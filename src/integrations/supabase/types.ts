@@ -389,6 +389,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      user_is_club_admin: {
+        Args: { club_id_param: string; user_id_param: string }
+        Returns: boolean
+      }
     }
     Enums: {
       event_type:
