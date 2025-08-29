@@ -106,12 +106,13 @@ export default function ClubManagement() {
     try {
       setCreating(true);
 
-      // Create the club - trigger will set created_by automatically  
+      // Create the club with the user's ID as created_by
       const { data: clubData, error: clubError } = await supabase
         .from('clubs')
         .insert({
           name: newClubName.trim(),
-        } as any) // Use 'as any' to bypass TypeScript since trigger sets created_by
+          created_by: user.id,
+        })
         .select()
         .single();
 
