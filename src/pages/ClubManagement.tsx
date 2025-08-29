@@ -85,9 +85,12 @@ export default function ClubManagement() {
   };
 
   const createClub = async () => {
+    console.log('Creating club - User:', user);
+    console.log('Creating club - User ID:', user?.id);
+    
     if (!user) {
       toast({
-        title: "Authentication Required",
+        title: "Authentication Required", 
         description: "Please log in to create a club",
         variant: "destructive",
       });
@@ -105,13 +108,10 @@ export default function ClubManagement() {
 
     try {
       setCreating(true);
-
-      // Test authentication context first
-      const { data: authTest, error: authError } = await supabase.rpc('test_auth_context');
-      console.log('Auth context test:', authTest);
       
-      // Create the club with proper user authentication
-      console.log('Creating club with user ID:', user.id);
+      console.log('About to create club with user ID:', user.id);
+      
+      // Create the club with explicit user ID
       const { data: clubData, error: clubError } = await supabase
         .from('clubs')
         .insert({

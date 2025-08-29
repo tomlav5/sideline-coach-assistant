@@ -370,14 +370,6 @@ export type Database = {
         Args: { club_id_param: string }
         Returns: boolean
       }
-      debug_auth: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          current_user_id: string
-          is_authenticated: boolean
-          profile_exists: boolean
-        }[]
-      }
       test_auth_context: {
         Args: Record<PropertyKey, never>
         Returns: {
