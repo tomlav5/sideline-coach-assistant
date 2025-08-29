@@ -2,6 +2,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import { 
   Home, 
   Users, 
+  User,
   Calendar, 
   Play, 
   BarChart3, 
@@ -28,13 +29,15 @@ import { useAuth } from "@/hooks/useAuth";
 const navigationItems = [
   { title: "Dashboard", url: "/", icon: Home },
   { title: "Teams", url: "/teams", icon: Users },
+  { title: "Players", url: "/players", icon: User },
   { title: "Fixtures", url: "/fixtures", icon: Calendar },
   { title: "Match Day", url: "/match", icon: Play },
   { title: "Reports", url: "/reports", icon: BarChart3 },
 ];
 
 const settingsItems = [
-  { title: "Club Settings", url: "/settings", icon: Settings },
+  { title: "Club Management", url: "/club-management", icon: Settings },
+  { title: "Settings", url: "/settings", icon: Settings },
 ];
 
 export function AppSidebar() {

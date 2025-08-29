@@ -7,6 +7,9 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/hooks/useTheme";
 import { Layout } from "@/components/layout/Layout";
 import Dashboard from "./pages/Dashboard";
+import Teams from "./pages/Teams";
+import Players from "./pages/Players";
+import Fixtures from "./pages/Fixtures";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import ClubManagement from "./pages/ClubManagement";
@@ -24,8 +27,9 @@ const App = () => (
             <Routes>
               <Route path="/auth" element={<Auth />} />
               <Route path="/" element={<Layout><Dashboard /></Layout>} />
-              <Route path="/teams" element={<Layout><div className="p-6"><h1 className="text-2xl font-bold">Teams - Coming Soon</h1></div></Layout>} />
-              <Route path="/fixtures" element={<Layout><div className="p-6"><h1 className="text-2xl font-bold">Fixtures - Coming Soon</h1></div></Layout>} />
+              <Route path="/teams" element={<Layout><Teams /></Layout>} />
+              <Route path="/players" element={<Layout><Players /></Layout>} />
+              <Route path="/fixtures" element={<Layout><Fixtures /></Layout>} />
               <Route path="/match" element={<Layout><div className="p-6"><h1 className="text-2xl font-bold">Match Day - Coming Soon</h1></div></Layout>} />
               <Route path="/reports" element={<Layout><div className="p-6"><h1 className="text-2xl font-bold">Reports - Coming Soon</h1></div></Layout>} />
               <Route path="/settings" element={<Layout><div className="p-6"><h1 className="text-2xl font-bold">Settings - Coming Soon</h1></div></Layout>} />

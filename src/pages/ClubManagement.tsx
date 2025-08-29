@@ -1,25 +1,30 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Building, Users, Edit, Trash } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
+import { Users, Plus, Calendar, User, Crown, Shield, Eye } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { UserManagement } from '@/components/club/UserManagement';
+import { LogoUpload } from '@/components/club/LogoUpload';
 
 interface Club {
   id: string;
   name: string;
-  logo_url?: string;
+  logo_url?: string | null;
   created_at: string;
   created_by: string;
-  club_members: Array<{
-    role: string;
+  members: Array<{
+    id: string;
+    role: 'admin' | 'official' | 'viewer';
     user_id: string;
   }>;
+  currentUserRole?: string;
 }
 
 export default function ClubManagement() {
@@ -27,35 +32,46 @@ export default function ClubManagement() {
   const { toast } = useToast();
   const [clubs, setClubs] = useState<Club[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [newClubName, setNewClubName] = useState('');
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
-    fetchClubs();
+    if (user) {
+      fetchClubs();
+    }
   }, [user]);
 
   const fetchClubs = async () => {
-    if (!user) return;
-
     try {
+      setLoading(true);
       const { data, error } = await supabase
         .from('clubs')
         .select(`
-          id,
-          name,
-          logo_url,
-          created_at,
-          created_by,
-          club_members!inner(
+          *,
+          club_members(
+            id,
             role,
             user_id
           )
         `)
-        .eq('club_members.user_id', user.id);
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setClubs(data || []);
+
+      // Add current user role to each club
+      const clubsWithRole = (data || []).map(club => {
+        const currentUserMember = club.club_members.find(
+          member => member.user_id === user?.id
+        );
+        return {
+          ...club,
+          members: club.club_members,
+          currentUserRole: currentUserMember?.role
+        };
+      });
+
+      setClubs(clubsWithRole);
     } catch (error) {
       console.error('Error fetching clubs:', error);
       toast({
@@ -69,46 +85,54 @@ export default function ClubManagement() {
   };
 
   const createClub = async () => {
-    if (!user || !newClubName.trim()) return;
+    if (!newClubName.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a club name",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    setCreating(true);
     try {
-      // Create club
-      const { data: club, error: clubError } = await supabase
+      setCreating(true);
+
+      // Create the club
+      const { data: clubData, error: clubError } = await supabase
         .from('clubs')
-        .insert({
+        .insert([{
           name: newClubName.trim(),
-          created_by: user.id
-        })
+          created_by: user?.id,
+        }])
         .select()
         .single();
 
       if (clubError) throw clubError;
 
-      // Add creator as admin member
+      // Add the creator as an admin
       const { error: memberError } = await supabase
         .from('club_members')
-        .insert({
-          club_id: club.id,
-          user_id: user.id,
-          role: 'admin'
-        });
+        .insert([{
+          club_id: clubData.id,
+          user_id: user?.id,
+          role: 'admin',
+        }]);
 
       if (memberError) throw memberError;
 
       toast({
         title: "Success",
-        description: "Club created successfully!",
+        description: "Club created successfully",
       });
 
+      setCreateDialogOpen(false);
       setNewClubName('');
-      setShowCreateDialog(false);
       fetchClubs();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error creating club:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to create club",
+        description: "Failed to create club",
         variant: "destructive",
       });
     } finally {
@@ -116,33 +140,46 @@ export default function ClubManagement() {
     }
   };
 
+  const getRoleIcon = (role: string) => {
+    switch (role) {
+      case 'admin': return Crown;
+      case 'official': return Shield;
+      case 'viewer': return Eye;
+      default: return User;
+    }
+  };
+
+  const updateClubLogo = (clubId: string, logoUrl: string | null) => {
+    setClubs(clubs.map(club => 
+      club.id === clubId ? { ...club, logo_url: logoUrl } : club
+    ));
+  };
+
   if (loading) {
     return (
-      <div className="p-6 space-y-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-muted rounded w-1/3"></div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {[...Array(2)].map((_, i) => (
-              <div key={i} className="h-48 bg-muted rounded"></div>
-            ))}
-          </div>
+      <div className="container mx-auto p-4 space-y-6">
+        <div className="flex justify-between items-center">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-10 w-32" />
+        </div>
+        <div className="grid gap-6 md:grid-cols-2">
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={i} className="h-64" />
+          ))}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+    <div className="container mx-auto p-4 space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Club Management</h1>
-          <p className="text-muted-foreground">
-            Create and manage your football clubs
-          </p>
+          <h1 className="text-2xl font-bold text-foreground">Club Management</h1>
+          <p className="text-muted-foreground">Manage your football clubs and their settings</p>
         </div>
         
-        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button className="touch-target">
               <Plus className="h-4 w-4 mr-2" />
@@ -153,34 +190,25 @@ export default function ClubManagement() {
             <DialogHeader>
               <DialogTitle>Create New Club</DialogTitle>
               <DialogDescription>
-                Set up a new football club. You'll be added as the administrator.
+                Enter a name for your new football club
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="clubName">Club Name</Label>
+              <div>
+                <Label htmlFor="name">Club Name</Label>
                 <Input
-                  id="clubName"
+                  id="name"
                   value={newClubName}
                   onChange={(e) => setNewClubName(e.target.value)}
                   placeholder="Enter club name"
-                  className="touch-target"
                 />
               </div>
-              <div className="flex justify-end space-x-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowCreateDialog(false)}
-                  disabled={creating}
-                >
-                  Cancel
+              <div className="flex gap-2 pt-4">
+                <Button onClick={createClub} disabled={creating} className="flex-1">
+                  {creating ? "Creating..." : "Create Club"}
                 </Button>
-                <Button
-                  onClick={createClub}
-                  disabled={creating || !newClubName.trim()}
-                  className="touch-target"
-                >
-                  {creating ? 'Creating...' : 'Create Club'}
+                <Button variant="outline" onClick={() => setCreateDialogOpen(false)} className="flex-1">
+                  Cancel
                 </Button>
               </div>
             </div>
@@ -188,95 +216,95 @@ export default function ClubManagement() {
         </Dialog>
       </div>
 
-      {/* Clubs Grid */}
       {clubs.length === 0 ? (
         <Card>
-          <CardContent className="py-12 text-center">
-            <Building className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-medium mb-2">No clubs yet</h3>
-            <p className="text-muted-foreground mb-4">
-              Create your first club to start managing teams and players.
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Users className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No clubs yet</h3>
+            <p className="text-muted-foreground text-center mb-4">
+              Create your first club to start managing teams and players
             </p>
-            <Button onClick={() => setShowCreateDialog(true)}>
+            <Button onClick={() => setCreateDialogOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
-              Create Your First Club
+              Create Club
             </Button>
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {clubs.map((club) => (
-            <Card key={club.id} className="hover:shadow-md transition-shadow">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    {club.logo_url ? (
-                      <img 
-                        src={club.logo_url} 
-                        alt={club.name}
-                        className="h-12 w-12 rounded-lg object-cover"
-                      />
-                    ) : (
-                      <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <Building className="h-6 w-6 text-primary" />
+        <div className="grid gap-6 lg:grid-cols-2">
+          {clubs.map((club) => {
+            const userRole = club.currentUserRole || 'viewer';
+            const RoleIcon = getRoleIcon(userRole);
+            
+            return (
+              <div key={club.id} className="space-y-6">
+                <Card className="hover:shadow-md transition-shadow">
+                  <CardHeader>
+                    <div className="flex justify-between items-start">
+                      <div className="flex items-center space-x-3">
+                        {club.logo_url ? (
+                          <img
+                            src={club.logo_url}
+                            alt={`${club.name} logo`}
+                            className="w-12 h-12 rounded-lg object-cover border"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-lg border border-dashed border-muted-foreground flex items-center justify-center">
+                            <Users className="h-6 w-6 text-muted-foreground" />
+                          </div>
+                        )}
+                        <div>
+                          <CardTitle className="text-xl">{club.name}</CardTitle>
+                          <CardDescription>
+                            Created {new Date(club.created_at).toLocaleDateString()}
+                          </CardDescription>
+                        </div>
                       </div>
-                    )}
-                    <div>
-                      <CardTitle className="text-xl">{club.name}</CardTitle>
-                      <CardDescription>
-                        Created {new Date(club.created_at).toLocaleDateString()}
-                      </CardDescription>
+                      <Badge variant="secondary" className="flex items-center gap-1">
+                        <RoleIcon className="h-3 w-3" />
+                        {userRole}
+                      </Badge>
                     </div>
-                  </div>
-                  
-                  <div className="flex space-x-2">
-                    <Button variant="outline" size="sm">
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              
-              <CardContent className="space-y-4">
-                {/* Members */}
-                <div>
-                  <h4 className="font-medium mb-2 flex items-center">
-                    <Users className="h-4 w-4 mr-2" />
-                    Members ({club.club_members.length})
-                  </h4>
-                  <div className="space-y-2">
-                    {club.club_members.slice(0, 3).map((member, index) => (
-                      <div key={index} className="flex items-center justify-between text-sm">
-                        <span>
-                          Member {index + 1}
-                        </span>
-                        <Badge variant={member.role === 'admin' ? 'default' : 'secondary'}>
-                          {member.role}
-                        </Badge>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center text-sm text-muted-foreground">
+                        <Users className="h-4 w-4 mr-1" />
+                        {club.members.length} members
                       </div>
-                    ))}
-                    {club.club_members.length > 3 && (
-                      <p className="text-xs text-muted-foreground">
-                        +{club.club_members.length - 3} more
-                      </p>
-                    )}
-                  </div>
-                </div>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => window.location.href = '/teams'}>
+                          <Users className="h-4 w-4 mr-1" />
+                          Teams
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => window.location.href = '/fixtures'}>
+                          <Calendar className="h-4 w-4 mr-1" />
+                          Fixtures
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
 
-                {/* Actions */}
-                <div className="flex space-x-2 pt-2">
-                  <Button variant="outline" size="sm" className="flex-1">
-                    <Users className="h-4 w-4 mr-2" />
-                    Manage Teams
-                  </Button>
-                  <Button variant="outline" size="sm" className="flex-1">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Members
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                {/* Logo Upload - Only for Admins */}
+                {userRole === 'admin' && (
+                  <LogoUpload
+                    clubId={club.id}
+                    currentLogoUrl={club.logo_url}
+                    onLogoUpdate={(logoUrl) => updateClubLogo(club.id, logoUrl)}
+                  />
+                )}
+
+                {/* User Management - Only for Admins */}
+                {userRole === 'admin' && (
+                  <UserManagement 
+                    clubId={club.id} 
+                    currentUserRole={userRole}
+                  />
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
