@@ -85,6 +85,15 @@ export default function ClubManagement() {
   };
 
   const createClub = async () => {
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to create a club",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!newClubName.trim()) {
       toast({
         title: "Error",
@@ -102,8 +111,7 @@ export default function ClubManagement() {
         .from('clubs')
         .insert({
           name: newClubName.trim(),
-          created_by: '', // Will be overridden by trigger
-        })
+        } as any) // Use 'as any' to bypass TypeScript since trigger sets created_by
         .select()
         .single();
 
