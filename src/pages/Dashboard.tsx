@@ -113,7 +113,7 @@ export default function Dashboard() {
             Welcome back! Here's what's happening with your teams.
           </p>
         </div>
-        <Button onClick={() => navigate('/settings')} className="touch-target">
+        <Button onClick={() => navigate('/club-management')} className="touch-target">
           <Plus className="h-4 w-4 mr-2" />
           Create Club
         </Button>
@@ -192,7 +192,7 @@ export default function Dashboard() {
               <p className="text-muted-foreground mb-4">
                 Create your first club to start managing teams and players.
               </p>
-              <Button onClick={() => navigate('/settings')}>
+              <Button onClick={() => navigate('/club-management')}>
                 <Plus className="h-4 w-4 mr-2" />
                 Create Your First Club
               </Button>

@@ -9,6 +9,7 @@ import { Layout } from "@/components/layout/Layout";
 import Dashboard from "./pages/Dashboard";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
+import ClubManagement from "./pages/ClubManagement";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +29,7 @@ const App = () => (
               <Route path="/match" element={<Layout><div className="p-6"><h1 className="text-2xl font-bold">Match Day - Coming Soon</h1></div></Layout>} />
               <Route path="/reports" element={<Layout><div className="p-6"><h1 className="text-2xl font-bold">Reports - Coming Soon</h1></div></Layout>} />
               <Route path="/settings" element={<Layout><div className="p-6"><h1 className="text-2xl font-bold">Settings - Coming Soon</h1></div></Layout>} />
+              <Route path="/club-management" element={<Layout><ClubManagement /></Layout>} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
