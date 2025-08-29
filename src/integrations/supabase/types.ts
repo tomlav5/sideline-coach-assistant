@@ -378,6 +378,14 @@ export type Database = {
           profile_exists: boolean
         }[]
       }
+      test_auth_context: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          auth_role: string
+          current_auth_uid: string
+          is_authenticated: boolean
+        }[]
+      }
       test_current_user: {
         Args: Record<PropertyKey, never>
         Returns: {

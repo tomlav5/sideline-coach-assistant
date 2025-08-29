@@ -106,7 +106,12 @@ export default function ClubManagement() {
     try {
       setCreating(true);
 
-      // Create the club with the user's ID as created_by
+      // Test authentication context first
+      const { data: authTest, error: authError } = await supabase.rpc('test_auth_context');
+      console.log('Auth context test:', authTest);
+      
+      // Create the club with proper user authentication
+      console.log('Creating club with user ID:', user.id);
       const { data: clubData, error: clubError } = await supabase
         .from('clubs')
         .insert({
