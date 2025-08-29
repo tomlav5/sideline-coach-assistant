@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Users, Plus, Settings, UserPlus } from 'lucide-react';
+import { TeamPlayers } from '@/components/team/TeamPlayers';
+import { TeamSettings } from '@/components/team/TeamSettings';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface Club {
@@ -43,6 +45,9 @@ export default function Teams() {
   const [clubs, setClubs] = useState<Club[]>([]);
   const [loading, setLoading] = useState(true);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
+  const [showPlayerManagement, setShowPlayerManagement] = useState(false);
+  const [showTeamSettings, setShowTeamSettings] = useState(false);
   const [newTeam, setNewTeam] = useState({
     name: '',
     team_type: '11-a-side' as const,
@@ -156,6 +161,57 @@ export default function Teams() {
   const getTeamTypeLabel = (type: string) => {
     return TEAM_TYPES.find(t => t.value === type)?.label || type;
   };
+
+  const handlePlayerManagement = (team: Team) => {
+    setSelectedTeam(team);
+    setShowPlayerManagement(true);
+  };
+
+  const handleTeamSettings = (team: Team) => {
+    setSelectedTeam(team);
+    setShowTeamSettings(true);
+  };
+
+  const handleClosePlayerManagement = () => {
+    setShowPlayerManagement(false);
+    setSelectedTeam(null);
+  };
+
+  const handleCloseTeamSettings = () => {
+    setShowTeamSettings(false);
+    setSelectedTeam(null);
+  };
+
+  const handleTeamUpdated = () => {
+    fetchTeams();
+  };
+
+  const handleTeamDeleted = () => {
+    fetchTeams();
+  };
+
+  // Show player management view
+  if (showPlayerManagement && selectedTeam) {
+    return (
+      <div className="container mx-auto p-4">
+        <TeamPlayers team={selectedTeam} onClose={handleClosePlayerManagement} />
+      </div>
+    );
+  }
+
+  // Show team settings view
+  if (showTeamSettings && selectedTeam) {
+    return (
+      <div className="container mx-auto p-4">
+        <TeamSettings 
+          team={selectedTeam} 
+          onClose={handleCloseTeamSettings}
+          onTeamUpdated={handleTeamUpdated}
+          onTeamDeleted={handleTeamDeleted}
+        />
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -287,11 +343,19 @@ export default function Teams() {
                     {team._count?.team_players || 0} players
                   </div>
                   <div className="flex gap-2">
-                    <Button size="sm" variant="outline">
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => handlePlayerManagement(team)}
+                    >
                       <UserPlus className="h-4 w-4 mr-1" />
                       Players
                     </Button>
-                    <Button size="sm" variant="outline">
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => handleTeamSettings(team)}
+                    >
                       <Settings className="h-4 w-4" />
                     </Button>
                   </div>
