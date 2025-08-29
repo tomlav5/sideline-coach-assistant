@@ -97,12 +97,12 @@ export default function ClubManagement() {
     try {
       setCreating(true);
 
-      // Create the club - trigger will set created_by and add admin membership automatically
+      // Create the club - trigger will set created_by automatically  
       const { data: clubData, error: clubError } = await supabase
         .from('clubs')
         .insert({
           name: newClubName.trim(),
-          created_by: user?.id || '', // Trigger will override this
+          created_by: '', // Will be overridden by trigger
         })
         .select()
         .single();
