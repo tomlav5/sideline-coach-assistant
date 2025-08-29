@@ -366,6 +366,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      club_has_no_members: {
+        Args: { club_id_param: string }
+        Returns: boolean
+      }
       debug_auth: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -390,6 +394,10 @@ export type Database = {
         Returns: boolean
       }
       user_is_club_admin: {
+        Args: { club_id_param: string; user_id_param: string }
+        Returns: boolean
+      }
+      user_is_club_member: {
         Args: { club_id_param: string; user_id_param: string }
         Returns: boolean
       }
