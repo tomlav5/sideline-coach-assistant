@@ -106,6 +106,13 @@ export default function ClubManagement() {
 
       console.log('Creating club with user:', currentUser.id);
 
+      // Test what auth.uid() returns in the database
+      const { data: debugData, error: debugError } = await supabase
+        .rpc('test_current_user')
+        .single();
+      
+      console.log('Database auth debug:', debugData, debugError);
+
       // Test what the database sees for auth
       const { data: authTest, error: authTestError } = await supabase
         .rpc('test_current_user');
