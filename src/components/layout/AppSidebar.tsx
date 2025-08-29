@@ -45,7 +45,7 @@ export function AppSidebar() {
 
   const isActive = (path: string) => currentPath === path;
   const getNavCls = ({ isActive }: { isActive: boolean }) =>
-    isActive ? "bg-accent text-accent-foreground font-medium" : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground";
+    isActive ? "bg-primary text-primary-foreground font-medium" : "text-foreground hover:bg-accent hover:text-accent-foreground";
 
   const collapsed = state === "collapsed";
 
@@ -54,18 +54,16 @@ export function AppSidebar() {
       <SidebarHeader className="p-4">
         <div className="flex items-center space-x-2">
           <Shield className="h-8 w-8 text-primary" />
-          {!collapsed && (
-            <div>
-              <h2 className="text-lg font-semibold text-primary">SideLine</h2>
-              <p className="text-xs text-muted-foreground">Football Coach</p>
-            </div>
-          )}
+          <div>
+            <h2 className="text-lg font-semibold text-primary">SideLine</h2>
+            <p className="text-xs text-muted-foreground">Football Coach</p>
+          </div>
         </div>
       </SidebarHeader>
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-foreground/80">Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {navigationItems.map((item) => (
@@ -83,7 +81,7 @@ export function AppSidebar() {
         </SidebarGroup>
 
         <SidebarGroup>
-          <SidebarGroupLabel>Settings</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-foreground/80">Settings</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {settingsItems.map((item) => (
