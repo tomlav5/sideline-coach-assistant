@@ -374,6 +374,14 @@ export type Database = {
           profile_exists: boolean
         }[]
       }
+      test_current_user: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          auth_uid: string
+          jwt_claims: Json
+          session_exists: boolean
+        }[]
+      }
       user_has_club_access: {
         Args: {
           club_id_param: string
