@@ -97,34 +97,12 @@ export default function ClubManagement() {
     try {
       setCreating(true);
 
-      // Debug current authentication
-      const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
-      
-      if (userError || !currentUser) {
-        throw new Error('Not authenticated - please sign in again');
-      }
-
-      console.log('Creating club with user:', currentUser.id);
-
-      // Test what auth.uid() returns in the database
-      const { data: debugData, error: debugError } = await supabase
-        .rpc('test_current_user')
-        .single();
-      
-      console.log('Database auth debug:', debugData, debugError);
-
-      // Test what the database sees for auth
-      const { data: authTest, error: authTestError } = await supabase
-        .rpc('test_current_user');
-      
-      console.log('Database auth test:', authTest, authTestError);
-
-      // Create the club
+      // Create the club - trigger will set created_by and add admin membership automatically
       const { data: clubData, error: clubError } = await supabase
         .from('clubs')
         .insert({
           name: newClubName.trim(),
-          created_by: currentUser.id,
+          created_by: user?.id || '', // Trigger will override this
         })
         .select()
         .single();
@@ -133,24 +111,6 @@ export default function ClubManagement() {
         console.error('Club creation error:', clubError);
         throw clubError;
       }
-
-      console.log('Club created:', clubData);
-
-      // Add the creator as an admin
-      const { error: memberError } = await supabase
-        .from('club_members')
-        .insert({
-          club_id: clubData.id,
-          user_id: currentUser.id,
-          role: 'admin',
-        });
-
-      if (memberError) {
-        console.error('Member creation error:', memberError);
-        throw memberError;
-      }
-
-      console.log('Admin member added successfully');
 
       toast({
         title: "Success",
