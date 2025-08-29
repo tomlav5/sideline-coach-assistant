@@ -13,6 +13,8 @@ import Fixtures from "./pages/Fixtures";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import ClubManagement from "./pages/ClubManagement";
+import SquadSelection from "./pages/SquadSelection";
+import MatchDay from "./pages/MatchDay";
 
 const queryClient = new QueryClient();
 
@@ -30,6 +32,8 @@ const App = () => (
               <Route path="/teams" element={<Layout><Teams /></Layout>} />
               <Route path="/players" element={<Layout><Players /></Layout>} />
               <Route path="/fixtures" element={<Layout><Fixtures /></Layout>} />
+              <Route path="/squad/:fixtureId" element={<Layout><SquadSelection /></Layout>} />
+              <Route path="/match/:fixtureId" element={<Layout><MatchDay /></Layout>} />
               <Route path="/match" element={<Layout><div className="p-6"><h1 className="text-2xl font-bold">Match Day - Coming Soon</h1></div></Layout>} />
               <Route path="/reports" element={<Layout><div className="p-6"><h1 className="text-2xl font-bold">Reports - Coming Soon</h1></div></Layout>} />
               <Route path="/settings" element={<Layout><div className="p-6"><h1 className="text-2xl font-bold">Settings - Coming Soon</h1></div></Layout>} />

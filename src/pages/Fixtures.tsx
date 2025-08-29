@@ -9,12 +9,13 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, Clock, MapPin, Plus, Play, Home, Plane } from 'lucide-react';
+import { Calendar, Clock, MapPin, Plus, Play, Home, Plane, Users } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
+import { useNavigate } from 'react-router-dom';
 
 interface Team {
   id: string;
@@ -51,6 +52,7 @@ const STATUS_COLORS = {
 } as const;
 
 export default function Fixtures() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
   const [fixtures, setFixtures] = useState<Fixture[]>([]);
@@ -411,12 +413,27 @@ export default function Fixtures() {
                     </div>
                   )}
                   
-                  {fixture.status === 'scheduled' && (
-                    <Button size="sm" className="w-full mt-4">
-                      <Play className="h-4 w-4 mr-1" />
-                      Start Match
-                    </Button>
-                  )}
+                   {fixture.status === 'scheduled' && (
+                     <div className="flex space-x-2 mt-4">
+                       <Button 
+                         size="sm" 
+                         onClick={() => navigate(`/squad/${fixture.id}`)}
+                         className="flex-1 bg-blue-600 hover:bg-blue-700"
+                       >
+                         <Users className="h-4 w-4 mr-1" />
+                         Select Squad
+                       </Button>
+                       <Button 
+                         size="sm" 
+                         variant="outline"
+                         disabled={true}
+                         className="flex-1"
+                       >
+                         <Play className="h-4 w-4 mr-1" />
+                         Start Match
+                       </Button>
+                     </div>
+                   )}
                 </CardContent>
               </Card>
             );
