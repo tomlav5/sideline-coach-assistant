@@ -45,7 +45,7 @@ export function AppSidebar() {
 
   const isActive = (path: string) => currentPath === path;
   const getNavCls = ({ isActive }: { isActive: boolean }) =>
-    isActive ? "bg-primary text-primary-foreground font-medium" : "text-foreground hover:bg-accent hover:text-accent-foreground";
+    isActive ? "bg-primary text-primary-foreground font-medium" : "";
 
   const collapsed = state === "collapsed";
 
@@ -68,10 +68,10 @@ export function AppSidebar() {
             <SidebarMenu>
               {navigationItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                   <SidebarMenuButton asChild>
+                  <SidebarMenuButton asChild>
                     <NavLink to={item.url} end className={getNavCls}>
                       <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
+                      <span className="text-sidebar-foreground">{item.title}</span>
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -86,10 +86,10 @@ export function AppSidebar() {
             <SidebarMenu>
               {settingsItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                   <SidebarMenuButton asChild>
+                  <SidebarMenuButton asChild>
                     <NavLink to={item.url} className={getNavCls}>
                       <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
+                      <span className="text-sidebar-foreground">{item.title}</span>
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -105,8 +105,8 @@ export function AppSidebar() {
           onClick={() => signOut()}
           className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10"
         >
-          <LogOut className="h-4 w-4" />
-          <span className="ml-2">Sign Out</span>
+          <LogOut className="h-4 w-4 text-destructive" />
+          <span className="ml-2 text-destructive">Sign Out</span>
         </Button>
       </SidebarFooter>
     </Sidebar>
