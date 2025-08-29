@@ -45,8 +45,8 @@ const FIXTURE_TYPES = [
 
 const STATUS_COLORS = {
   scheduled: 'default',
-  in_progress: 'secondary',
-  completed: 'success',
+  in_progress: 'secondary', 
+  completed: 'outline',
   cancelled: 'destructive',
 } as const;
 

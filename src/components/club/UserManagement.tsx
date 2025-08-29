@@ -21,7 +21,7 @@ interface ClubMember {
     first_name: string | null;
     last_name: string | null;
     email: string | null;
-  };
+  } | null;
 }
 
 interface UserManagementProps {
@@ -54,14 +54,13 @@ export function UserManagement({ clubId, currentUserRole }: UserManagementProps)
       const { data, error } = await supabase
         .from('club_members')
         .select(`
-          *,
-          profile:profiles(first_name, last_name, email)
+          *
         `)
         .eq('club_id', clubId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setMembers(data || []);
+      setMembers((data || []) as ClubMember[]);
     } catch (error) {
       console.error('Error fetching members:', error);
       toast({
@@ -181,7 +180,7 @@ export function UserManagement({ clubId, currentUserRole }: UserManagementProps)
     }
   };
 
-  const updateMemberRole = async (memberId: string, newRole: string) => {
+  const updateMemberRole = async (memberId: string, newRole: 'admin' | 'official' | 'viewer') => {
     try {
       const { error } = await supabase
         .from('club_members')
@@ -321,7 +320,7 @@ export function UserManagement({ clubId, currentUserRole }: UserManagementProps)
                     <>
                       <Select 
                         value={member.role} 
-                        onValueChange={(newRole) => updateMemberRole(member.id, newRole)}
+                        onValueChange={(newRole: 'admin' | 'official' | 'viewer') => updateMemberRole(member.id, newRole)}
                       >
                         <SelectTrigger className="w-32">
                           <SelectValue />

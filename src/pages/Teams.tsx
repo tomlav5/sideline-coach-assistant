@@ -20,7 +20,7 @@ interface Club {
 interface Team {
   id: string;
   name: string;
-  team_type: 'five-a-side' | 'seven-a-side' | 'nine-a-side' | 'eleven-a-side';
+  team_type: string;
   club_id: string;
   created_at: string;
   club: Club;
@@ -30,10 +30,10 @@ interface Team {
 }
 
 const TEAM_TYPES = [
-  { value: 'five-a-side', label: '5-a-side' },
-  { value: 'seven-a-side', label: '7-a-side' },
-  { value: 'nine-a-side', label: '9-a-side' },
-  { value: 'eleven-a-side', label: '11-a-side' },
+  { value: '5-a-side', label: '5-a-side' },
+  { value: '7-a-side', label: '7-a-side' },
+  { value: '9-a-side', label: '9-a-side' },
+  { value: '11-a-side', label: '11-a-side' },
 ];
 
 export default function Teams() {
@@ -45,7 +45,7 @@ export default function Teams() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [newTeam, setNewTeam] = useState({
     name: '',
-    team_type: 'eleven-a-side' as const,
+    team_type: '11-a-side' as const,
     club_id: '',
   });
   const [creating, setCreating] = useState(false);
@@ -139,7 +139,7 @@ export default function Teams() {
       });
 
       setCreateDialogOpen(false);
-      setNewTeam({ name: '', team_type: 'eleven-a-side', club_id: '' });
+      setNewTeam({ name: '', team_type: '11-a-side', club_id: '' });
       fetchTeams();
     } catch (error) {
       console.error('Error creating team:', error);

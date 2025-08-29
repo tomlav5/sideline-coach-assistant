@@ -22,6 +22,7 @@ interface Team {
   id: string;
   name: string;
   team_type: string;
+  club_id: string;
 }
 
 interface Player {
@@ -110,7 +111,7 @@ export default function Players() {
           const { data: teamData } = await supabase
             .from('team_players')
             .select(`
-              team:teams(id, name, team_type)
+              team:teams(id, name, team_type, club_id)
             `)
             .eq('player_id', player.id);
           
