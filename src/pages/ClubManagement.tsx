@@ -97,28 +97,47 @@ export default function ClubManagement() {
     try {
       setCreating(true);
 
+      // Debug current authentication
+      const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !currentUser) {
+        throw new Error('Not authenticated - please sign in again');
+      }
+
+      console.log('Creating club with user:', currentUser.id);
+
       // Create the club
       const { data: clubData, error: clubError } = await supabase
         .from('clubs')
-        .insert([{
+        .insert({
           name: newClubName.trim(),
-          created_by: user?.id,
-        }])
+          created_by: currentUser.id,
+        })
         .select()
         .single();
 
-      if (clubError) throw clubError;
+      if (clubError) {
+        console.error('Club creation error:', clubError);
+        throw clubError;
+      }
+
+      console.log('Club created:', clubData);
 
       // Add the creator as an admin
       const { error: memberError } = await supabase
         .from('club_members')
-        .insert([{
+        .insert({
           club_id: clubData.id,
-          user_id: user?.id,
+          user_id: currentUser.id,
           role: 'admin',
-        }]);
+        });
 
-      if (memberError) throw memberError;
+      if (memberError) {
+        console.error('Member creation error:', memberError);
+        throw memberError;
+      }
+
+      console.log('Admin member added successfully');
 
       toast({
         title: "Success",
@@ -128,11 +147,11 @@ export default function ClubManagement() {
       setCreateDialogOpen(false);
       setNewClubName('');
       fetchClubs();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating club:', error);
       toast({
         title: "Error",
-        description: "Failed to create club",
+        description: error.message || "Failed to create club",
         variant: "destructive",
       });
     } finally {

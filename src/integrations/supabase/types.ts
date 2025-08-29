@@ -366,6 +366,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      debug_auth: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          current_user_id: string
+          is_authenticated: boolean
+          profile_exists: boolean
+        }[]
+      }
       user_has_club_access: {
         Args: {
           club_id_param: string
