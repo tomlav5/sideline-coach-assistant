@@ -96,6 +96,14 @@ export default function MatchDay() {
     playerTimes: [],
   });
   
+  const [startTimes, setStartTimes] = useState<{
+    firstHalfStart?: number;
+    secondHalfStart?: number;
+    pausedTime: { first: number; second: number };
+  }>({
+    pausedTime: { first: 0, second: 0 }
+  });
+  
   const [eventDialog, setEventDialog] = useState<{
     open: boolean;
     type: MatchEvent['event_type'] | null;
@@ -126,10 +134,25 @@ export default function MatchDay() {
     initializePlayerTimes();
     requestWakeLock();
     
+    // Handle visibility change to maintain timer accuracy
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        console.log('App went to background');
+      } else {
+        console.log('App returned to foreground');
+        if (gameState.isRunning) {
+          updateTimerFromStartTime();
+        }
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       releaseWakeLock();
     };
   }, []);
@@ -137,11 +160,7 @@ export default function MatchDay() {
   useEffect(() => {
     if (gameState.isRunning) {
       intervalRef.current = setInterval(() => {
-        setGameState(prev => ({
-          ...prev,
-          [prev.currentHalf === 'first' ? 'firstHalfTime' : 'secondHalfTime']: 
-            prev.currentHalf === 'first' ? prev.firstHalfTime + 1 : prev.secondHalfTime + 1
-        }));
+        updateTimerFromStartTime();
       }, 1000);
     } else {
       if (intervalRef.current) {
@@ -156,11 +175,32 @@ export default function MatchDay() {
     };
   }, [gameState.isRunning]);
 
+  const updateTimerFromStartTime = () => {
+    const now = Date.now();
+    const currentHalf = gameState.currentHalf;
+    
+    if (currentHalf === 'first' && startTimes.firstHalfStart) {
+      const elapsed = Math.floor((now - startTimes.firstHalfStart) / 1000) + startTimes.pausedTime.first;
+      setGameState(prev => ({ ...prev, firstHalfTime: elapsed }));
+    } else if (currentHalf === 'second' && startTimes.secondHalfStart) {
+      const elapsed = Math.floor((now - startTimes.secondHalfStart) / 1000) + startTimes.pausedTime.second;
+      setGameState(prev => ({ ...prev, secondHalfTime: elapsed }));
+    }
+  };
+
   const requestWakeLock = async () => {
     try {
       if ('wakeLock' in navigator) {
         wakeLockRef.current = await navigator.wakeLock.request('screen');
         console.log('Screen wake lock activated');
+        
+        // Re-request wake lock when it's released (e.g., tab becomes hidden)
+        wakeLockRef.current.addEventListener('release', () => {
+          console.log('Wake lock released, attempting to re-acquire...');
+          if (gameState.isRunning && document.visibilityState === 'visible') {
+            requestWakeLock();
+          }
+        });
       }
     } catch (err) {
       console.log('Wake lock request failed:', err);
@@ -233,11 +273,47 @@ export default function MatchDay() {
   };
 
   const toggleTimer = () => {
-    setGameState(prev => ({ ...prev, isRunning: !prev.isRunning }));
+    const now = Date.now();
+    
+    setGameState(prev => {
+      const newIsRunning = !prev.isRunning;
+      
+      if (newIsRunning) {
+        // Starting timer
+        if (prev.currentHalf === 'first') {
+          setStartTimes(st => ({ ...st, firstHalfStart: now }));
+        } else {
+          setStartTimes(st => ({ ...st, secondHalfStart: now }));
+        }
+        requestWakeLock();
+      } else {
+        // Pausing timer - save current elapsed time
+        if (prev.currentHalf === 'first') {
+          setStartTimes(st => ({ 
+            ...st, 
+            pausedTime: { ...st.pausedTime, first: prev.firstHalfTime }
+          }));
+        } else {
+          setStartTimes(st => ({ 
+            ...st, 
+            pausedTime: { ...st.pausedTime, second: prev.secondHalfTime }
+          }));
+        }
+      }
+      
+      return { ...prev, isRunning: newIsRunning };
+    });
   };
 
   const endHalf = () => {
     setGameState(prev => ({ ...prev, isRunning: false }));
+    setStartTimes(st => ({ 
+      ...st, 
+      pausedTime: { 
+        ...st.pausedTime, 
+        [gameState.currentHalf]: gameState.currentHalf === 'first' ? gameState.firstHalfTime : gameState.secondHalfTime
+      }
+    }));
     
     if (gameState.currentHalf === 'first') {
       toast({
@@ -253,11 +329,14 @@ export default function MatchDay() {
   };
 
   const startSecondHalf = () => {
+    const now = Date.now();
     setGameState(prev => ({
       ...prev,
       currentHalf: 'second',
       isRunning: true,
     }));
+    setStartTimes(st => ({ ...st, secondHalfStart: now }));
+    requestWakeLock();
     
     toast({
       title: "Second Half Started",
