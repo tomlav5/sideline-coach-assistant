@@ -345,7 +345,7 @@ export default function SquadSelection() {
             size="sm"
             className="bg-blue-600 hover:bg-blue-700"
           >
-            {saving ? 'Saving...' : 'Save Squad to Memory'}
+            {saving ? 'Saving...' : 'Save Squad'}
           </Button>
           <Button 
             onClick={startMatch} 

@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,13 +8,14 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, Clock, MapPin, Plus, Play, Home, Plane, Users, Trophy } from 'lucide-react';
+import { Calendar, Clock, MapPin, Plus, Play, Home, Plane, Users, Trophy, Settings, X, Trash2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 interface Team {
   id: string;
@@ -62,11 +62,12 @@ const STATUS_COLORS = {
 export default function Fixtures() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { toast } = useToast();
   const [fixtures, setFixtures] = useState<Fixture[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingFixture, setEditingFixture] = useState<Fixture | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [selectedTime, setSelectedTime] = useState('');
   const [newFixture, setNewFixture] = useState<{
@@ -93,6 +94,7 @@ export default function Fixtures() {
     name: string;
   } | null>(null);
   const [creating, setCreating] = useState(false);
+  const [updating, setUpdating] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -138,11 +140,6 @@ export default function Fixtures() {
       setFixtures(data || []);
     } catch (error) {
       console.error('Error fetching fixtures:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load fixtures",
-        variant: "destructive",
-      });
     } finally {
       setLoading(false);
     }
@@ -150,21 +147,11 @@ export default function Fixtures() {
 
   const createFixture = async () => {
     if (!newFixture.team_id || !newFixture.opponent_name.trim() || !selectedDate || !selectedTime) {
-      toast({
-        title: "Error",
-        description: "Please fill in all required fields",
-        variant: "destructive",
-      });
       return;
     }
 
     // Validate competition name for tournaments
     if (newFixture.competition_type === 'tournament' && !newFixture.competition_name.trim()) {
-      toast({
-        title: "Error",
-        description: "Tournament name is required for tournament matches",
-        variant: "destructive",
-      });
       return;
     }
 
@@ -198,23 +185,97 @@ export default function Fixtures() {
         name: newFixture.competition_name.trim()
       });
 
-      toast({
-        title: "Success",
-        description: "Fixture created successfully",
-      });
-
       setCreateDialogOpen(false);
       resetForm();
       fetchFixtures();
     } catch (error) {
       console.error('Error creating fixture:', error);
-      toast({
-        title: "Error",
-        description: "Failed to create fixture",
-        variant: "destructive",
-      });
     } finally {
       setCreating(false);
+    }
+  };
+
+  const editFixture = (fixture: Fixture) => {
+    setEditingFixture(fixture);
+    setNewFixture({
+      team_id: fixture.team_id,
+      opponent_name: fixture.opponent_name,
+      location: fixture.location || '',
+      fixture_type: fixture.fixture_type,
+      half_length: fixture.half_length,
+      competition_type: fixture.competition_type,
+      competition_name: fixture.competition_name || '',
+    });
+    setSelectedDate(new Date(fixture.scheduled_date));
+    setSelectedTime(format(new Date(fixture.scheduled_date), 'HH:mm'));
+    setEditDialogOpen(true);
+  };
+
+  const updateFixture = async () => {
+    if (!editingFixture || !newFixture.team_id || !newFixture.opponent_name.trim() || !selectedDate || !selectedTime) {
+      return;
+    }
+
+    try {
+      setUpdating(true);
+      
+      // Combine date and time
+      const [hours, minutes] = selectedTime.split(':');
+      const scheduledDateTime = new Date(selectedDate);
+      scheduledDateTime.setHours(parseInt(hours), parseInt(minutes));
+
+      const { error } = await supabase
+        .from('fixtures')
+        .update({
+          team_id: newFixture.team_id,
+          opponent_name: newFixture.opponent_name.trim(),
+          location: newFixture.location.trim() || null,
+          fixture_type: newFixture.fixture_type,
+          half_length: newFixture.half_length,
+          scheduled_date: scheduledDateTime.toISOString(),
+          competition_type: newFixture.competition_type,
+          competition_name: newFixture.competition_name.trim() || null,
+        })
+        .eq('id', editingFixture.id);
+
+      if (error) throw error;
+
+      setEditDialogOpen(false);
+      setEditingFixture(null);
+      resetForm();
+      fetchFixtures();
+    } catch (error) {
+      console.error('Error updating fixture:', error);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const cancelFixture = async (fixtureId: string) => {
+    try {
+      const { error } = await supabase
+        .from('fixtures')
+        .update({ status: 'cancelled' as any })
+        .eq('id', fixtureId);
+
+      if (error) throw error;
+      fetchFixtures();
+    } catch (error) {
+      console.error('Error cancelling fixture:', error);
+    }
+  };
+
+  const deleteFixture = async (fixtureId: string) => {
+    try {
+      const { error } = await supabase
+        .from('fixtures')
+        .delete()
+        .eq('id', fixtureId);
+
+      if (error) throw error;
+      fetchFixtures();
+    } catch (error) {
+      console.error('Error deleting fixture:', error);
     }
   };
 
@@ -442,6 +503,121 @@ export default function Fixtures() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Edit Dialog */}
+        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+          <DialogContent className="max-w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Edit Fixture</DialogTitle>
+              <DialogDescription>
+                Update fixture details
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 px-1">
+              <div>
+                <Label htmlFor="edit-team" className="text-base">Team</Label>
+                <Select value={newFixture.team_id} onValueChange={(value) => setNewFixture({ ...newFixture, team_id: value })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a team" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {teams.map((team) => (
+                      <SelectItem key={team.id} value={team.id}>
+                        {team.name} ({team.club.name})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div>
+                <Label htmlFor="edit-opponent" className="text-base">Opponent</Label>
+                <Input
+                  id="edit-opponent"
+                  value={newFixture.opponent_name}
+                  onChange={(e) => setNewFixture({ ...newFixture, opponent_name: e.target.value })}
+                  placeholder="Opponent team name"
+                  className="text-base min-h-[44px]"
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="edit-fixture_type">Match Type</Label>
+                <Select value={newFixture.fixture_type} onValueChange={(value: any) => setNewFixture({ ...newFixture, fixture_type: value })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FIXTURE_TYPES.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>
+                        <div className="flex items-center">
+                          <type.icon className="h-4 w-4 mr-2" />
+                          {type.label}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div>
+                <Label>Match Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !selectedDate && "text-muted-foreground"
+                      )}
+                    >
+                      <Calendar className="mr-2 h-4 w-4" />
+                      {selectedDate ? format(selectedDate, "PPP") : "Pick a date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent
+                      mode="single"
+                      selected={selectedDate}
+                      onSelect={setSelectedDate}
+                      initialFocus
+                      className="p-3 pointer-events-auto"
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              
+              <div>
+                <Label htmlFor="edit-time">Match Time</Label>
+                <Input
+                  id="edit-time"
+                  type="time"
+                  value={selectedTime}
+                  onChange={(e) => setSelectedTime(e.target.value)}
+                />
+              </div>
+              
+              <div>
+                <Label htmlFor="edit-location">Location (Optional)</Label>
+                <Input
+                  id="edit-location"
+                  value={newFixture.location}
+                  onChange={(e) => setNewFixture({ ...newFixture, location: e.target.value })}
+                  placeholder="Match venue"
+                />
+              </div>
+              
+              <div className="flex gap-2 pt-4">
+                <Button onClick={updateFixture} disabled={updating} className="flex-1">
+                  {updating ? "Updating..." : "Update Fixture"}
+                </Button>
+                <Button variant="outline" onClick={() => setEditDialogOpen(false)} className="flex-1">
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {fixtures.length === 0 ? (
@@ -473,9 +649,37 @@ export default function Fixtures() {
                       </CardTitle>
                       <CardDescription>{fixture.team.club.name}</CardDescription>
                     </div>
-                    <Badge variant={getStatusBadgeVariant(fixture.status)}>
-                      {fixture.status.replace('_', ' ')}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={getStatusBadgeVariant(fixture.status)}>
+                        {fixture.status.replace('_', ' ')}
+                      </Badge>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <Settings className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => editFixture(fixture)}>
+                            <Settings className="h-4 w-4 mr-2" />
+                            Edit Details
+                          </DropdownMenuItem>
+                          {fixture.status === 'scheduled' && (
+                            <DropdownMenuItem onClick={() => cancelFixture(fixture.id)}>
+                              <X className="h-4 w-4 mr-2" />
+                              Cancel Match
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem 
+                            onClick={() => deleteFixture(fixture.id)}
+                            className="text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">

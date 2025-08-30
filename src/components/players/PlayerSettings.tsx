@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { useToast } from '@/hooks/use-toast';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,22 +31,41 @@ interface PlayerSettingsProps {
 }
 
 export function PlayerSettings({ player, open, onOpenChange, onPlayerUpdate }: PlayerSettingsProps) {
-  const { toast } = useToast();
+  const { user } = useAuth();
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [editedPlayer, setEditedPlayer] = useState({
     first_name: player.first_name,
     last_name: player.last_name,
     jersey_number: player.jersey_number?.toString() || '',
   });
 
+  useEffect(() => {
+    checkAdminRole();
+  }, [user, player.club_id]);
+
+  const checkAdminRole = async () => {
+    if (!user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('club_members')
+        .select('role')
+        .eq('club_id', player.club_id)
+        .eq('user_id', user.id)
+        .single();
+      
+      if (error) throw error;
+      setIsAdmin(data?.role === 'admin');
+    } catch (error) {
+      console.error('Error checking admin role:', error);
+      setIsAdmin(false);
+    }
+  };
+
   const updatePlayer = async () => {
     if (!editedPlayer.first_name.trim() || !editedPlayer.last_name.trim()) {
-      toast({
-        title: "Error",
-        description: "First name and last name are required",
-        variant: "destructive",
-      });
       return;
     }
 
@@ -70,26 +89,18 @@ export function PlayerSettings({ player, open, onOpenChange, onPlayerUpdate }: P
 
       if (error) throw error;
 
-      toast({
-        title: "Success",
-        description: "Player updated successfully",
-      });
-
       onOpenChange(false);
       onPlayerUpdate();
     } catch (error) {
       console.error('Error updating player:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update player",
-        variant: "destructive",
-      });
     } finally {
       setSaving(false);
     }
   };
 
   const deletePlayer = async () => {
+    if (!isAdmin) return;
+    
     try {
       setDeleting(true);
       
@@ -107,20 +118,10 @@ export function PlayerSettings({ player, open, onOpenChange, onPlayerUpdate }: P
 
       if (error) throw error;
 
-      toast({
-        title: "Success",
-        description: "Player deleted successfully",
-      });
-
       onOpenChange(false);
       onPlayerUpdate();
     } catch (error) {
       console.error('Error deleting player:', error);
-      toast({
-        title: "Error",
-        description: "Failed to delete player",
-        variant: "destructive",
-      });
     } finally {
       setDeleting(false);
     }
@@ -180,35 +181,37 @@ export function PlayerSettings({ player, open, onOpenChange, onPlayerUpdate }: P
           </div>
           
           <div className="flex justify-between pt-4">
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" size="sm">
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete Player
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete Player</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Are you sure you want to delete "{player.first_name} {player.last_name}"? 
-                    This action cannot be undone and will remove the player from all teams.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={deletePlayer} disabled={deleting}>
-                    {deleting ? "Deleting..." : "Delete"}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            {isAdmin && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" size="sm">
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Player
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete Player</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Are you sure you want to delete "{player.first_name} {player.last_name}"? 
+                      This action cannot be undone and will remove the player from all teams.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={deletePlayer} disabled={deleting}>
+                      {deleting ? "Deleting..." : "Delete"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
 
-            <div className="flex gap-2">
-              <Button onClick={updatePlayer} disabled={saving}>
+            <div className={`flex gap-2 ${!isAdmin ? 'w-full' : ''}`}>
+              <Button onClick={updatePlayer} disabled={saving} className={!isAdmin ? 'flex-1' : ''}>
                 {saving ? "Saving..." : "Save Changes"}
               </Button>
-              <Button variant="outline" onClick={handleCancel}>
+              <Button variant="outline" onClick={handleCancel} className={!isAdmin ? 'flex-1' : ''}>
                 Cancel
               </Button>
             </div>
