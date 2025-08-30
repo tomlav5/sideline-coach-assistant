@@ -282,11 +282,13 @@ export default function MatchDay() {
   const openEventDialog = (type: MatchEvent['event_type'], isOurTeam: boolean) => {
     setEventDialog({ open: true, type, isOurTeam });
     setSelectedPlayer('');
+    setSelectedAssist('');
     setIsPenalty(false);
   };
 
   const closeEventDialog = () => {
     setEventDialog({ open: false, type: null, isOurTeam: true });
+    setSelectedPlayer('');
     setSelectedAssist('');
   };
 
@@ -521,14 +523,6 @@ export default function MatchDay() {
                   Goal
                 </Button>
                 <Button
-                  onClick={() => openEventDialog('assist', true)}
-                  variant="outline"
-                  className="w-full"
-                >
-                  <TrendingUp className="h-4 w-4 mr-2" />
-                  Assist
-                </Button>
-                <Button
                   onClick={() => openEventDialog('corner', true)}
                   variant="outline"
                   className="w-full"
@@ -541,6 +535,7 @@ export default function MatchDay() {
                   variant="outline"
                   className="w-full"
                 >
+                  <Trophy className="h-4 w-4 mr-2" />
                   Free Kick
                 </Button>
                 <Button
@@ -548,6 +543,7 @@ export default function MatchDay() {
                   variant="outline"
                   className="w-full"
                 >
+                  <Users className="h-4 w-4 mr-2" />
                   Throw In
                 </Button>
                 <Button
@@ -555,6 +551,7 @@ export default function MatchDay() {
                   variant="outline"
                   className="w-full"
                 >
+                  <Target className="h-4 w-4 mr-2" />
                   Penalty
                 </Button>
               </CardContent>
@@ -586,6 +583,7 @@ export default function MatchDay() {
                   variant="outline"
                   className="w-full"
                 >
+                  <Trophy className="h-4 w-4 mr-2" />
                   Free Kick
                 </Button>
                 <Button
@@ -593,6 +591,7 @@ export default function MatchDay() {
                   variant="outline"
                   className="w-full"
                 >
+                  <Users className="h-4 w-4 mr-2" />
                   Throw In
                 </Button>
                 <Button
@@ -600,6 +599,7 @@ export default function MatchDay() {
                   variant="outline"
                   className="w-full"
                 >
+                  <Target className="h-4 w-4 mr-2" />
                   Penalty
                 </Button>
               </CardContent>
@@ -783,12 +783,12 @@ export default function MatchDay() {
           </DialogHeader>
           
           <div className="space-y-4">
-            {eventDialog.isOurTeam && (eventDialog.type === 'goal' || eventDialog.type === 'assist') && (
+            {eventDialog.isOurTeam && (eventDialog.type === 'goal') && (
               <div>
-                <Label>{eventDialog.type === 'goal' ? 'Goal Scorer' : 'Player'}</Label>
+                <Label>Goal Scorer</Label>
                 <Select value={selectedPlayer} onValueChange={setSelectedPlayer}>
                   <SelectTrigger>
-                    <SelectValue placeholder={`Select ${eventDialog.type === 'goal' ? 'scorer' : 'player'}`} />
+                    <SelectValue placeholder="Select goal scorer" />
                   </SelectTrigger>
                   <SelectContent>
                     {matchState.squad.map((player) => (
