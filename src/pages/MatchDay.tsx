@@ -56,7 +56,7 @@ interface GameState {
 
 interface MatchEvent {
   id?: string;
-  event_type: 'goal' | 'assist' | 'throw_in' | 'corner' | 'free_kick' | 'penalty';
+  event_type: 'goal' | 'assist' | 'throw_in' | 'corner' | 'free_kick' | 'penalty' | 'goal_kick';
   player_id?: string;
   is_our_team: boolean;
   half: 'first' | 'second';
@@ -305,6 +305,91 @@ export default function MatchDay() {
     });
   };
 
+  const saveMatchData = async () => {
+    try {
+      // Calculate final player times
+      const finalPlayerTimes = gameState.playerTimes.map(pt => {
+        const currentTime = getCurrentTime();
+        let totalMinutes = 0;
+        
+        if (pt.time_on !== null) {
+          const endTime = pt.time_off || currentTime;
+          totalMinutes = Math.floor((endTime - pt.time_on) / 60);
+        }
+        
+        return {
+          ...pt,
+          total_minutes: totalMinutes
+        };
+      });
+
+      // Save player time logs to database
+      const { error: timeLogError } = await supabase
+        .from('player_time_logs')
+        .insert(
+          finalPlayerTimes.map(pt => ({
+            fixture_id: fixtureId,
+            player_id: pt.player_id,
+            is_starter: pt.is_starter,
+            time_on: pt.time_on,
+            time_off: pt.time_off,
+            half: pt.half,
+            total_minutes: pt.total_minutes
+          }))
+        );
+
+      if (timeLogError) throw timeLogError;
+
+      // Update fixture status to completed
+      const { error: fixtureError } = await supabase
+        .from('fixtures')
+        .update({ 
+          status: 'completed',
+          selected_squad_data: {
+            starters: matchState.starters,
+            substitutes: matchState.substitutes.map(s => s.id),
+            events: gameState.events.map(e => ({
+              event_type: e.event_type,
+              player_id: e.player_id || null,
+              is_our_team: e.is_our_team,
+              half: e.half,
+              minute: e.minute,
+              is_penalty: e.is_penalty || false
+            })),
+            playerTimes: finalPlayerTimes.map(pt => ({
+              player_id: pt.player_id,
+              is_starter: pt.is_starter,
+              time_on: pt.time_on,
+              time_off: pt.time_off,
+              half: pt.half,
+              total_minutes: pt.total_minutes
+            }))
+          }
+        })
+        .eq('id', fixtureId);
+
+      if (fixtureError) throw fixtureError;
+
+      toast({
+        title: "Match Saved Successfully",
+        description: "All match data has been saved to the database",
+      });
+
+      // Navigate back to fixtures after a delay
+      setTimeout(() => {
+        navigate('/fixtures');
+      }, 2000);
+
+    } catch (error) {
+      console.error('Error saving match data:', error);
+      toast({
+        title: "Error Saving Match",
+        description: "Failed to save match data. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const endHalf = () => {
     setGameState(prev => ({ ...prev, isRunning: false }));
     setStartTimes(st => ({ 
@@ -321,10 +406,12 @@ export default function MatchDay() {
         description: "Get ready for the second half",
       });
     } else {
+      // Match completed, save data
       toast({
         title: "Match Ended",
-        description: "Time to save match data",
+        description: "Saving match data...",
       });
+      saveMatchData();
     }
   };
 
@@ -651,6 +738,14 @@ export default function MatchDay() {
                   <Target className="h-4 w-4 mr-2" />
                   Penalty
                 </Button>
+                <Button
+                  onClick={() => openEventDialog('goal_kick', true)}
+                  variant="outline"
+                  className="w-full"
+                >
+                  <Flag className="h-4 w-4 mr-2" />
+                  Goal Kick
+                </Button>
               </CardContent>
             </Card>
 
@@ -698,6 +793,14 @@ export default function MatchDay() {
                 >
                   <Target className="h-4 w-4 mr-2" />
                   Penalty
+                </Button>
+                <Button
+                  onClick={() => openEventDialog('goal_kick', false)}
+                  variant="outline"
+                  className="w-full"
+                >
+                  <Flag className="h-4 w-4 mr-2" />
+                  Goal Kick
                 </Button>
               </CardContent>
             </Card>

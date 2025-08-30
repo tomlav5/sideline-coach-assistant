@@ -75,6 +75,10 @@ export type Database = {
       }
       fixtures: {
         Row: {
+          competition_name: string | null
+          competition_type:
+            | Database["public"]["Enums"]["competition_type"]
+            | null
           created_at: string
           fixture_type: Database["public"]["Enums"]["fixture_type"]
           half_length: number
@@ -88,6 +92,10 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          competition_name?: string | null
+          competition_type?:
+            | Database["public"]["Enums"]["competition_type"]
+            | null
           created_at?: string
           fixture_type: Database["public"]["Enums"]["fixture_type"]
           half_length?: number
@@ -101,6 +109,10 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          competition_name?: string | null
+          competition_type?:
+            | Database["public"]["Enums"]["competition_type"]
+            | null
           created_at?: string
           fixture_type?: Database["public"]["Enums"]["fixture_type"]
           half_length?: number
@@ -406,6 +418,7 @@ export type Database = {
       }
     }
     Enums: {
+      competition_type: "league" | "tournament" | "friendly"
       event_type:
         | "goal"
         | "assist"
@@ -413,6 +426,7 @@ export type Database = {
         | "corner"
         | "free_kick"
         | "penalty"
+        | "goal_kick"
       fixture_type: "home" | "away"
       match_half: "first" | "second"
       match_status: "scheduled" | "in_progress" | "completed"
@@ -545,6 +559,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      competition_type: ["league", "tournament", "friendly"],
       event_type: [
         "goal",
         "assist",
@@ -552,6 +567,7 @@ export const Constants = {
         "corner",
         "free_kick",
         "penalty",
+        "goal_kick",
       ],
       fixture_type: ["home", "away"],
       match_half: ["first", "second"],

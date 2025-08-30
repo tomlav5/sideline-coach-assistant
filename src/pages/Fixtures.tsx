@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, Clock, MapPin, Plus, Play, Home, Plane, Users } from 'lucide-react';
+import { Calendar, Clock, MapPin, Plus, Play, Home, Plane, Users, Trophy } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
@@ -37,11 +37,19 @@ interface Fixture {
   team_id: string;
   team: Team;
   created_at: string;
+  competition_type: 'league' | 'tournament' | 'friendly';
+  competition_name: string | null;
 }
 
 const FIXTURE_TYPES = [
   { value: 'home', label: 'Home', icon: Home },
   { value: 'away', label: 'Away', icon: Plane },
+];
+
+const COMPETITION_TYPES = [
+  { value: 'league', label: 'League Match' },
+  { value: 'tournament', label: 'Tournament' },
+  { value: 'friendly', label: 'Friendly' },
 ];
 
 const STATUS_COLORS = {
@@ -61,13 +69,29 @@ export default function Fixtures() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [selectedTime, setSelectedTime] = useState('');
-  const [newFixture, setNewFixture] = useState({
+  const [newFixture, setNewFixture] = useState<{
+    team_id: string;
+    opponent_name: string;
+    location: string;
+    fixture_type: 'home' | 'away';
+    half_length: number;
+    competition_type: 'league' | 'tournament' | 'friendly';
+    competition_name: string;
+  }>({
     team_id: '',
     opponent_name: '',
     location: '',
-    fixture_type: 'home' as const,
+    fixture_type: 'home',
     half_length: 25,
+    competition_type: 'friendly',
+    competition_name: '',
   });
+
+  // Remember last competition settings
+  const [lastCompetition, setLastCompetition] = useState<{
+    type: 'league' | 'tournament' | 'friendly';
+    name: string;
+  } | null>(null);
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
@@ -134,6 +158,16 @@ export default function Fixtures() {
       return;
     }
 
+    // Validate competition name for tournaments
+    if (newFixture.competition_type === 'tournament' && !newFixture.competition_name.trim()) {
+      toast({
+        title: "Error",
+        description: "Tournament name is required for tournament matches",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       setCreating(true);
       
@@ -152,9 +186,17 @@ export default function Fixtures() {
           half_length: newFixture.half_length,
           scheduled_date: scheduledDateTime.toISOString(),
           status: 'scheduled',
+          competition_type: newFixture.competition_type,
+          competition_name: newFixture.competition_name.trim() || null,
         }]);
 
       if (error) throw error;
+
+      // Remember this competition for next fixture
+      setLastCompetition({
+        type: newFixture.competition_type,
+        name: newFixture.competition_name.trim()
+      });
 
       toast({
         title: "Success",
@@ -183,6 +225,8 @@ export default function Fixtures() {
       location: '',
       fixture_type: 'home',
       half_length: 25,
+      competition_type: (lastCompetition?.type || 'friendly') as 'league' | 'tournament' | 'friendly',
+      competition_name: lastCompetition?.name || '',
     });
     setSelectedDate(undefined);
     setSelectedTime('');
@@ -337,6 +381,44 @@ export default function Fixtures() {
               </div>
               
               <div>
+                <Label htmlFor="competition_type">Competition Type</Label>
+                <Select 
+                  value={newFixture.competition_type} 
+                  onValueChange={(value: 'league' | 'tournament' | 'friendly') => setNewFixture({ 
+                    ...newFixture, 
+                    competition_type: value,
+                    competition_name: value === 'friendly' ? '' : newFixture.competition_name
+                  })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {COMPETITION_TYPES.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>
+                        {type.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {(newFixture.competition_type === 'tournament' || newFixture.competition_type === 'league') && (
+                <div>
+                  <Label htmlFor="competition_name">
+                    {newFixture.competition_type === 'tournament' ? 'Tournament Name' : 'League Name'} 
+                    {newFixture.competition_type === 'tournament' && <span className="text-destructive">*</span>}
+                  </Label>
+                  <Input
+                    id="competition_name"
+                    value={newFixture.competition_name}
+                    onChange={(e) => setNewFixture({ ...newFixture, competition_name: e.target.value })}
+                    placeholder={`Enter ${newFixture.competition_type} name`}
+                  />
+                </div>
+              )}
+
+              <div>
                 <Label htmlFor="half_length">Half Length (minutes)</Label>
                 <Input
                   id="half_length"
@@ -406,12 +488,20 @@ export default function Fixtures() {
                     {formatTime(fixture.scheduled_date)} ({fixture.half_length}min halves)
                   </div>
                   
-                  {fixture.location && (
-                    <div className="flex items-center text-sm text-muted-foreground">
-                      <MapPin className="h-4 w-4 mr-2" />
-                      {fixture.location}
-                    </div>
-                  )}
+                   {fixture.location && (
+                     <div className="flex items-center text-sm text-muted-foreground">
+                       <MapPin className="h-4 w-4 mr-2" />
+                       {fixture.location}
+                     </div>
+                   )}
+                   
+                   {fixture.competition_type !== 'friendly' && (
+                     <div className="flex items-center text-sm text-muted-foreground">
+                       <Trophy className="h-4 w-4 mr-2" />
+                       {fixture.competition_type === 'league' ? 'League' : 'Tournament'}
+                       {fixture.competition_name && `: ${fixture.competition_name}`}
+                     </div>
+                   )}
                   
                    {fixture.status === 'scheduled' && (
                      <div className="flex space-x-2 mt-4">
