@@ -178,9 +178,9 @@ export default function ClubManagement() {
   }
 
   return (
-    <div className="container mx-auto p-4 space-y-6">
+    <div className="container mx-auto p-4 space-y-6 max-w-7xl">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
+        <div className="w-full sm:w-auto">
           <h1 className="text-2xl font-bold text-foreground">Club Management</h1>
           <p className="text-muted-foreground">Manage your football clubs and their settings</p>
         </div>
@@ -237,55 +237,65 @@ export default function ClubManagement() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-4 sm:gap-6 xl:grid-cols-2">
           {clubs.map((club) => {
             const userRole = club.currentUserRole || 'viewer';
             const RoleIcon = getRoleIcon(userRole);
             
             return (
-              <div key={club.id} className="space-y-6">
-                <Card className="hover:shadow-md transition-shadow">
-                  <CardHeader>
-                    <div className="flex justify-between items-start">
-                      <div className="flex items-center space-x-3">
+              <div key={club.id} className="space-y-4 sm:space-y-6 w-full min-w-0">
+                <Card className="hover:shadow-md transition-shadow w-full">
+                  <CardHeader className="pb-4">
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+                      <div className="flex items-center space-x-3 min-w-0 flex-1">
                         {club.logo_url ? (
                           <img
                             src={club.logo_url}
                             alt={`${club.name} logo`}
-                            className="w-12 h-12 rounded-lg object-cover border"
+                            className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg object-cover border flex-shrink-0"
                           />
                         ) : (
-                          <div className="w-12 h-12 rounded-lg border border-dashed border-muted-foreground flex items-center justify-center">
-                            <Users className="h-6 w-6 text-muted-foreground" />
+                          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg border border-dashed border-muted-foreground flex items-center justify-center flex-shrink-0">
+                            <Users className="h-5 w-5 sm:h-6 sm:w-6 text-muted-foreground" />
                           </div>
                         )}
-                        <div>
-                          <CardTitle className="text-xl">{club.name}</CardTitle>
-                          <CardDescription>
+                        <div className="min-w-0 flex-1">
+                          <CardTitle className="text-lg sm:text-xl truncate">{club.name}</CardTitle>
+                          <CardDescription className="text-sm">
                             Created {new Date(club.created_at).toLocaleDateString()}
                           </CardDescription>
                         </div>
                       </div>
-                      <Badge variant="secondary" className="flex items-center gap-1">
+                      <Badge variant="secondary" className="flex items-center gap-1 self-start shrink-0">
                         <RoleIcon className="h-3 w-3" />
-                        {userRole}
+                        <span className="text-xs">{userRole}</span>
                       </Badge>
                     </div>
                   </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center justify-between">
+                  <CardContent className="pt-0">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                       <div className="flex items-center text-sm text-muted-foreground">
-                        <Users className="h-4 w-4 mr-1" />
-                        {club.members.length} members
+                        <Users className="h-4 w-4 mr-1 flex-shrink-0" />
+                        <span>{club.members.length} members</span>
                       </div>
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => window.location.href = '/teams'}>
+                      <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => window.location.href = '/teams'}
+                          className="flex-1 sm:flex-none min-h-[36px]"
+                        >
                           <Users className="h-4 w-4 mr-1" />
-                          Teams
+                          <span>Teams</span>
                         </Button>
-                        <Button size="sm" variant="outline" onClick={() => window.location.href = '/fixtures'}>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => window.location.href = '/fixtures'}
+                          className="flex-1 sm:flex-none min-h-[36px]"
+                        >
                           <Calendar className="h-4 w-4 mr-1" />
-                          Fixtures
+                          <span>Fixtures</span>
                         </Button>
                       </div>
                     </div>
@@ -294,19 +304,23 @@ export default function ClubManagement() {
 
                 {/* Logo Upload - Only for Admins */}
                 {userRole === 'admin' && (
-                  <LogoUpload
-                    clubId={club.id}
-                    currentLogoUrl={club.logo_url}
-                    onLogoUpdate={(logoUrl) => updateClubLogo(club.id, logoUrl)}
-                  />
+                  <div className="w-full">
+                    <LogoUpload
+                      clubId={club.id}
+                      currentLogoUrl={club.logo_url}
+                      onLogoUpdate={(logoUrl) => updateClubLogo(club.id, logoUrl)}
+                    />
+                  </div>
                 )}
 
                 {/* User Management - Only for Admins */}
                 {userRole === 'admin' && (
-                  <UserManagement 
-                    clubId={club.id} 
-                    currentUserRole={userRole}
-                  />
+                  <div className="w-full">
+                    <UserManagement 
+                      clubId={club.id} 
+                      currentUserRole={userRole}
+                    />
+                  </div>
                 )}
               </div>
             );

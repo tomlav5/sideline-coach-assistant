@@ -6,7 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/hooks/useTheme";
 import { Layout } from "@/components/layout/Layout";
-import Dashboard from "./pages/Dashboard";
+import Index from "./pages/Index";
 import Teams from "./pages/Teams";
 import Players from "./pages/Players";
 import Fixtures from "./pages/Fixtures";
@@ -29,7 +29,7 @@ const App = () => (
           <AuthProvider>
             <Routes>
               <Route path="/auth" element={<Auth />} />
-              <Route path="/" element={<Layout><Dashboard /></Layout>} />
+              <Route path="/" element={<Layout><Index /></Layout>} />
               <Route path="/teams" element={<Layout><Teams /></Layout>} />
               <Route path="/players" element={<Layout><Players /></Layout>} />
               <Route path="/fixtures" element={<Layout><Fixtures /></Layout>} />
