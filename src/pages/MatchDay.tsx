@@ -322,7 +322,7 @@ export default function MatchDay() {
       }));
 
       // If it's a goal and there's an assist, add the assist event too
-      if (eventDialog.type === 'goal' && selectedAssist && eventDialog.isOurTeam) {
+      if (eventDialog.type === 'goal' && selectedAssist && selectedAssist !== 'none' && eventDialog.isOurTeam) {
         const assistEvent: MatchEvent = {
           event_type: 'assist',
           player_id: selectedAssist,
@@ -349,7 +349,7 @@ export default function MatchDay() {
       
       toast({
         title: "Event Added",
-        description: `${eventDialog.type} recorded at minute ${getCurrentMinute()}${selectedAssist && eventDialog.type === 'goal' ? ' with assist' : ''}`,
+        description: `${eventDialog.type} recorded at minute ${getCurrentMinute()}${selectedAssist && selectedAssist !== 'none' && eventDialog.type === 'goal' ? ' with assist' : ''}`,
       });
       
       closeEventDialog();
@@ -828,7 +828,7 @@ export default function MatchDay() {
                     <SelectValue placeholder="Select assist player (optional)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No assist</SelectItem>
+                    <SelectItem value="none">No assist</SelectItem>
                     {matchState.squad
                       .filter(player => player.id !== selectedPlayer)
                       .map((player) => (
