@@ -111,35 +111,53 @@ const Index = () => {
 
         {/* Quick Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-          <Card className="bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900 border-blue-200 dark:border-blue-800">
+          <Card 
+            className="bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900 border-blue-200 dark:border-blue-800 cursor-pointer hover:shadow-lg transition-all duration-300 group"
+            onClick={() => navigate('/fixtures')}
+          >
             <CardContent className="p-4 sm:p-6 text-center">
-              <div className="text-2xl sm:text-3xl font-bold text-blue-700 dark:text-blue-300">
+              <div className="text-2xl sm:text-3xl font-bold text-blue-700 dark:text-blue-300 group-hover:scale-110 transition-transform">
                 {stats.upcomingFixtures}
               </div>
-              <div className="text-sm text-blue-600 dark:text-blue-400 mt-1">
+              <div className="text-sm text-blue-600 dark:text-blue-400 mt-1 group-hover:text-blue-500 dark:group-hover:text-blue-300">
                 Upcoming Fixtures
               </div>
+              <div className="text-xs text-blue-500 dark:text-blue-400 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                Click to view all →
+              </div>
             </CardContent>
           </Card>
           
-          <Card className="bg-gradient-to-r from-green-50 to-green-100 dark:from-green-950 dark:to-green-900 border-green-200 dark:border-green-800">
+          <Card 
+            className="bg-gradient-to-r from-green-50 to-green-100 dark:from-green-950 dark:to-green-900 border-green-200 dark:border-green-800 cursor-pointer hover:shadow-lg transition-all duration-300 group"
+            onClick={() => navigate('/teams')}
+          >
             <CardContent className="p-4 sm:p-6 text-center">
-              <div className="text-2xl sm:text-3xl font-bold text-green-700 dark:text-green-300">
+              <div className="text-2xl sm:text-3xl font-bold text-green-700 dark:text-green-300 group-hover:scale-110 transition-transform">
                 {stats.totalTeams}
               </div>
-              <div className="text-sm text-green-600 dark:text-green-400 mt-1">
+              <div className="text-sm text-green-600 dark:text-green-400 mt-1 group-hover:text-green-500 dark:group-hover:text-green-300">
                 Teams
+              </div>
+              <div className="text-xs text-green-500 dark:text-green-400 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                Click to manage →
               </div>
             </CardContent>
           </Card>
           
-          <Card className="bg-gradient-to-r from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900 border-purple-200 dark:border-purple-800">
+          <Card 
+            className="bg-gradient-to-r from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900 border-purple-200 dark:border-purple-800 cursor-pointer hover:shadow-lg transition-all duration-300 group"
+            onClick={() => navigate('/players')}
+          >
             <CardContent className="p-4 sm:p-6 text-center">
-              <div className="text-2xl sm:text-3xl font-bold text-purple-700 dark:text-purple-300">
+              <div className="text-2xl sm:text-3xl font-bold text-purple-700 dark:text-purple-300 group-hover:scale-110 transition-transform">
                 {stats.totalPlayers}
               </div>
-              <div className="text-sm text-purple-600 dark:text-purple-400 mt-1">
+              <div className="text-sm text-purple-600 dark:text-purple-400 mt-1 group-hover:text-purple-500 dark:group-hover:text-purple-300">
                 Players
+              </div>
+              <div className="text-xs text-purple-500 dark:text-purple-400 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                Click to view all →
               </div>
             </CardContent>
           </Card>
