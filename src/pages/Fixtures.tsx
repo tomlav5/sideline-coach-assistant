@@ -275,21 +275,21 @@ export default function Fixtures() {
         
         <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="touch-target">
+            <Button className="touch-target w-full sm:w-auto">
               <Plus className="h-4 w-4 mr-2" />
               Create Fixture
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Create New Fixture</DialogTitle>
               <DialogDescription>
                 Schedule a new match for your team
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 max-h-96 overflow-y-auto">
+            <div className="space-y-4 px-1">
               <div>
-                <Label htmlFor="team">Team</Label>
+                <Label htmlFor="team" className="text-base">Team</Label>
                 <Select value={newFixture.team_id} onValueChange={(value) => setNewFixture({ ...newFixture, team_id: value })}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select a team" />
@@ -305,12 +305,13 @@ export default function Fixtures() {
               </div>
               
               <div>
-                <Label htmlFor="opponent">Opponent</Label>
+                <Label htmlFor="opponent" className="text-base">Opponent</Label>
                 <Input
                   id="opponent"
                   value={newFixture.opponent_name}
                   onChange={(e) => setNewFixture({ ...newFixture, opponent_name: e.target.value })}
                   placeholder="Opponent team name"
+                  className="text-base min-h-[44px]"
                 />
               </div>
               
@@ -458,7 +459,7 @@ export default function Fixtures() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
           {fixtures.map((fixture) => {
             const TypeIcon = getFixtureTypeIcon(fixture.fixture_type);
             return (
@@ -504,11 +505,11 @@ export default function Fixtures() {
                    )}
                   
                    {fixture.status === 'scheduled' && (
-                     <div className="flex space-x-2 mt-4">
+                     <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 mt-4">
                        <Button 
                          size="sm" 
                          onClick={() => navigate(`/squad/${fixture.id}`)}
-                         className="flex-1 bg-blue-600 hover:bg-blue-700"
+                         className="flex-1 bg-blue-600 hover:bg-blue-700 min-h-[44px]"
                        >
                          <Users className="h-4 w-4 mr-1" />
                          Select Squad
@@ -517,7 +518,7 @@ export default function Fixtures() {
                          size="sm" 
                          variant="outline"
                          disabled={true}
-                         className="flex-1"
+                         className="flex-1 min-h-[44px]"
                        >
                          <Play className="h-4 w-4 mr-1" />
                          Start Match

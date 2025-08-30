@@ -340,19 +340,19 @@ export default function Reports() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-6">
       <div className="flex items-center space-x-2">
-        <Trophy className="h-8 w-8 text-primary" />
-        <h1 className="text-3xl font-bold">Reports</h1>
+        <Trophy className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
+        <h1 className="text-2xl sm:text-3xl font-bold">Reports</h1>
       </div>
 
       {/* Competition Filter */}
       <Card>
         <CardContent className="p-4">
-          <div className="flex items-center space-x-4">
-            <Label htmlFor="competition-filter">Filter by Competition:</Label>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+            <Label htmlFor="competition-filter" className="text-base font-medium">Filter by Competition:</Label>
             <Select value={competitionFilter} onValueChange={setCompetitionFilter}>
-              <SelectTrigger className="w-64">
+              <SelectTrigger className="w-full sm:w-64 min-h-[44px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -374,18 +374,18 @@ export default function Reports() {
       </Card>
 
       <Tabs defaultValue="matches" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="matches" className="flex items-center space-x-2">
+        <TabsList className="grid w-full grid-cols-3 h-auto">
+          <TabsTrigger value="matches" className="flex flex-col sm:flex-row items-center space-y-1 sm:space-y-0 sm:space-x-2 p-2 sm:p-3">
             <Calendar className="h-4 w-4" />
-            <span>Match Results</span>
+            <span className="text-xs sm:text-sm">Match Results</span>
           </TabsTrigger>
-          <TabsTrigger value="scorers" className="flex items-center space-x-2">
+          <TabsTrigger value="scorers" className="flex flex-col sm:flex-row items-center space-y-1 sm:space-y-0 sm:space-x-2 p-2 sm:p-3">
             <Target className="h-4 w-4" />
-            <span>Goal Scorers</span>
+            <span className="text-xs sm:text-sm">Goal Scorers</span>
           </TabsTrigger>
-          <TabsTrigger value="playing-time" className="flex items-center space-x-2">
+          <TabsTrigger value="playing-time" className="flex flex-col sm:flex-row items-center space-y-1 sm:space-y-0 sm:space-x-2 p-2 sm:p-3">
             <Clock className="h-4 w-4" />
-            <span>Playing Time</span>
+            <span className="text-xs sm:text-sm">Playing Time</span>
           </TabsTrigger>
         </TabsList>
 
@@ -400,15 +400,16 @@ export default function Reports() {
                   No completed matches found
                 </div>
               ) : (
+                <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Team</TableHead>
-                      <TableHead>Opponent</TableHead>
-                      <TableHead>Score</TableHead>
-                      <TableHead>Result</TableHead>
-                      <TableHead>Location</TableHead>
+                      <TableHead className="text-xs sm:text-sm">Date</TableHead>
+                      <TableHead className="text-xs sm:text-sm">Team</TableHead>
+                      <TableHead className="text-xs sm:text-sm">Opponent</TableHead>
+                      <TableHead className="text-center text-xs sm:text-sm">Score</TableHead>
+                      <TableHead className="text-center text-xs sm:text-sm">Result</TableHead>
+                      <TableHead className="text-xs sm:text-sm">Location</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -416,22 +417,22 @@ export default function Reports() {
                       const { result, color } = getMatchResult(match.our_score, match.opponent_score);
                       return (
                         <TableRow key={match.id}>
-                          <TableCell>
+                          <TableCell className="text-xs sm:text-sm">
                             {format(new Date(match.scheduled_date), 'dd/MM/yyyy')}
                           </TableCell>
-                          <TableCell className="font-medium">
+                          <TableCell className="font-medium text-xs sm:text-sm">
                             {match.team_name}
                           </TableCell>
-                          <TableCell>{match.opponent_name}</TableCell>
-                          <TableCell className="font-mono text-lg">
+                          <TableCell className="text-xs sm:text-sm">{match.opponent_name}</TableCell>
+                          <TableCell className="text-center font-mono text-sm sm:text-lg">
                             {match.our_score} - {match.opponent_score}
                           </TableCell>
-                          <TableCell>
-                            <Badge className={`${color} text-white`}>
+                          <TableCell className="text-center">
+                            <Badge className={`${color} text-white text-xs`}>
                               {result}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-muted-foreground">
+                          <TableCell className="text-muted-foreground text-xs sm:text-sm">
                             {match.location}
                           </TableCell>
                         </TableRow>
@@ -439,6 +440,7 @@ export default function Reports() {
                     })}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </CardContent>
           </Card>
