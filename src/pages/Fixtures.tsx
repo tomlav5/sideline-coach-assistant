@@ -8,14 +8,15 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, Clock, MapPin, Plus, Play, Home, Plane, Users, Trophy, Settings, X, Trash2 } from 'lucide-react';
+import { Calendar, Clock, MapPin, Plus, Play, Home, Plane, Users, Trophy, Settings, X, Trash2, Filter, CalendarDays } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { format } from 'date-fns';
+import { format, isAfter, isBefore, startOfDay, endOfDay, subDays, addDays } from 'date-fns';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface Team {
   id: string;
@@ -70,6 +71,13 @@ export default function Fixtures() {
   const [editingFixture, setEditingFixture] = useState<Fixture | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [selectedTime, setSelectedTime] = useState('');
+  
+  // Date filtering state
+  const [dateFilterOpen, setDateFilterOpen] = useState(false);
+  const [startDate, setStartDate] = useState<Date>();
+  const [endDate, setEndDate] = useState<Date>();
+  const [activeTab, setActiveTab] = useState<string>('upcoming');
+  
   const [newFixture, setNewFixture] = useState<{
     team_id: string;
     opponent_name: string;
@@ -134,7 +142,7 @@ export default function Fixtures() {
             club:clubs(id, name)
           )
         `)
-        .order('scheduled_date', { ascending: true });
+        .order('scheduled_date', { ascending: false }); // Show most recent first
 
       if (error) throw error;
       setFixtures(data || []);
@@ -310,6 +318,191 @@ export default function Fixtures() {
     return fixtureType?.icon || Home;
   };
 
+  // Filter fixtures based on date range and past/upcoming
+  const getFilteredFixtures = (isPast: boolean) => {
+    const now = new Date();
+    let filtered = fixtures.filter(fixture => {
+      const fixtureDate = new Date(fixture.scheduled_date);
+      return isPast ? isBefore(fixtureDate, now) : isAfter(fixtureDate, now) || 
+             (fixtureDate.toDateString() === now.toDateString());
+    });
+
+    // Apply date range filter if set
+    if (startDate && endDate) {
+      filtered = filtered.filter(fixture => {
+        const fixtureDate = new Date(fixture.scheduled_date);
+        return isAfter(fixtureDate, startOfDay(startDate)) && 
+               isBefore(fixtureDate, endOfDay(endDate));
+      });
+    }
+
+    return filtered;
+  };
+
+  const upcomingFixtures = getFilteredFixtures(false);
+  const pastFixtures = getFilteredFixtures(true);
+
+  // Quick date filter options
+  const applyQuickFilter = (days: number) => {
+    const now = new Date();
+    if (days > 0) {
+      // Future dates
+      setStartDate(now);
+      setEndDate(addDays(now, days));
+      setActiveTab('upcoming');
+    } else {
+      // Past dates
+      setStartDate(addDays(now, days));
+      setEndDate(now);
+      setActiveTab('past');
+    }
+  };
+
+  const clearDateFilter = () => {
+    setStartDate(undefined);
+    setEndDate(undefined);
+  };
+
+  const renderFixtures = (fixtureList: Fixture[], type: 'upcoming' | 'past') => {
+    if (loading) {
+      return (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {[...Array(6)].map((_, i) => (
+            <Skeleton key={i} className="h-48" />
+          ))}
+        </div>
+      );
+    }
+
+    if (fixtureList.length === 0) {
+      return (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Calendar className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">
+              No {type} fixtures {(startDate || endDate) ? 'in date range' : 'found'}
+            </h3>
+            <p className="text-muted-foreground text-center mb-4">
+              {type === 'upcoming' 
+                ? 'Create your first fixture to start scheduling matches'
+                : 'No past fixtures to display'}
+            </p>
+            {type === 'upcoming' && (
+              <Button onClick={() => setCreateDialogOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Create Fixture
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      );
+    }
+
+    return (
+      <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+        {fixtureList.map((fixture) => {
+          const TypeIcon = getFixtureTypeIcon(fixture.fixture_type);
+          const isUpcoming = type === 'upcoming';
+          
+          return (
+            <Card key={fixture.id} className="hover:shadow-md transition-shadow">
+              <CardHeader>
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <TypeIcon className="h-5 w-5" />
+                      {fixture.team.name} vs {fixture.opponent_name}
+                    </CardTitle>
+                    <CardDescription>{fixture.team.club.name}</CardDescription>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={getStatusBadgeVariant(fixture.status)}>
+                      {fixture.status.replace('_', ' ')}
+                    </Badge>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                          <Settings className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => editFixture(fixture)}>
+                          <Settings className="h-4 w-4 mr-2" />
+                          Edit Details
+                        </DropdownMenuItem>
+                        {fixture.status === 'scheduled' && (
+                          <DropdownMenuItem onClick={() => cancelFixture(fixture.id)}>
+                            <X className="h-4 w-4 mr-2" />
+                            Cancel Match
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem 
+                          onClick={() => deleteFixture(fixture.id)}
+                          className="text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center text-sm text-muted-foreground">
+                  <Calendar className="h-4 w-4 mr-2" />
+                  {formatDate(fixture.scheduled_date)}
+                </div>
+                
+                <div className="flex items-center text-sm text-muted-foreground">
+                  <Clock className="h-4 w-4 mr-2" />
+                  {formatTime(fixture.scheduled_date)} ({fixture.half_length}min halves)
+                </div>
+                
+                {fixture.location && (
+                  <div className="flex items-center text-sm text-muted-foreground">
+                    <MapPin className="h-4 w-4 mr-2" />
+                    {fixture.location}
+                  </div>
+                )}
+                
+                {fixture.competition_type !== 'friendly' && (
+                  <div className="flex items-center text-sm text-muted-foreground">
+                    <Trophy className="h-4 w-4 mr-2" />
+                    {fixture.competition_type === 'league' ? 'League' : 'Tournament'}
+                    {fixture.competition_name && `: ${fixture.competition_name}`}
+                  </div>
+                )}
+                
+                {isUpcoming && fixture.status === 'scheduled' && (
+                  <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 mt-4">
+                    <Button 
+                      size="sm" 
+                      onClick={() => navigate(`/squad/${fixture.id}`)}
+                      className="flex-1 bg-blue-600 hover:bg-blue-700 min-h-[44px]"
+                    >
+                      <Users className="h-4 w-4 mr-1" />
+                      Select Squad
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      disabled={true}
+                      className="flex-1 min-h-[44px]"
+                    >
+                      <Play className="h-4 w-4 mr-1" />
+                      Start Match
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="container mx-auto p-4 space-y-6">
@@ -334,407 +527,430 @@ export default function Fixtures() {
           <p className="text-muted-foreground">Manage team fixtures and matches</p>
         </div>
         
-        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="touch-target w-full sm:w-auto">
-              <Plus className="h-4 w-4 mr-2" />
-              Create Fixture
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Create New Fixture</DialogTitle>
-              <DialogDescription>
-                Schedule a new match for your team
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 px-1">
-              <div>
-                <Label htmlFor="team" className="text-base">Team</Label>
-                <Select value={newFixture.team_id} onValueChange={(value) => setNewFixture({ ...newFixture, team_id: value })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a team" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {teams.map((team) => (
-                      <SelectItem key={team.id} value={team.id}>
-                        {team.name} ({team.club.name})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div>
-                <Label htmlFor="opponent" className="text-base">Opponent</Label>
-                <Input
-                  id="opponent"
-                  value={newFixture.opponent_name}
-                  onChange={(e) => setNewFixture({ ...newFixture, opponent_name: e.target.value })}
-                  placeholder="Opponent team name"
-                  className="text-base min-h-[44px]"
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="fixture_type">Match Type</Label>
-                <Select value={newFixture.fixture_type} onValueChange={(value: any) => setNewFixture({ ...newFixture, fixture_type: value })}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {FIXTURE_TYPES.map((type) => (
-                      <SelectItem key={type.value} value={type.value}>
-                        <div className="flex items-center">
-                          <type.icon className="h-4 w-4 mr-2" />
-                          {type.label}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div>
-                <Label>Match Date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !selectedDate && "text-muted-foreground"
-                      )}
-                    >
-                      <Calendar className="mr-2 h-4 w-4" />
-                      {selectedDate ? format(selectedDate, "PPP") : "Pick a date"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <CalendarComponent
-                      mode="single"
-                      selected={selectedDate}
-                      onSelect={setSelectedDate}
-                      initialFocus
-                      className="p-3 pointer-events-auto"
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              
-              <div>
-                <Label htmlFor="time">Match Time</Label>
-                <Input
-                  id="time"
-                  type="time"
-                  value={selectedTime}
-                  onChange={(e) => setSelectedTime(e.target.value)}
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="location">Location (Optional)</Label>
-                <Input
-                  id="location"
-                  value={newFixture.location}
-                  onChange={(e) => setNewFixture({ ...newFixture, location: e.target.value })}
-                  placeholder="Match venue"
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="competition_type">Competition Type</Label>
-                <Select 
-                  value={newFixture.competition_type} 
-                  onValueChange={(value: 'league' | 'tournament' | 'friendly') => setNewFixture({ 
-                    ...newFixture, 
-                    competition_type: value,
-                    competition_name: value === 'friendly' ? '' : newFixture.competition_name
-                  })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {COMPETITION_TYPES.map((type) => (
-                      <SelectItem key={type.value} value={type.value}>
-                        {type.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              {(newFixture.competition_type === 'tournament' || newFixture.competition_type === 'league') && (
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          {/* Date Filter Dialog */}
+          <Dialog open={dateFilterOpen} onOpenChange={setDateFilterOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="touch-target w-full sm:w-auto">
+                <Filter className="h-4 w-4 mr-2" />
+                Date Filter
+                {(startDate || endDate) && (
+                  <Badge variant="secondary" className="ml-2">
+                    Active
+                  </Badge>
+                )}
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-[95vw] sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Filter by Date Range</DialogTitle>
+                <DialogDescription>
+                  Filter fixtures between specific dates
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                {/* Quick Filters */}
                 <div>
-                  <Label htmlFor="competition_name">
-                    {newFixture.competition_type === 'tournament' ? 'Tournament Name' : 'League Name'} 
-                    {newFixture.competition_type === 'tournament' && <span className="text-destructive">*</span>}
-                  </Label>
+                  <Label className="text-sm font-medium">Quick Filters</Label>
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    <Button variant="outline" size="sm" onClick={() => applyQuickFilter(7)}>
+                      Next 7 days
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => applyQuickFilter(30)}>
+                      Next 30 days
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => applyQuickFilter(-7)}>
+                      Last 7 days
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => applyQuickFilter(-30)}>
+                      Last 30 days
+                    </Button>
+                  </div>
+                </div>
+                
+                {/* Custom Date Range */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Start Date</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "w-full justify-start text-left font-normal",
+                            !startDate && "text-muted-foreground"
+                          )}
+                        >
+                          <CalendarDays className="mr-2 h-4 w-4" />
+                          {startDate ? format(startDate, "MMM dd") : "Start"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <CalendarComponent
+                          mode="single"
+                          selected={startDate}
+                          onSelect={setStartDate}
+                          className="p-3"
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  
+                  <div>
+                    <Label>End Date</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "w-full justify-start text-left font-normal",
+                            !endDate && "text-muted-foreground"
+                          )}
+                        >
+                          <CalendarDays className="mr-2 h-4 w-4" />
+                          {endDate ? format(endDate, "MMM dd") : "End"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <CalendarComponent
+                          mode="single"
+                          selected={endDate}
+                          onSelect={setEndDate}
+                          className="p-3"
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+                
+                <div className="flex gap-2 pt-4">
+                  <Button onClick={clearDateFilter} variant="outline" className="flex-1">
+                    Clear Filter
+                  </Button>
+                  <Button onClick={() => setDateFilterOpen(false)} className="flex-1">
+                    Apply
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="touch-target w-full sm:w-auto">
+                <Plus className="h-4 w-4 mr-2" />
+                Create Fixture
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Create New Fixture</DialogTitle>
+                <DialogDescription>
+                  Schedule a new match for your team
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 px-1">
+                <div>
+                  <Label htmlFor="team" className="text-base">Team</Label>
+                  <Select value={newFixture.team_id} onValueChange={(value) => setNewFixture({ ...newFixture, team_id: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a team" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {teams.map((team) => (
+                        <SelectItem key={team.id} value={team.id}>
+                          {team.name} ({team.club.name})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div>
+                  <Label htmlFor="opponent" className="text-base">Opponent</Label>
                   <Input
-                    id="competition_name"
-                    value={newFixture.competition_name}
-                    onChange={(e) => setNewFixture({ ...newFixture, competition_name: e.target.value })}
-                    placeholder={`Enter ${newFixture.competition_type} name`}
+                    id="opponent"
+                    value={newFixture.opponent_name}
+                    onChange={(e) => setNewFixture({ ...newFixture, opponent_name: e.target.value })}
+                    placeholder="Opponent team name"
+                    className="text-base min-h-[44px]"
                   />
                 </div>
-              )}
-
-              <div>
-                <Label htmlFor="half_length">Half Length (minutes)</Label>
-                <Input
-                  id="half_length"
-                  type="number"
-                  value={newFixture.half_length}
-                  onChange={(e) => setNewFixture({ ...newFixture, half_length: parseInt(e.target.value) || 25 })}
-                  min="1"
-                  max="60"
-                />
-              </div>
-              
-              <div className="flex gap-2 pt-4">
-                <Button onClick={createFixture} disabled={creating} className="flex-1">
-                  {creating ? "Creating..." : "Create Fixture"}
-                </Button>
-                <Button variant="outline" onClick={() => setCreateDialogOpen(false)} className="flex-1">
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* Edit Dialog */}
-        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-          <DialogContent className="max-w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Edit Fixture</DialogTitle>
-              <DialogDescription>
-                Update fixture details
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 px-1">
-              <div>
-                <Label htmlFor="edit-team" className="text-base">Team</Label>
-                <Select value={newFixture.team_id} onValueChange={(value) => setNewFixture({ ...newFixture, team_id: value })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a team" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {teams.map((team) => (
-                      <SelectItem key={team.id} value={team.id}>
-                        {team.name} ({team.club.name})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div>
-                <Label htmlFor="edit-opponent" className="text-base">Opponent</Label>
-                <Input
-                  id="edit-opponent"
-                  value={newFixture.opponent_name}
-                  onChange={(e) => setNewFixture({ ...newFixture, opponent_name: e.target.value })}
-                  placeholder="Opponent team name"
-                  className="text-base min-h-[44px]"
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="edit-fixture_type">Match Type</Label>
-                <Select value={newFixture.fixture_type} onValueChange={(value: any) => setNewFixture({ ...newFixture, fixture_type: value })}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {FIXTURE_TYPES.map((type) => (
-                      <SelectItem key={type.value} value={type.value}>
-                        <div className="flex items-center">
-                          <type.icon className="h-4 w-4 mr-2" />
+                
+                <div>
+                  <Label htmlFor="fixture_type">Match Type</Label>
+                  <Select value={newFixture.fixture_type} onValueChange={(value: any) => setNewFixture({ ...newFixture, fixture_type: value })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FIXTURE_TYPES.map((type) => (
+                        <SelectItem key={type.value} value={type.value}>
+                          <div className="flex items-center">
+                            <type.icon className="h-4 w-4 mr-2" />
+                            {type.label}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div>
+                  <Label>Match Date</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !selectedDate && "text-muted-foreground"
+                        )}
+                      >
+                        <Calendar className="mr-2 h-4 w-4" />
+                        {selectedDate ? format(selectedDate, "PPP") : "Pick a date"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <CalendarComponent
+                        mode="single"
+                        selected={selectedDate}
+                        onSelect={setSelectedDate}
+                        initialFocus
+                        className="p-3 pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                
+                <div>
+                  <Label htmlFor="time">Match Time</Label>
+                  <Input
+                    id="time"
+                    type="time"
+                    value={selectedTime}
+                    onChange={(e) => setSelectedTime(e.target.value)}
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="location">Location (Optional)</Label>
+                  <Input
+                    id="location"
+                    value={newFixture.location}
+                    onChange={(e) => setNewFixture({ ...newFixture, location: e.target.value })}
+                    placeholder="Match venue"
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="competition_type">Competition Type</Label>
+                  <Select 
+                    value={newFixture.competition_type} 
+                    onValueChange={(value: 'league' | 'tournament' | 'friendly') => setNewFixture({ 
+                      ...newFixture, 
+                      competition_type: value,
+                      competition_name: value === 'friendly' ? '' : newFixture.competition_name
+                    })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {COMPETITION_TYPES.map((type) => (
+                        <SelectItem key={type.value} value={type.value}>
                           {type.label}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div>
-                <Label>Match Date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !selectedDate && "text-muted-foreground"
-                      )}
-                    >
-                      <Calendar className="mr-2 h-4 w-4" />
-                      {selectedDate ? format(selectedDate, "PPP") : "Pick a date"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <CalendarComponent
-                      mode="single"
-                      selected={selectedDate}
-                      onSelect={setSelectedDate}
-                      initialFocus
-                      className="p-3 pointer-events-auto"
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {(newFixture.competition_type === 'tournament' || newFixture.competition_type === 'league') && (
+                  <div>
+                    <Label htmlFor="competition_name">
+                      {newFixture.competition_type === 'tournament' ? 'Tournament Name' : 'League Name'} 
+                      {newFixture.competition_type === 'tournament' && <span className="text-destructive">*</span>}
+                    </Label>
+                    <Input
+                      id="competition_name"
+                      value={newFixture.competition_name}
+                      onChange={(e) => setNewFixture({ ...newFixture, competition_name: e.target.value })}
+                      placeholder={`Enter ${newFixture.competition_type} name`}
                     />
-                  </PopoverContent>
-                </Popover>
+                  </div>
+                )}
+
+                <div>
+                  <Label htmlFor="half_length">Half Length (minutes)</Label>
+                  <Input
+                    id="half_length"
+                    type="number"
+                    value={newFixture.half_length}
+                    onChange={(e) => setNewFixture({ ...newFixture, half_length: parseInt(e.target.value) || 25 })}
+                    min="1"
+                    max="60"
+                  />
+                </div>
+                
+                <div className="flex gap-2 pt-4">
+                  <Button onClick={createFixture} disabled={creating} className="flex-1">
+                    {creating ? "Creating..." : "Create Fixture"}
+                  </Button>
+                  <Button variant="outline" onClick={() => setCreateDialogOpen(false)} className="flex-1">
+                    Cancel
+                  </Button>
+                </div>
               </div>
-              
-              <div>
-                <Label htmlFor="edit-time">Match Time</Label>
-                <Input
-                  id="edit-time"
-                  type="time"
-                  value={selectedTime}
-                  onChange={(e) => setSelectedTime(e.target.value)}
-                />
+            </DialogContent>
+          </Dialog>
+
+          {/* Edit Dialog */}
+          <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+            <DialogContent className="max-w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Edit Fixture</DialogTitle>
+                <DialogDescription>
+                  Update fixture details
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 px-1">
+                <div>
+                  <Label htmlFor="edit-team" className="text-base">Team</Label>
+                  <Select value={newFixture.team_id} onValueChange={(value) => setNewFixture({ ...newFixture, team_id: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a team" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {teams.map((team) => (
+                        <SelectItem key={team.id} value={team.id}>
+                          {team.name} ({team.club.name})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div>
+                  <Label htmlFor="edit-opponent" className="text-base">Opponent</Label>
+                  <Input
+                    id="edit-opponent"
+                    value={newFixture.opponent_name}
+                    onChange={(e) => setNewFixture({ ...newFixture, opponent_name: e.target.value })}
+                    placeholder="Opponent team name"
+                    className="text-base min-h-[44px]"
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="edit-fixture_type">Match Type</Label>
+                  <Select value={newFixture.fixture_type} onValueChange={(value: any) => setNewFixture({ ...newFixture, fixture_type: value })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FIXTURE_TYPES.map((type) => (
+                        <SelectItem key={type.value} value={type.value}>
+                          <div className="flex items-center">
+                            <type.icon className="h-4 w-4 mr-2" />
+                            {type.label}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div>
+                  <Label>Match Date</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !selectedDate && "text-muted-foreground"
+                        )}
+                      >
+                        <Calendar className="mr-2 h-4 w-4" />
+                        {selectedDate ? format(selectedDate, "PPP") : "Pick a date"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <CalendarComponent
+                        mode="single"
+                        selected={selectedDate}
+                        onSelect={setSelectedDate}
+                        initialFocus
+                        className="p-3 pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                
+                <div>
+                  <Label htmlFor="edit-time">Match Time</Label>
+                  <Input
+                    id="edit-time"
+                    type="time"
+                    value={selectedTime}
+                    onChange={(e) => setSelectedTime(e.target.value)}
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="edit-location">Location (Optional)</Label>
+                  <Input
+                    id="edit-location"
+                    value={newFixture.location}
+                    onChange={(e) => setNewFixture({ ...newFixture, location: e.target.value })}
+                    placeholder="Match venue"
+                  />
+                </div>
+                
+                <div className="flex gap-2 pt-4">
+                  <Button onClick={updateFixture} disabled={updating} className="flex-1">
+                    {updating ? "Updating..." : "Update Fixture"}
+                  </Button>
+                  <Button variant="outline" onClick={() => setEditDialogOpen(false)} className="flex-1">
+                    Cancel
+                  </Button>
+                </div>
               </div>
-              
-              <div>
-                <Label htmlFor="edit-location">Location (Optional)</Label>
-                <Input
-                  id="edit-location"
-                  value={newFixture.location}
-                  onChange={(e) => setNewFixture({ ...newFixture, location: e.target.value })}
-                  placeholder="Match venue"
-                />
-              </div>
-              
-              <div className="flex gap-2 pt-4">
-                <Button onClick={updateFixture} disabled={updating} className="flex-1">
-                  {updating ? "Updating..." : "Update Fixture"}
-                </Button>
-                <Button variant="outline" onClick={() => setEditDialogOpen(false)} className="flex-1">
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
-      {fixtures.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Calendar className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No fixtures scheduled</h3>
-            <p className="text-muted-foreground text-center mb-4">
-              Create your first fixture to start scheduling matches
-            </p>
-            <Button onClick={() => setCreateDialogOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create Fixture
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-          {fixtures.map((fixture) => {
-            const TypeIcon = getFixtureTypeIcon(fixture.fixture_type);
-            return (
-              <Card key={fixture.id} className="hover:shadow-md transition-shadow">
-                <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        <TypeIcon className="h-5 w-5" />
-                        {fixture.team.name} vs {fixture.opponent_name}
-                      </CardTitle>
-                      <CardDescription>{fixture.team.club.name}</CardDescription>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant={getStatusBadgeVariant(fixture.status)}>
-                        {fixture.status.replace('_', ' ')}
-                      </Badge>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <Settings className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => editFixture(fixture)}>
-                            <Settings className="h-4 w-4 mr-2" />
-                            Edit Details
-                          </DropdownMenuItem>
-                          {fixture.status === 'scheduled' && (
-                            <DropdownMenuItem onClick={() => cancelFixture(fixture.id)}>
-                              <X className="h-4 w-4 mr-2" />
-                              Cancel Match
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuItem 
-                            onClick={() => deleteFixture(fixture.id)}
-                            className="text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex items-center text-sm text-muted-foreground">
-                    <Calendar className="h-4 w-4 mr-2" />
-                    {formatDate(fixture.scheduled_date)}
-                  </div>
-                  
-                  <div className="flex items-center text-sm text-muted-foreground">
-                    <Clock className="h-4 w-4 mr-2" />
-                    {formatTime(fixture.scheduled_date)} ({fixture.half_length}min halves)
-                  </div>
-                  
-                   {fixture.location && (
-                     <div className="flex items-center text-sm text-muted-foreground">
-                       <MapPin className="h-4 w-4 mr-2" />
-                       {fixture.location}
-                     </div>
-                   )}
-                   
-                   {fixture.competition_type !== 'friendly' && (
-                     <div className="flex items-center text-sm text-muted-foreground">
-                       <Trophy className="h-4 w-4 mr-2" />
-                       {fixture.competition_type === 'league' ? 'League' : 'Tournament'}
-                       {fixture.competition_name && `: ${fixture.competition_name}`}
-                     </div>
-                   )}
-                  
-                   {fixture.status === 'scheduled' && (
-                     <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 mt-4">
-                       <Button 
-                         size="sm" 
-                         onClick={() => navigate(`/squad/${fixture.id}`)}
-                         className="flex-1 bg-blue-600 hover:bg-blue-700 min-h-[44px]"
-                       >
-                         <Users className="h-4 w-4 mr-1" />
-                         Select Squad
-                       </Button>
-                       <Button 
-                         size="sm" 
-                         variant="outline"
-                         disabled={true}
-                         className="flex-1 min-h-[44px]"
-                       >
-                         <Play className="h-4 w-4 mr-1" />
-                         Start Match
-                       </Button>
-                     </div>
-                   )}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
+      {/* Tabs for Past/Upcoming Fixtures */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="upcoming" className="relative">
+            Upcoming
+            {upcomingFixtures.length > 0 && (
+              <Badge variant="secondary" className="ml-2 h-5 text-xs">
+                {upcomingFixtures.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="past" className="relative">
+            Past
+            {pastFixtures.length > 0 && (
+              <Badge variant="secondary" className="ml-2 h-5 text-xs">
+                {pastFixtures.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="upcoming" className="space-y-4">
+          {renderFixtures(upcomingFixtures, 'upcoming')}
+        </TabsContent>
+        
+        <TabsContent value="past" className="space-y-4">
+          {renderFixtures(pastFixtures, 'past')}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
