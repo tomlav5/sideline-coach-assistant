@@ -126,7 +126,8 @@ export default function MatchDay() {
 
   useEffect(() => {
     if (!matchState) {
-      navigate('/fixtures');
+      // Try to recover match state from localStorage or database
+      recoverMatchState();
       return;
     }
     
@@ -134,10 +135,14 @@ export default function MatchDay() {
     initializePlayerTimes();
     requestWakeLock();
     
+    // Save match state to localStorage for persistence
+    saveMatchStateToStorage();
+    
     // Handle visibility change to maintain timer accuracy
     const handleVisibilityChange = () => {
       if (document.hidden) {
         console.log('App went to background');
+        saveMatchStateToStorage();
       } else {
         console.log('App returned to foreground');
         if (gameState.isRunning) {
@@ -156,6 +161,13 @@ export default function MatchDay() {
       releaseWakeLock();
     };
   }, []);
+
+  // Save game state whenever it changes
+  useEffect(() => {
+    if (matchState && fixture) {
+      saveMatchStateToStorage();
+    }
+  }, [gameState, matchState, fixture]);
 
   useEffect(() => {
     if (gameState.isRunning) {
@@ -237,6 +249,66 @@ export default function MatchDay() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const saveMatchStateToStorage = () => {
+    if (!fixtureId || !matchState) return;
+    
+    const matchData = {
+      fixtureId,
+      matchState,
+      gameState,
+      startTimes,
+      timestamp: Date.now()
+    };
+    
+    localStorage.setItem(`match_${fixtureId}`, JSON.stringify(matchData));
+  };
+
+  const recoverMatchState = async () => {
+    if (!fixtureId) {
+      navigate('/fixtures');
+      return;
+    }
+
+    // Try to recover from localStorage first
+    const storedData = localStorage.getItem(`match_${fixtureId}`);
+    if (storedData) {
+      try {
+        const { matchState: recoveredMatchState, gameState: recoveredGameState, startTimes: recoveredStartTimes } = JSON.parse(storedData);
+        
+        // Check if this is a recent session (within 12 hours)
+        const timeSinceLastSave = Date.now() - (JSON.parse(storedData).timestamp || 0);
+        if (timeSinceLastSave < 12 * 60 * 60 * 1000) {
+          // Recover the state
+          setGameState(recoveredGameState);
+          setStartTimes(recoveredStartTimes);
+          
+          // Also need to set the matchState somehow - we'll fetch fixture and reconstruct
+          await fetchFixture();
+          
+          // Show recovery message
+          toast({
+            title: "Match Session Recovered",
+            description: "Welcome back! Your match tracking has been restored.",
+          });
+          
+          setLoading(false);
+          return;
+        }
+      } catch (error) {
+        console.error('Error recovering match state:', error);
+      }
+    }
+
+    // If no recovery possible, redirect to fixtures
+    navigate('/fixtures');
+  };
+
+  const clearMatchFromStorage = () => {
+    if (fixtureId) {
+      localStorage.removeItem(`match_${fixtureId}`);
     }
   };
 
@@ -369,6 +441,9 @@ export default function MatchDay() {
         .eq('id', fixtureId);
 
       if (fixtureError) throw fixtureError;
+
+      // Clear the stored match state since match is complete
+      clearMatchFromStorage();
 
       toast({
         title: "Match Saved Successfully",
