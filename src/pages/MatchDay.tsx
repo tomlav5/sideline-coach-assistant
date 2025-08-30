@@ -26,7 +26,8 @@ import {
   UserCheck,
   UserX,
   Trophy,
-  TrendingUp
+  TrendingUp,
+  ArrowUpDown
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
@@ -108,6 +109,11 @@ export default function MatchDay() {
   const [selectedPlayer, setSelectedPlayer] = useState<string>('');
   const [selectedAssist, setSelectedAssist] = useState<string>('');
   const [isPenalty, setIsPenalty] = useState(false);
+  const [substitutionDialog, setSubstitutionDialog] = useState({
+    open: false,
+    playerOff: '',
+    playerOn: ''
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -417,17 +423,17 @@ export default function MatchDay() {
   }
 
   return (
-    <div className={`p-6 space-y-6 ${gameState.isRunning ? 'match-active' : ''}`}>
+    <div className={`p-4 md:p-6 space-y-4 md:space-y-6 max-w-full overflow-x-hidden ${gameState.isRunning ? 'match-active' : ''}`}>
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center space-x-4">
-          <Button variant="outline" onClick={() => navigate(`/squad/${fixtureId}`)}>
+          <Button variant="outline" onClick={() => navigate(`/squad/${fixtureId}`)} size="sm">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Squad
           </Button>
           <div>
-            <h1 className="text-3xl font-bold">Match Day</h1>
-            <p className="text-muted-foreground">
+            <h1 className="text-2xl md:text-3xl font-bold">Match Day</h1>
+            <p className="text-sm md:text-base text-muted-foreground">
               {fixture.teams.name} vs {fixture.opponent_name}
             </p>
           </div>
@@ -436,9 +442,9 @@ export default function MatchDay() {
 
       {/* Timer and Match Control */}
       <Card>
-        <CardContent className="pt-6">
+        <CardContent className="p-4 md:p-6">
           <div className="text-center space-y-4">
-            <div className="text-6xl font-mono font-bold">
+            <div className="text-4xl md:text-6xl font-mono font-bold">
               {formatTime(getCurrentTime())}
             </div>
             
@@ -456,7 +462,7 @@ export default function MatchDay() {
               )}
             </div>
             
-            <div className="flex items-center justify-center space-x-4">
+            <div className="flex flex-wrap items-center justify-center gap-2 md:gap-4">
               <Button
                 onClick={toggleTimer}
                 size="lg"
@@ -491,22 +497,22 @@ export default function MatchDay() {
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="events" className="space-y-6">
+      <Tabs defaultValue="events" className="space-y-4 md:space-y-6">
         <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="events">Match Events</TabsTrigger>
-          <TabsTrigger value="players">Player Times</TabsTrigger>
-          <TabsTrigger value="stats">Match Stats</TabsTrigger>
+          <TabsTrigger value="events" className="text-xs md:text-sm">Match Events</TabsTrigger>
+          <TabsTrigger value="players" className="text-xs md:text-sm">Line Up</TabsTrigger>
+          <TabsTrigger value="stats" className="text-xs md:text-sm">Match Stats</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="events" className="space-y-6">
+        <TabsContent value="events" className="space-y-4 md:space-y-6">
           {/* Event Buttons */}
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
             {/* Our Team Events */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-center">{fixture.teams.name}</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2">
+              <CardContent className="p-4 md:p-6 space-y-2">
                 <Button
                   onClick={() => openEventDialog('goal', true)}
                   className="w-full bg-green-600 hover:bg-green-700"
@@ -559,7 +565,7 @@ export default function MatchDay() {
               <CardHeader>
                 <CardTitle className="text-center">{fixture.opponent_name}</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2">
+              <CardContent className="p-4 md:p-6 space-y-2">
                 <Button
                   onClick={() => openEventDialog('goal', false)}
                   className="w-full bg-red-600 hover:bg-red-700"
@@ -649,15 +655,25 @@ export default function MatchDay() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="players" className="space-y-6">
+        <TabsContent value="players" className="space-y-4 md:space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Player Time Tracking</CardTitle>
+              <CardTitle className="flex items-center justify-between">
+                <span>Current Line Up & Playing Time</span>
+                <Button 
+                  onClick={() => setSubstitutionDialog({ open: true, playerOff: '', playerOn: '' })}
+                  size="sm"
+                  variant="outline"
+                >
+                  <ArrowUpDown className="h-4 w-4 mr-2" />
+                  Make Substitution
+                </Button>
+              </CardTitle>
               <CardDescription>
-                Track how many minutes each player has played
+                Track player minutes and make substitutions during the match
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-4 md:p-6">
               <div className="space-y-3">
                 {gameState.playerTimes.map((playerLog) => {
                   const player = matchState.squad.find(p => p.id === playerLog.player_id);
@@ -668,7 +684,7 @@ export default function MatchDay() {
                     <div
                       key={playerLog.player_id}
                       className={`
-                        flex items-center justify-between p-3 rounded-lg border
+                        flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 rounded-lg border gap-2
                         ${isActive ? 'border-green-200 bg-green-50 dark:bg-green-950' : 'border-muted'}
                       `}
                     >
@@ -679,23 +695,25 @@ export default function MatchDay() {
                           <UserX className="h-5 w-5 text-muted-foreground" />
                         )}
                         <div>
-                          <p className="font-medium">
+                          <p className="font-medium text-sm md:text-base">
                             {player?.first_name} {player?.last_name}
                             {player?.jersey_number && ` (#${player.jersey_number})`}
                           </p>
-                          <p className="text-sm text-muted-foreground">
+                          <p className="text-xs md:text-sm text-muted-foreground">
                             {playerLog.is_starter ? 'Starter' : 'Substitute'}
                           </p>
                         </div>
                       </div>
                       
-                      <div className="text-right">
-                        <p className="font-medium">
-                          {minutesPlayed}' played
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {isActive ? 'On field' : 'Off field'}
-                        </p>
+                      <div className="flex justify-between sm:text-right">
+                        <div>
+                          <p className="font-medium text-sm md:text-base">
+                            {minutesPlayed}' played
+                          </p>
+                          <p className="text-xs md:text-sm text-muted-foreground">
+                            {isActive ? 'On field' : 'Off field'}
+                          </p>
+                        </div>
                       </div>
                     </div>
                   );
@@ -705,8 +723,8 @@ export default function MatchDay() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="stats" className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <TabsContent value="stats" className="space-y-4 md:space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
             <Card>
               <CardHeader>
                 <CardTitle className="text-center">Goals</CardTitle>
@@ -822,6 +840,86 @@ export default function MatchDay() {
                 Add Event
               </Button>
               <Button variant="outline" onClick={closeEventDialog} className="flex-1">
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Substitution Dialog */}
+      <Dialog open={substitutionDialog.open} onOpenChange={(open) => setSubstitutionDialog(prev => ({ ...prev, open }))}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Make Substitution</DialogTitle>
+            <DialogDescription>
+              Select the player coming off and the player coming on at minute {getCurrentMinute()}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <Label>Player Coming Off</Label>
+              <Select value={substitutionDialog.playerOff} onValueChange={(value) => setSubstitutionDialog(prev => ({ ...prev, playerOff: value }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select player to substitute off" />
+                </SelectTrigger>
+                <SelectContent>
+                  {gameState.playerTimes
+                    .filter(pt => pt.time_on !== null && pt.time_off === null)
+                    .map((pt) => {
+                      const player = matchState.squad.find(p => p.id === pt.player_id);
+                      return (
+                        <SelectItem key={pt.player_id} value={pt.player_id}>
+                          {player?.first_name} {player?.last_name}
+                          {player?.jersey_number && ` (#${player.jersey_number})`}
+                        </SelectItem>
+                      );
+                    })}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Player Coming On</Label>
+              <Select value={substitutionDialog.playerOn} onValueChange={(value) => setSubstitutionDialog(prev => ({ ...prev, playerOn: value }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select player to bring on" />
+                </SelectTrigger>
+                <SelectContent>
+                  {gameState.playerTimes
+                    .filter(pt => pt.time_on === null || pt.time_off !== null)
+                    .map((pt) => {
+                      const player = matchState.squad.find(p => p.id === pt.player_id);
+                      return (
+                        <SelectItem key={pt.player_id} value={pt.player_id}>
+                          {player?.first_name} {player?.last_name}
+                          {player?.jersey_number && ` (#${player.jersey_number})`}
+                        </SelectItem>
+                      );
+                    })}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="flex gap-2 pt-4">
+              <Button 
+                onClick={() => {
+                  if (substitutionDialog.playerOff && substitutionDialog.playerOn) {
+                    makeSubstitution(substitutionDialog.playerOn, substitutionDialog.playerOff);
+                    setSubstitutionDialog({ open: false, playerOff: '', playerOn: '' });
+                  }
+                }}
+                disabled={!substitutionDialog.playerOff || !substitutionDialog.playerOn}
+                className="flex-1"
+              >
+                Make Substitution
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => setSubstitutionDialog({ open: false, playerOff: '', playerOn: '' })}
+                className="flex-1"
+              >
                 Cancel
               </Button>
             </div>
