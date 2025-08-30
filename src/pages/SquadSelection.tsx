@@ -194,8 +194,9 @@ export default function SquadSelection() {
       if (error) throw error;
 
       toast({
-        title: "Squad Saved",
-        description: "Squad selection has been saved for this fixture",
+        title: "Squad Committed to Memory ✓",
+        description: "Squad selection has been permanently saved for this fixture and can be recalled anytime",
+        duration: 4000,
       });
     } catch (error) {
       console.error('Error saving squad:', error);
@@ -336,14 +337,15 @@ export default function SquadSelection() {
           </div>
         </div>
         
-        <div className="flex space-x-2">
+        <div className="flex space-x-2 sm:ml-auto">
           <Button 
             onClick={saveSquadSelection} 
             disabled={selectedPlayers.length === 0 || saving}
-            variant="outline"
+            variant="default"
             size="sm"
+            className="bg-blue-600 hover:bg-blue-700"
           >
-            {saving ? 'Saving...' : 'Save Squad'}
+            {saving ? 'Saving...' : 'Save Squad to Memory'}
           </Button>
           <Button 
             onClick={startMatch} 
