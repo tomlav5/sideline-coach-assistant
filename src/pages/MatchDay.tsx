@@ -446,7 +446,25 @@ export default function MatchDay() {
       <Card>
         <CardContent className="p-4 md:p-6">
           <div className="text-center space-y-4">
-            <div className="text-4xl md:text-6xl font-mono font-bold">
+            {/* Match Score */}
+            <div className="flex items-center justify-center space-x-4">
+              <div className="text-center">
+                <p className="text-sm md:text-base font-medium text-muted-foreground">{fixture.teams.name}</p>
+                <div className="text-3xl md:text-4xl font-bold text-green-600">
+                  {gameState.events.filter(e => e.event_type === 'goal' && e.is_our_team).length}
+                </div>
+              </div>
+              <div className="text-2xl md:text-3xl font-bold text-muted-foreground">-</div>
+              <div className="text-center">
+                <p className="text-sm md:text-base font-medium text-muted-foreground">{fixture.opponent_name}</p>
+                <div className="text-3xl md:text-4xl font-bold text-red-600">
+                  {gameState.events.filter(e => e.event_type === 'goal' && !e.is_our_team).length}
+                </div>
+              </div>
+            </div>
+            
+            {/* Timer */}
+            <div className="text-3xl md:text-5xl font-mono font-bold">
               {formatTime(getCurrentTime())}
             </div>
             
