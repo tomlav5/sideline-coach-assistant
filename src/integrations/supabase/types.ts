@@ -429,7 +429,7 @@ export type Database = {
         | "goal_kick"
       fixture_type: "home" | "away"
       match_half: "first" | "second"
-      match_status: "scheduled" | "in_progress" | "completed"
+      match_status: "scheduled" | "in_progress" | "completed" | "cancelled"
       team_type: "5-a-side" | "7-a-side" | "9-a-side" | "11-a-side"
       user_role: "admin" | "official" | "viewer"
     }
@@ -571,7 +571,7 @@ export const Constants = {
       ],
       fixture_type: ["home", "away"],
       match_half: ["first", "second"],
-      match_status: ["scheduled", "in_progress", "completed"],
+      match_status: ["scheduled", "in_progress", "completed", "cancelled"],
       team_type: ["5-a-side", "7-a-side", "9-a-side", "11-a-side"],
       user_role: ["admin", "official", "viewer"],
     },
