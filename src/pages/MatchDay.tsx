@@ -106,6 +106,7 @@ export default function MatchDay() {
   });
   
   const [selectedPlayer, setSelectedPlayer] = useState<string>('');
+  const [selectedAssist, setSelectedAssist] = useState<string>('');
   const [isPenalty, setIsPenalty] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -280,40 +281,69 @@ export default function MatchDay() {
 
   const closeEventDialog = () => {
     setEventDialog({ open: false, type: null, isOurTeam: true });
+    setSelectedAssist('');
   };
 
   const addEvent = async () => {
     if (!eventDialog.type) return;
     
-    const event: MatchEvent = {
-      event_type: eventDialog.type,
-      player_id: eventDialog.isOurTeam && selectedPlayer ? selectedPlayer : undefined,
-      is_our_team: eventDialog.isOurTeam,
-      half: gameState.currentHalf,
-      minute: getCurrentMinute(),
-      is_penalty: isPenalty,
-    };
-
     try {
+      // First add the main event (goal)
+      const event: MatchEvent = {
+        event_type: eventDialog.type,
+        player_id: eventDialog.isOurTeam && selectedPlayer ? selectedPlayer : undefined,
+        is_our_team: eventDialog.isOurTeam,
+        half: gameState.currentHalf,
+        minute: getCurrentMinute(),
+        is_penalty: isPenalty,
+      };
+
       const { error } = await supabase
         .from('match_events')
         .insert([{
-          fixture_id: fixtureId,
           ...event,
+          fixture_id: fixtureId,
         }]);
 
       if (error) throw error;
 
+      // Add to local state
       setGameState(prev => ({
         ...prev,
         events: [...prev.events, event],
       }));
 
+      // If it's a goal and there's an assist, add the assist event too
+      if (eventDialog.type === 'goal' && selectedAssist && eventDialog.isOurTeam) {
+        const assistEvent: MatchEvent = {
+          event_type: 'assist',
+          player_id: selectedAssist,
+          is_our_team: true,
+          half: gameState.currentHalf,
+          minute: getCurrentMinute(),
+          is_penalty: false,
+        };
+
+        const { error: assistError } = await supabase
+          .from('match_events')
+          .insert([{
+            ...assistEvent,
+            fixture_id: fixtureId,
+          }]);
+
+        if (!assistError) {
+          setGameState(prev => ({
+            ...prev,
+            events: [...prev.events, assistEvent],
+          }));
+        }
+      }
+      
       toast({
         title: "Event Added",
-        description: `${event.event_type} recorded at ${getCurrentMinute()}'`,
+        description: `${eventDialog.type} recorded at minute ${getCurrentMinute()}${selectedAssist && eventDialog.type === 'goal' ? ' with assist' : ''}`,
       });
-
+      
       closeEventDialog();
     } catch (error) {
       console.error('Error adding event:', error);
@@ -737,10 +767,10 @@ export default function MatchDay() {
           <div className="space-y-4">
             {eventDialog.isOurTeam && (eventDialog.type === 'goal' || eventDialog.type === 'assist') && (
               <div>
-                <Label>Player</Label>
+                <Label>{eventDialog.type === 'goal' ? 'Goal Scorer' : 'Player'}</Label>
                 <Select value={selectedPlayer} onValueChange={setSelectedPlayer}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select player" />
+                    <SelectValue placeholder={`Select ${eventDialog.type === 'goal' ? 'scorer' : 'player'}`} />
                   </SelectTrigger>
                   <SelectContent>
                     {matchState.squad.map((player) => (
@@ -749,6 +779,28 @@ export default function MatchDay() {
                         {player.jersey_number && ` (#${player.jersey_number})`}
                       </SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {eventDialog.type === 'goal' && eventDialog.isOurTeam && (
+              <div>
+                <Label>Assist (Optional)</Label>
+                <Select value={selectedAssist} onValueChange={setSelectedAssist}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select assist player (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">No assist</SelectItem>
+                    {matchState.squad
+                      .filter(player => player.id !== selectedPlayer)
+                      .map((player) => (
+                        <SelectItem key={player.id} value={player.id}>
+                          {player.first_name} {player.last_name}
+                          {player.jersey_number && ` (#${player.jersey_number})`}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>

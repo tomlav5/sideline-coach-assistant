@@ -82,6 +82,7 @@ export type Database = {
           location: string | null
           opponent_name: string
           scheduled_date: string
+          selected_squad_data: Json | null
           status: Database["public"]["Enums"]["match_status"]
           team_id: string
           updated_at: string
@@ -94,6 +95,7 @@ export type Database = {
           location?: string | null
           opponent_name: string
           scheduled_date: string
+          selected_squad_data?: Json | null
           status?: Database["public"]["Enums"]["match_status"]
           team_id: string
           updated_at?: string
@@ -106,6 +108,7 @@ export type Database = {
           location?: string | null
           opponent_name?: string
           scheduled_date?: string
+          selected_squad_data?: Json | null
           status?: Database["public"]["Enums"]["match_status"]
           team_id?: string
           updated_at?: string

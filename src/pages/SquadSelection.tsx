@@ -50,6 +50,7 @@ export default function SquadSelection() {
   const [selectedPlayers, setSelectedPlayers] = useState<Player[]>([]);
   const [startingPlayers, setStartingPlayers] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (fixtureId) {
@@ -98,6 +99,16 @@ export default function SquadSelection() {
       
       const players = teamPlayersData.map(tp => tp.players);
       setAvailablePlayers(players);
+
+      // Load saved squad selection if exists
+      if (fixtureData.selected_squad_data && typeof fixtureData.selected_squad_data === 'object') {
+        const savedData = fixtureData.selected_squad_data as any;
+        const savedSelectedPlayers = players.filter(p => savedData.selectedPlayerIds?.includes(p.id));
+        const savedStartingPlayers = new Set<string>(savedData.startingPlayerIds || []);
+        
+        setSelectedPlayers(savedSelectedPlayers);
+        setStartingPlayers(savedStartingPlayers);
+      }
       
     } catch (error) {
       console.error('Error fetching fixture data:', error);
@@ -161,6 +172,41 @@ export default function SquadSelection() {
     if (!team) return false;
     const teamSize = TEAM_SIZE_MAP[team.team_type];
     return startingPlayers.size === teamSize && isSquadValid();
+  };
+
+  const saveSquadSelection = async () => {
+    if (!fixtureId) return;
+    
+    try {
+      setSaving(true);
+      
+      const squadData = {
+        selectedPlayerIds: selectedPlayers.map(p => p.id),
+        startingPlayerIds: Array.from(startingPlayers),
+        savedAt: new Date().toISOString()
+      };
+
+      const { error } = await supabase
+        .from('fixtures')
+        .update({ selected_squad_data: squadData })
+        .eq('id', fixtureId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Squad Saved",
+        description: "Squad selection has been saved for this fixture",
+      });
+    } catch (error) {
+      console.error('Error saving squad:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save squad selection",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const startMatch = () => {
@@ -284,14 +330,23 @@ export default function SquadSelection() {
           </Badge>
         </div>
         
-        <Button 
-          onClick={startMatch} 
-          disabled={!canStartMatch()}
-          className="bg-green-600 hover:bg-green-700"
-        >
-          <Play className="h-4 w-4 mr-2" />
-          Start Match
-        </Button>
+        <div className="flex space-x-2">
+          <Button 
+            onClick={saveSquadSelection} 
+            disabled={selectedPlayers.length === 0 || saving}
+            variant="outline"
+          >
+            {saving ? 'Saving...' : 'Save Squad'}
+          </Button>
+          <Button 
+            onClick={startMatch} 
+            disabled={!canStartMatch()}
+            className="bg-green-600 hover:bg-green-700"
+          >
+            <Play className="h-4 w-4 mr-2" />
+            Start Match
+          </Button>
+        </div>
       </div>
 
       {/* Player Selection */}
@@ -312,7 +367,7 @@ export default function SquadSelection() {
                 No players assigned to this team yet.
               </p>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 {availablePlayers.map((player) => {
                   const isSelected = selectedPlayers.some(p => p.id === player.id);
                   const isStarter = startingPlayers.has(player.id);
@@ -331,45 +386,47 @@ export default function SquadSelection() {
                       `}
                       onClick={() => togglePlayerSelection(player)}
                     >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium text-sm">
-                          {player.first_name} {player.last_name}
-                        </span>
-                        {player.jersey_number && (
-                          <Badge variant="outline" className="text-xs">
-                            #{player.jersey_number}
-                          </Badge>
-                        )}
-                      </div>
-                      
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-1">
-                          {isSelected ? (
-                            <UserCheck className="h-4 w-4 text-green-600" />
-                          ) : (
-                            <UserX className="h-4 w-4 text-muted-foreground" />
-                          )}
-                          <span className="text-xs text-muted-foreground">
-                            {isSelected ? 'Selected' : 'Available'}
+                      <div className="flex flex-col space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-sm">
+                            {player.first_name} {player.last_name}
                           </span>
+                          {player.jersey_number && (
+                            <Badge variant="outline" className="text-xs">
+                              #{player.jersey_number}
+                            </Badge>
+                          )}
                         </div>
                         
-                        {isSelected && (
-                          <Button
-                            variant={isStarter ? 'default' : 'outline'}
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleStartingPlayer(player.id);
-                            }}
-                            className="h-6 px-2"
-                          >
-                            <Star className="h-3 w-3 mr-1" />
-                            <span className="text-xs">
-                              {isStarter ? 'Starter' : 'Sub'}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-1">
+                            {isSelected ? (
+                              <UserCheck className="h-4 w-4 text-green-600" />
+                            ) : (
+                              <UserX className="h-4 w-4 text-muted-foreground" />
+                            )}
+                            <span className="text-xs text-muted-foreground">
+                              {isSelected ? 'Selected' : 'Available'}
                             </span>
-                          </Button>
-                        )}
+                          </div>
+                          
+                          {isSelected && (
+                            <Button
+                              variant={isStarter ? 'default' : 'outline'}
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleStartingPlayer(player.id);
+                              }}
+                              className="h-6 px-1.5 text-xs"
+                            >
+                              <Star className="h-3 w-3" />
+                              <span className="ml-0.5">
+                                {isStarter ? 'Start' : 'Sub'}
+                              </span>
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
@@ -392,11 +449,11 @@ export default function SquadSelection() {
                   <Star className="h-4 w-4 mr-2 text-yellow-500" />
                   Starting XI ({startingPlayers.size}/{teamSize})
                 </h4>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
                   {selectedPlayers
                     .filter(p => startingPlayers.has(p.id))
                     .map(player => (
-                      <div key={player.id} className="flex items-center space-x-2 p-2 bg-green-50 dark:bg-green-950 rounded">
+                      <div key={player.id} className="flex items-center justify-between p-2 bg-green-50 dark:bg-green-950 rounded">
                         <span className="text-sm font-medium">
                           {player.first_name} {player.last_name}
                         </span>
@@ -418,11 +475,11 @@ export default function SquadSelection() {
                   <Users className="h-4 w-4 mr-2 text-blue-500" />
                   Substitutes ({selectedPlayers.length - startingPlayers.size})
                 </h4>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
                   {selectedPlayers
                     .filter(p => !startingPlayers.has(p.id))
                     .map(player => (
-                      <div key={player.id} className="flex items-center space-x-2 p-2 bg-blue-50 dark:bg-blue-950 rounded">
+                      <div key={player.id} className="flex items-center justify-between p-2 bg-blue-50 dark:bg-blue-950 rounded">
                         <span className="text-sm font-medium">
                           {player.first_name} {player.last_name}
                         </span>
