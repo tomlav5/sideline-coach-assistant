@@ -74,11 +74,12 @@ const Index = () => {
 
   const fetchStats = async () => {
     try {
-      // Get upcoming fixtures count
+      // Get upcoming fixtures count (scheduled and in the future)
       const { count: fixtureCount } = await supabase
         .from('fixtures')
         .select('*', { count: 'exact', head: true })
-        .eq('status', 'scheduled');
+        .eq('status', 'scheduled')
+        .gte('scheduled_date', new Date().toISOString());
 
       // Get teams count
       const { count: teamCount } = await supabase
