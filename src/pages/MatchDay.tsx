@@ -52,6 +52,7 @@ interface GameState {
   secondHalfTime: number; // in seconds
   events: MatchEvent[];
   playerTimes: PlayerTimeLog[];
+  matchPhase: 'pre-match' | 'first-half' | 'half-time' | 'second-half' | 'completed';
 }
 
 interface MatchEvent {
@@ -94,6 +95,7 @@ export default function MatchDay() {
     secondHalfTime: 0,
     events: [],
     playerTimes: [],
+    matchPhase: 'pre-match',
   });
   
   const [startTimes, setStartTimes] = useState<{
@@ -344,6 +346,22 @@ export default function MatchDay() {
     setGameState(prev => ({ ...prev, playerTimes: initialTimes }));
   };
 
+  const startMatch = () => {
+    const now = Date.now();
+    setGameState(prev => ({
+      ...prev,
+      isRunning: true,
+      matchPhase: 'first-half'
+    }));
+    setStartTimes(st => ({ ...st, firstHalfStart: now }));
+    requestWakeLock();
+    
+    toast({
+      title: "Match Started",
+      description: "First half is now underway",
+    });
+  };
+
   const toggleTimer = () => {
     const now = Date.now();
     
@@ -465,29 +483,45 @@ export default function MatchDay() {
     }
   };
 
-  const endHalf = () => {
-    setGameState(prev => ({ ...prev, isRunning: false }));
+  const endFirstHalf = () => {
+    setGameState(prev => ({ 
+      ...prev, 
+      isRunning: false,
+      matchPhase: 'half-time'
+    }));
     setStartTimes(st => ({ 
       ...st, 
       pausedTime: { 
         ...st.pausedTime, 
-        [gameState.currentHalf]: gameState.currentHalf === 'first' ? gameState.firstHalfTime : gameState.secondHalfTime
+        first: gameState.firstHalfTime
       }
     }));
     
-    if (gameState.currentHalf === 'first') {
-      toast({
-        title: "First Half Ended",
-        description: "Get ready for the second half",
-      });
-    } else {
-      // Match completed, save data
-      toast({
-        title: "Match Ended",
-        description: "Saving match data...",
-      });
-      saveMatchData();
-    }
+    toast({
+      title: "First Half Ended",
+      description: "Get ready for the second half",
+    });
+  };
+
+  const endMatch = () => {
+    setGameState(prev => ({ 
+      ...prev, 
+      isRunning: false,
+      matchPhase: 'completed'
+    }));
+    setStartTimes(st => ({ 
+      ...st, 
+      pausedTime: { 
+        ...st.pausedTime, 
+        second: gameState.secondHalfTime
+      }
+    }));
+    
+    toast({
+      title: "Match Ended",
+      description: "Saving match data...",
+    });
+    saveMatchData();
   };
 
   const startSecondHalf = () => {
@@ -496,13 +530,14 @@ export default function MatchDay() {
       ...prev,
       currentHalf: 'second',
       isRunning: true,
+      matchPhase: 'second-half'
     }));
     setStartTimes(st => ({ ...st, secondHalfStart: now }));
     requestWakeLock();
     
     toast({
       title: "Second Half Started",
-      description: "Timer reset for second half",
+      description: "The second half is now underway",
     });
   };
 
@@ -724,34 +759,83 @@ export default function MatchDay() {
             </div>
             
             <div className="flex flex-wrap items-center justify-center gap-2 md:gap-4">
-              <Button
-                onClick={toggleTimer}
-                size="lg"
-                variant={gameState.isRunning ? 'destructive' : 'default'}
-              >
-                {gameState.isRunning ? (
-                  <>
-                    <Pause className="h-5 w-5 mr-2" />
-                    Pause
-                  </>
-                ) : (
-                  <>
-                    <Play className="h-5 w-5 mr-2" />
-                    Start
-                  </>
-                )}
-              </Button>
-              
-              <Button onClick={endHalf} variant="outline">
-                <Square className="h-4 w-4 mr-2" />
-                End Half
-              </Button>
-              
-              {gameState.currentHalf === 'first' && !gameState.isRunning && (
-                <Button onClick={startSecondHalf} variant="outline">
-                  <RotateCcw className="h-4 w-4 mr-2" />
-                  Start 2nd Half
+              {/* Pre-match phase */}
+              {gameState.matchPhase === 'pre-match' && (
+                <Button onClick={startMatch} size="lg" variant="default">
+                  <Play className="h-5 w-5 mr-2" />
+                  Start Match
                 </Button>
+              )}
+              
+              {/* First half controls */}
+              {gameState.matchPhase === 'first-half' && (
+                <>
+                  <Button
+                    onClick={toggleTimer}
+                    size="lg"
+                    variant={gameState.isRunning ? 'destructive' : 'default'}
+                  >
+                    {gameState.isRunning ? (
+                      <>
+                        <Pause className="h-5 w-5 mr-2" />
+                        Pause
+                      </>
+                    ) : (
+                      <>
+                        <Play className="h-5 w-5 mr-2" />
+                        Resume
+                      </>
+                    )}
+                  </Button>
+                  
+                  <Button onClick={endFirstHalf} variant="outline">
+                    <Square className="h-4 w-4 mr-2" />
+                    End First Half
+                  </Button>
+                </>
+              )}
+              
+              {/* Half-time controls */}
+              {gameState.matchPhase === 'half-time' && (
+                <Button onClick={startSecondHalf} size="lg" variant="default">
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Start Second Half
+                </Button>
+              )}
+              
+              {/* Second half controls */}
+              {gameState.matchPhase === 'second-half' && (
+                <>
+                  <Button
+                    onClick={toggleTimer}
+                    size="lg"
+                    variant={gameState.isRunning ? 'destructive' : 'default'}
+                  >
+                    {gameState.isRunning ? (
+                      <>
+                        <Pause className="h-5 w-5 mr-2" />
+                        Pause
+                      </>
+                    ) : (
+                      <>
+                        <Play className="h-5 w-5 mr-2" />
+                        Resume
+                      </>
+                    )}
+                  </Button>
+                  
+                  <Button onClick={endMatch} variant="outline">
+                    <Square className="h-4 w-4 mr-2" />
+                    End Match
+                  </Button>
+                </>
+              )}
+              
+              {/* Match completed */}
+              {gameState.matchPhase === 'completed' && (
+                <Badge variant="secondary" className="text-lg p-3">
+                  Match Completed
+                </Badge>
               )}
             </div>
           </div>

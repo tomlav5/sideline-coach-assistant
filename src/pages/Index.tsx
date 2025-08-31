@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Calendar, Trophy, Clock, Users, ArrowRight, Plus, Play, BarChart3, Settings2 } from 'lucide-react';
 
 const Index = () => {
@@ -14,6 +15,8 @@ const Index = () => {
     totalTeams: 0,
     totalPlayers: 0,
   });
+  const [hasLiveMatch, setHasLiveMatch] = useState(false);
+  const [liveMatchId, setLiveMatchId] = useState<string | null>(null);
   
   // Extract first name from user profile or metadata
   const firstName = user?.user_metadata?.first_name || 
@@ -23,8 +26,33 @@ const Index = () => {
   useEffect(() => {
     if (user) {
       fetchStats();
+      checkForLiveMatch();
     }
   }, [user]);
+
+  const checkForLiveMatch = () => {
+    // Check localStorage for any active match sessions
+    const keys = Object.keys(localStorage);
+    const matchKeys = keys.filter(key => key.startsWith('match_'));
+    
+    if (matchKeys.length > 0) {
+      const latestMatchKey = matchKeys[0];
+      const matchId = latestMatchKey.replace('match_', '');
+      
+      try {
+        const matchData = JSON.parse(localStorage.getItem(latestMatchKey) || '{}');
+        const timeSinceLastSave = Date.now() - (matchData.timestamp || 0);
+        
+        // If match was active within last 12 hours
+        if (timeSinceLastSave < 12 * 60 * 60 * 1000 && matchData.gameState?.matchPhase !== 'completed') {
+          setHasLiveMatch(true);
+          setLiveMatchId(matchId);
+        }
+      } catch (error) {
+        console.error('Error checking live match:', error);
+      }
+    }
+  };
 
   const fetchStats = async () => {
     try {
@@ -162,6 +190,30 @@ const Index = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* Live Match Recovery Banner */}
+        {hasLiveMatch && (
+          <Card className="border-orange-200 bg-orange-50 dark:bg-orange-950 dark:border-orange-800 mb-6">
+            <CardContent className="p-4 sm:p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <Badge variant="destructive" className="animate-pulse">LIVE</Badge>
+                  <div>
+                    <h3 className="font-semibold">Live Match in Progress</h3>
+                    <p className="text-sm text-muted-foreground">You have an active match tracking session</p>
+                  </div>
+                </div>
+                <Button 
+                  onClick={() => navigate(`/match-day/${liveMatchId}`)}
+                  variant="default"
+                  size="sm"
+                >
+                  Resume Match
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Main Quick Actions */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mb-8">

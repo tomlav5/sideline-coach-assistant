@@ -2,20 +2,13 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Trophy, Calendar, Target, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { ResponsiveWrapper } from '@/components/ui/responsive-wrapper';
 
 interface CompletedMatch {
   id: string;
@@ -322,7 +315,6 @@ export default function Reports() {
     }
   };
 
-
   const getMatchResult = (ourScore: number, opponentScore: number) => {
     if (ourScore > opponentScore) return { result: 'W', color: 'bg-green-500' };
     if (ourScore < opponentScore) return { result: 'L', color: 'bg-red-500' };
@@ -331,16 +323,16 @@ export default function Reports() {
 
   if (loading) {
     return (
-      <div className="p-6">
+      <ResponsiveWrapper>
         <div className="flex items-center justify-center h-64">
           <div className="text-lg">Loading reports...</div>
         </div>
-      </div>
+      </ResponsiveWrapper>
     );
   }
 
   return (
-    <div className="p-4 sm:p-6 space-y-6">
+    <ResponsiveWrapper className="space-y-6 max-w-full">
       <div className="flex items-center space-x-2">
         <Trophy className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
         <h1 className="text-2xl sm:text-3xl font-bold">Reports</h1>
@@ -350,7 +342,7 @@ export default function Reports() {
       <Card>
         <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
-            <Label htmlFor="competition-filter" className="text-base font-medium">Filter by Competition:</Label>
+            <Label htmlFor="competition-filter" className="text-base font-medium min-w-fit">Filter by Competition:</Label>
             <Select value={competitionFilter} onValueChange={setCompetitionFilter}>
               <SelectTrigger className="w-full sm:w-64 min-h-[44px]">
                 <SelectValue />
@@ -373,19 +365,19 @@ export default function Reports() {
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="matches" className="space-y-6">
+      <Tabs defaultValue="matches" className="space-y-6 w-full">
         <TabsList className="grid w-full grid-cols-3 h-auto">
-          <TabsTrigger value="matches" className="flex flex-col sm:flex-row items-center space-y-1 sm:space-y-0 sm:space-x-2 p-2 sm:p-3">
+          <TabsTrigger value="matches" className="flex flex-col sm:flex-row items-center space-y-1 sm:space-y-0 sm:space-x-2 p-2 sm:p-3 text-xs sm:text-sm">
             <Calendar className="h-4 w-4" />
-            <span className="text-xs sm:text-sm">Match Results</span>
+            <span>Matches</span>
           </TabsTrigger>
-          <TabsTrigger value="scorers" className="flex flex-col sm:flex-row items-center space-y-1 sm:space-y-0 sm:space-x-2 p-2 sm:p-3">
+          <TabsTrigger value="scorers" className="flex flex-col sm:flex-row items-center space-y-1 sm:space-y-0 sm:space-x-2 p-2 sm:p-3 text-xs sm:text-sm">
             <Target className="h-4 w-4" />
-            <span className="text-xs sm:text-sm">Goal Scorers</span>
+            <span>Scorers</span>
           </TabsTrigger>
-          <TabsTrigger value="playing-time" className="flex flex-col sm:flex-row items-center space-y-1 sm:space-y-0 sm:space-x-2 p-2 sm:p-3">
+          <TabsTrigger value="playing-time" className="flex flex-col sm:flex-row items-center space-y-1 sm:space-y-0 sm:space-x-2 p-2 sm:p-3 text-xs sm:text-sm">
             <Clock className="h-4 w-4" />
-            <span className="text-xs sm:text-sm">Playing Time</span>
+            <span>Time</span>
           </TabsTrigger>
         </TabsList>
 
@@ -394,52 +386,90 @@ export default function Reports() {
             <CardHeader>
               <CardTitle>Completed Matches</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0 sm:p-6">
               {completedMatches.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   No completed matches found
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-xs sm:text-sm">Date</TableHead>
-                      <TableHead className="text-xs sm:text-sm">Team</TableHead>
-                      <TableHead className="text-xs sm:text-sm">Opponent</TableHead>
-                      <TableHead className="text-center text-xs sm:text-sm">Score</TableHead>
-                      <TableHead className="text-center text-xs sm:text-sm">Result</TableHead>
-                      <TableHead className="text-xs sm:text-sm">Location</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {completedMatches.map((match) => {
-                      const { result, color } = getMatchResult(match.our_score, match.opponent_score);
-                      return (
-                        <TableRow key={match.id}>
-                          <TableCell className="text-xs sm:text-sm">
-                            {format(new Date(match.scheduled_date), 'dd/MM/yyyy')}
-                          </TableCell>
-                          <TableCell className="font-medium text-xs sm:text-sm">
-                            {match.team_name}
-                          </TableCell>
-                          <TableCell className="text-xs sm:text-sm">{match.opponent_name}</TableCell>
-                          <TableCell className="text-center font-mono text-sm sm:text-lg">
-                            {match.our_score} - {match.opponent_score}
-                          </TableCell>
-                          <TableCell className="text-center">
+                <div className="space-y-3 p-4 sm:p-0">
+                  {completedMatches.map((match) => {
+                    const { result, color } = getMatchResult(match.our_score, match.opponent_score);
+                    return (
+                      <Card key={match.id} className="sm:hidden">
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="text-sm text-muted-foreground">
+                              {format(new Date(match.scheduled_date), 'dd/MM/yyyy')}
+                            </div>
                             <Badge className={`${color} text-white text-xs`}>
                               {result}
                             </Badge>
-                          </TableCell>
-                          <TableCell className="text-muted-foreground text-xs sm:text-sm">
-                            {match.location}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium text-sm truncate pr-2">{match.team_name}</span>
+                              <div className="flex items-center space-x-2">
+                                <span className="font-mono text-lg">{match.our_score}</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm truncate pr-2">{match.opponent_name}</span>
+                              <div className="flex items-center space-x-2">
+                                <span className="font-mono text-lg">{match.opponent_score}</span>
+                              </div>
+                            </div>
+                            <div className="text-xs text-muted-foreground pt-2 border-t">
+                              {match.location}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                  
+                  {/* Desktop Table - Hidden on mobile */}
+                  <div className="hidden sm:block overflow-x-auto">
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left p-3 text-sm font-medium">Date</th>
+                          <th className="text-left p-3 text-sm font-medium">Team</th>
+                          <th className="text-left p-3 text-sm font-medium">Opponent</th>
+                          <th className="text-center p-3 text-sm font-medium">Score</th>
+                          <th className="text-center p-3 text-sm font-medium">Result</th>
+                          <th className="text-left p-3 text-sm font-medium">Location</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {completedMatches.map((match) => {
+                          const { result, color } = getMatchResult(match.our_score, match.opponent_score);
+                          return (
+                            <tr key={match.id} className="border-b hover:bg-muted/50">
+                              <td className="p-3 text-sm">
+                                {format(new Date(match.scheduled_date), 'dd/MM/yyyy')}
+                              </td>
+                              <td className="p-3 font-medium text-sm">
+                                {match.team_name}
+                              </td>
+                              <td className="p-3 text-sm">{match.opponent_name}</td>
+                              <td className="p-3 text-center font-mono text-lg">
+                                {match.our_score} - {match.opponent_score}
+                              </td>
+                              <td className="p-3 text-center">
+                                <Badge className={`${color} text-white text-xs`}>
+                                  {result}
+                                </Badge>
+                              </td>
+                              <td className="p-3 text-muted-foreground text-sm">
+                                {match.location}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </CardContent>
@@ -451,51 +481,83 @@ export default function Reports() {
             <CardHeader>
               <CardTitle>Goal Scorer League Table</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0 sm:p-6">
               {goalScorers.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   No goal scorer data available
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-16">Rank</TableHead>
-                      <TableHead>Player</TableHead>
-                      <TableHead>Team</TableHead>
-                      <TableHead className="text-center">Goals</TableHead>
-                      <TableHead className="text-center">Assists</TableHead>
-                      <TableHead className="text-center">Total</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {goalScorers.map((scorer, index) => (
-                      <TableRow key={scorer.player_id}>
-                        <TableCell className="font-medium">
-                          {index === 0 && (
-                            <Trophy className="h-4 w-4 text-yellow-500 inline mr-1" />
-                          )}
-                          #{index + 1}
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {scorer.player_name}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {scorer.team_name}
-                        </TableCell>
-                        <TableCell className="text-center font-mono text-lg">
-                          {scorer.goals}
-                        </TableCell>
-                        <TableCell className="text-center font-mono">
-                          {scorer.assists}
-                        </TableCell>
-                        <TableCell className="text-center font-mono font-medium">
-                          {scorer.goals + scorer.assists}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <div className="space-y-3 p-4 sm:p-0">
+                  {goalScorers.map((scorer, index) => (
+                    <Card key={scorer.player_id} className="sm:hidden">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className="flex items-center">
+                              {index === 0 && (
+                                <Trophy className="h-4 w-4 text-yellow-500 mr-1" />
+                              )}
+                              <span className="font-medium text-sm">#{index + 1}</span>
+                            </div>
+                            <div>
+                              <div className="font-medium text-sm">{scorer.player_name}</div>
+                              <div className="text-xs text-muted-foreground">{scorer.team_name}</div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-lg font-bold">{scorer.goals + scorer.assists}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {scorer.goals}G {scorer.assists}A
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                  
+                  {/* Desktop Table */}
+                  <div className="hidden sm:block overflow-x-auto">
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left p-3 w-16 text-sm font-medium">Rank</th>
+                          <th className="text-left p-3 text-sm font-medium">Player</th>
+                          <th className="text-left p-3 text-sm font-medium">Team</th>
+                          <th className="text-center p-3 text-sm font-medium">Goals</th>
+                          <th className="text-center p-3 text-sm font-medium">Assists</th>
+                          <th className="text-center p-3 text-sm font-medium">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {goalScorers.map((scorer, index) => (
+                          <tr key={scorer.player_id} className="border-b hover:bg-muted/50">
+                            <td className="p-3 font-medium">
+                              {index === 0 && (
+                                <Trophy className="h-4 w-4 text-yellow-500 inline mr-1" />
+                              )}
+                              #{index + 1}
+                            </td>
+                            <td className="p-3 font-medium text-sm">
+                              {scorer.player_name}
+                            </td>
+                            <td className="p-3 text-muted-foreground text-sm">
+                              {scorer.team_name}
+                            </td>
+                            <td className="p-3 text-center text-lg font-bold">
+                              {scorer.goals}
+                            </td>
+                            <td className="p-3 text-center text-lg font-bold">
+                              {scorer.assists}
+                            </td>
+                            <td className="p-3 text-center text-lg font-bold">
+                              {scorer.goals + scorer.assists}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -506,53 +568,73 @@ export default function Reports() {
             <CardHeader>
               <CardTitle>Player Playing Time</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0 sm:p-6">
               {playingTime.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   No playing time data available
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-16">Rank</TableHead>
-                      <TableHead>Player</TableHead>
-                      <TableHead>Team</TableHead>
-                      <TableHead className="text-center">Total Time</TableHead>
-                      <TableHead className="text-center">Matches</TableHead>
-                      <TableHead className="text-center">Average</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {playingTime.map((player, index) => (
-                      <TableRow key={player.player_id}>
-                        <TableCell className="font-medium">
-                          #{index + 1}
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {player.player_name}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {player.team_name}
-                        </TableCell>
-                        <TableCell className="text-center font-mono">
-                          {formatMinutes(player.total_minutes)}
-                        </TableCell>
-                        <TableCell className="text-center font-mono">
-                          {player.matches_played}
-                        </TableCell>
-                        <TableCell className="text-center font-mono">
-                          {formatMinutes(player.average_minutes)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <div className="space-y-3 p-4 sm:p-0">
+                  {playingTime.map((player) => (
+                    <Card key={player.player_id} className="sm:hidden">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-medium text-sm">{player.player_name}</div>
+                            <div className="text-xs text-muted-foreground">{player.team_name}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-lg font-bold">{formatMinutes(player.total_minutes)}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {player.matches_played} matches • {formatMinutes(player.average_minutes)} avg
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                  
+                  {/* Desktop Table */}
+                  <div className="hidden sm:block overflow-x-auto">
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left p-3 text-sm font-medium">Player</th>
+                          <th className="text-left p-3 text-sm font-medium">Team</th>
+                          <th className="text-center p-3 text-sm font-medium">Total Minutes</th>
+                          <th className="text-center p-3 text-sm font-medium">Matches Played</th>
+                          <th className="text-center p-3 text-sm font-medium">Average Minutes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {playingTime.map((player) => (
+                          <tr key={player.player_id} className="border-b hover:bg-muted/50">
+                            <td className="p-3 font-medium text-sm">
+                              {player.player_name}
+                            </td>
+                            <td className="p-3 text-muted-foreground text-sm">
+                              {player.team_name}
+                            </td>
+                            <td className="p-3 text-center font-bold">
+                              {formatMinutes(player.total_minutes)}
+                            </td>
+                            <td className="p-3 text-center">
+                              {player.matches_played}
+                            </td>
+                            <td className="p-3 text-center">
+                              {formatMinutes(player.average_minutes)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               )}
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
+    </ResponsiveWrapper>
   );
 }
