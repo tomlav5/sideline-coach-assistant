@@ -30,6 +30,24 @@ const Index = () => {
     }
   }, [user]);
 
+  // Auto-refresh stats when component comes into focus (user navigates back)
+  useEffect(() => {
+    const handleFocus = () => {
+      if (user) {
+        fetchStats();
+        checkForLiveMatch();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
+  }, [user]);
+
   const checkForLiveMatch = () => {
     // Check localStorage for any active match sessions
     const keys = Object.keys(localStorage);
