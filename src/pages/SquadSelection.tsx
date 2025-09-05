@@ -315,16 +315,16 @@ export default function SquadSelection() {
   const minSquadSize = teamSize - 1;
 
   return (
-    <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-w-full overflow-x-hidden">
+    <div className="container mx-auto p-3 sm:p-4 space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center space-x-4">
-          <Button variant="outline" onClick={() => navigate('/fixtures')} size="sm">
+        <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+          <Button variant="outline" onClick={() => navigate('/fixtures')} size="sm" className="w-fit">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back
           </Button>
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold">Squad Selection</h1>
-            <p className="text-sm md:text-base text-muted-foreground">Select your squad for the upcoming match</p>
+            <h1 className="text-2xl font-bold text-foreground">Squad Selection</h1>
+            <p className="text-muted-foreground">Select your squad for the upcoming match</p>
           </div>
         </div>
       </div>
@@ -343,8 +343,8 @@ export default function SquadSelection() {
             {fixture.location && ` • ${fixture.location}`}
           </CardDescription>
         </CardHeader>
-        <CardContent className="p-4 md:p-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 text-sm">
+        <CardContent className="p-3 sm:p-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 text-sm">
             <div>
               <p className="font-medium">Team Type</p>
               <p className="text-muted-foreground">{team.team_type}</p>
@@ -391,12 +391,13 @@ export default function SquadSelection() {
           </div>
         </div>
         
-        <div className="flex space-x-2 sm:ml-auto">
+        <div className="flex flex-col sm:flex-row gap-2 sm:space-x-2 sm:ml-auto w-full sm:w-auto">
            <Button 
              onClick={loadMostRecentSquad} 
              disabled={loading}
              variant="outline"
              size="sm"
+             className="w-full sm:w-auto"
            >
              Load Recent Squad
            </Button>
@@ -405,14 +406,14 @@ export default function SquadSelection() {
              disabled={selectedPlayers.length === 0 || saving}
              variant="default"
              size="sm"
-             className="bg-blue-600 hover:bg-blue-700"
+             className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
            >
              {saving ? 'Saving...' : 'Save Squad'}
            </Button>
           <Button 
             onClick={startMatch} 
             disabled={!canStartMatch()}
-            className="bg-green-600 hover:bg-green-700"
+            className="bg-green-600 hover:bg-green-700 w-full sm:w-auto"
             size="sm"
           >
             <Play className="h-4 w-4 mr-2" />
@@ -422,7 +423,7 @@ export default function SquadSelection() {
       </div>
 
       {/* Player Selection */}
-      <div className="grid gap-4 md:gap-6">
+      <div className="grid gap-4 sm:gap-6">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
@@ -433,13 +434,13 @@ export default function SquadSelection() {
               Select players for the squad. Minimum {minSquadSize} players required.
             </CardDescription>
           </CardHeader>
-          <CardContent className="p-4 md:p-6">
+          <CardContent className="p-3 sm:p-6">
             {availablePlayers.length === 0 ? (
               <p className="text-center text-muted-foreground py-8">
                 No players assigned to this team yet.
               </p>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                 {availablePlayers.map((player) => {
                   const isSelected = selectedPlayers.some(p => p.id === player.id);
                   const isStarter = startingPlayers.has(player.id);
@@ -514,14 +515,14 @@ export default function SquadSelection() {
             <CardHeader>
               <CardTitle>Squad Summary</CardTitle>
             </CardHeader>
-            <CardContent className="p-4 md:p-6 space-y-4">
+            <CardContent className="p-3 sm:p-6 space-y-4">
               {/* Starting Players */}
               <div>
                 <h4 className="font-medium mb-2 flex items-center">
                   <Star className="h-4 w-4 mr-2 text-yellow-500" />
                   Starting XI ({startingPlayers.size}/{teamSize})
                 </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+                <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
                   {selectedPlayers
                     .filter(p => startingPlayers.has(p.id))
                     .map(player => (
@@ -547,7 +548,7 @@ export default function SquadSelection() {
                   <Users className="h-4 w-4 mr-2 text-blue-500" />
                   Substitutes ({selectedPlayers.length - startingPlayers.size})
                 </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+                <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
                   {selectedPlayers
                     .filter(p => !startingPlayers.has(p.id))
                     .map(player => (
