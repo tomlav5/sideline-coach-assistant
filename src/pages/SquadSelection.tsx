@@ -67,7 +67,7 @@ export default function SquadSelection() {
         .from('fixtures')
         .select(`
           *,
-          teams!inner(
+          team:teams(
             id,
             name,
             team_type,
@@ -80,7 +80,7 @@ export default function SquadSelection() {
       if (fixtureError) throw fixtureError;
       
       setFixture(fixtureData);
-      setTeam(fixtureData.teams);
+      setTeam(fixtureData.team);
 
       // Fetch team players
       const { data: teamPlayersData, error: playersError } = await supabase
@@ -93,7 +93,7 @@ export default function SquadSelection() {
             jersey_number
           )
         `)
-        .eq('team_id', fixtureData.teams.id);
+        .eq('team_id', fixtureData.team.id);
 
       if (playersError) throw playersError;
       
