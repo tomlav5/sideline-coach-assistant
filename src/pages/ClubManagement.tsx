@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -28,6 +29,7 @@ interface Club {
 }
 
 export default function ClubManagement() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
   const [clubs, setClubs] = useState<Club[]>([]);
@@ -282,7 +284,7 @@ export default function ClubManagement() {
                         <Button 
                           size="sm" 
                           variant="outline" 
-                          onClick={() => window.location.href = '/teams'}
+                          onClick={() => navigate('/teams')}
                           className="flex-1 sm:flex-none min-h-[36px]"
                         >
                           <Users className="h-4 w-4 mr-1" />
@@ -291,7 +293,7 @@ export default function ClubManagement() {
                         <Button 
                           size="sm" 
                           variant="outline" 
-                          onClick={() => window.location.href = '/fixtures'}
+                          onClick={() => navigate('/fixtures')}
                           className="flex-1 sm:flex-none min-h-[36px]"
                         >
                           <Calendar className="h-4 w-4 mr-1" />

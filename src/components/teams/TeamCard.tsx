@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Users, Settings, UserPlus, Calendar } from 'lucide-react';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { TeamSettings } from './TeamSettings';
 
 interface Club {
@@ -36,6 +37,7 @@ const TEAM_TYPE_LABELS = {
 };
 
 export function TeamCard({ team, onTeamUpdate, onPlayerManagement }: TeamCardProps) {
+  const navigate = useNavigate();
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const getTeamTypeLabel = (type: string) => {
@@ -43,7 +45,7 @@ export function TeamCard({ team, onTeamUpdate, onPlayerManagement }: TeamCardPro
   };
 
   const handleFixtures = () => {
-    window.location.href = '/fixtures';
+    navigate('/fixtures');
   };
 
   return (

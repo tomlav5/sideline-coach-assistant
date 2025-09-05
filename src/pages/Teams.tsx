@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -27,6 +28,7 @@ interface Team {
 }
 
 export default function Teams() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
   const [teams, setTeams] = useState<Team[]>([]);
@@ -97,7 +99,7 @@ export default function Teams() {
 
   const handlePlayerManagement = (teamId: string) => {
     // Navigate to players page with team filter
-    window.location.href = `/players?team=${teamId}`;
+    navigate(`/players?team=${teamId}`);
   };
 
   if (loading) {

@@ -81,7 +81,7 @@ export default function MatchTracker() {
   const { user } = useAuth();
   const { toast } = useToast();
   
-  const matchState = location.state as MatchState;
+  const matchState = location.state as MatchState || (window as any).tempMatchState;
   const intervalRef = useRef<NodeJS.Timeout>();
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   
@@ -700,7 +700,7 @@ export default function MatchTracker() {
     );
   }
 
-  if (!fixture || !matchState?.squad) {
+  if (!fixture) {
     return (
       <div className="container mx-auto px-4 py-8">
         <Card>
@@ -709,9 +709,37 @@ export default function MatchTracker() {
             <p className="text-muted-foreground mb-4">
               This match doesn't have a proper squad selected. Please go back and select your squad first.
             </p>
-            <Button onClick={() => navigate('/fixtures')}>
-              Back to Fixtures
-            </Button>
+            <div className="space-x-2">
+              <Button onClick={() => navigate(`/squad/${fixtureId}`)}>
+                Select Squad
+              </Button>
+              <Button variant="outline" onClick={() => navigate('/fixtures')}>
+                Back to Fixtures
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!matchState?.squad) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <Card>
+          <CardContent className="p-6 text-center">
+            <h2 className="text-xl font-semibold mb-4">No Squad Selected</h2>
+            <p className="text-muted-foreground mb-4">
+              You need to select a squad before starting the match.
+            </p>
+            <div className="space-x-2">
+              <Button onClick={() => navigate(`/squad/${fixtureId}`)}>
+                Select Squad
+              </Button>
+              <Button variant="outline" onClick={() => navigate('/fixtures')}>
+                Back to Fixtures
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
