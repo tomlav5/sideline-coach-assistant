@@ -31,7 +31,6 @@ const navigationItems = [
   { title: "Teams", url: "/teams", icon: Users },
   { title: "Players", url: "/players", icon: User },
   { title: "Fixtures", url: "/fixtures", icon: Calendar },
-  { title: "Match Day", url: "/match", icon: Play },
   { title: "Reports", url: "/reports", icon: BarChart3 },
 ];
 

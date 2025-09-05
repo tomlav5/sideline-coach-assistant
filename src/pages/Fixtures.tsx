@@ -408,7 +408,13 @@ export default function Fixtures() {
             <Card 
               key={fixture.id} 
               className="hover:shadow-md transition-shadow cursor-pointer"
-              onClick={() => navigate(`/fixture/${fixture.id}`)}
+              onClick={() => {
+                if (fixture.status === 'in_progress') {
+                  navigate(`/match-day/${fixture.id}`);
+                } else {
+                  navigate(`/fixture/${fixture.id}`);
+                }
+              }}
             >
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
@@ -457,6 +463,15 @@ export default function Fixtures() {
                           <Calendar className="h-4 w-4 mr-2" />
                           View Details
                         </DropdownMenuItem>
+                        {fixture.status === 'in_progress' && (
+                          <DropdownMenuItem onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/match-day/${fixture.id}`);
+                          }}>
+                            <Play className="h-4 w-4 mr-2" />
+                            Resume Match
+                          </DropdownMenuItem>
+                        )}
                         {isUpcoming && fixture.status === 'scheduled' && (
                           <>
                             <DropdownMenuItem onClick={(e) => {
