@@ -102,7 +102,7 @@ export default function Teams() {
 
   if (loading) {
     return (
-      <div className="container mx-auto p-4 space-y-6">
+      <div className="container mx-auto p-3 sm:p-4 space-y-4 sm:space-y-6">
         <div className="flex justify-between items-center">
           <Skeleton className="h-8 w-32" />
           <Skeleton className="h-10 w-32" />
@@ -117,7 +117,7 @@ export default function Teams() {
   }
 
   return (
-    <div className="container mx-auto p-4 space-y-6">
+    <div className="container mx-auto p-3 sm:p-4 space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Teams</h1>

@@ -407,7 +407,7 @@ export default function Fixtures() {
           return (
             <Card 
               key={fixture.id} 
-              className="hover:shadow-md transition-shadow cursor-pointer"
+              className="hover:shadow-md transition-shadow cursor-pointer touch-manipulation"
               onClick={() => {
                 if (fixture.status === 'in_progress') {
                   navigate(`/match-day/${fixture.id}`);
@@ -416,46 +416,56 @@ export default function Fixtures() {
                 }
               }}
             >
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
+              <CardContent className="p-3 sm:p-4">
+                <div className="space-y-3">
                   {/* Main fixture info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 mb-2">
-                      <TypeIcon className="h-5 w-5 text-muted-foreground" />
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold truncate">
-                          {fixture.team.name} vs {fixture.opponent_name}
-                        </h3>
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
-                          <span>{format(new Date(fixture.scheduled_date), 'dd/MM/yyyy')}</span>
-                          <span>{format(new Date(fixture.scheduled_date), 'HH:mm')}</span>
-                          <span className="capitalize">
-                            {fixture.competition_type === 'league' ? 'League' : 
-                             fixture.competition_type === 'tournament' ? 'Tournament' : 'Friendly'}
-                          </span>
-                          {fixture.location && (
-                            <span className="hidden sm:inline truncate max-w-32">
-                              {fixture.location}
-                            </span>
-                          )}
-                        </div>
-                      </div>
+                  <div className="flex items-start gap-2 sm:gap-3">
+                    <TypeIcon className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-sm sm:text-base leading-tight">
+                        <span className="block sm:inline">{fixture.team.name}</span>
+                        <span className="block sm:inline text-muted-foreground sm:text-foreground"> vs </span>
+                        <span className="block sm:inline">{fixture.opponent_name}</span>
+                      </h3>
                     </div>
                   </div>
-
-                  {/* Status and actions */}
-                  <div className="flex items-center gap-2 ml-4">
-                    <Badge variant={getStatusBadgeVariant(fixture.status)}>
-                      {fixture.status.replace('_', ' ')}
-                    </Badge>
+                  
+                  {/* Date and time info */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {format(new Date(fixture.scheduled_date), 'dd/MM/yyyy')}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        {format(new Date(fixture.scheduled_date), 'HH:mm')}
+                      </span>
+                      <span className="capitalize hidden xs:inline flex-shrink-0">
+                        {fixture.competition_type === 'league' ? 'League' : 
+                         fixture.competition_type === 'tournament' ? 'Tournament' : 'Friendly'}
+                      </span>
+                      {fixture.location && (
+                        <span className="hidden sm:inline truncate max-w-24">
+                          <MapPin className="h-3 w-3 inline mr-1" />
+                          {fixture.location}
+                        </span>
+                      )}
+                    </div>
                     
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                        <Button variant="ghost" size="sm">
-                          <Settings className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
+                    {/* Status and actions */}
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <Badge variant={getStatusBadgeVariant(fixture.status)} className="text-xs">
+                        {fixture.status.replace('_', ' ')}
+                      </Badge>
+                      
+                       <DropdownMenu>
+                         <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                           <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                             <Settings className="h-4 w-4" />
+                           </Button>
+                         </DropdownMenuTrigger>
+                         <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={(e) => {
                           e.stopPropagation();
                           navigate(`/fixture/${fixture.id}`);
@@ -508,12 +518,13 @@ export default function Fixtures() {
                         >
                           <Trash2 className="h-4 w-4 mr-2" />
                           Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-              </CardContent>
+                         </DropdownMenuItem>
+                         </DropdownMenuContent>
+                       </DropdownMenu>
+                     </div>
+                   </div>
+                 </div>
+               </CardContent>
             </Card>
           );
         })}
@@ -523,7 +534,7 @@ export default function Fixtures() {
 
   if (loading) {
     return (
-      <div className="container mx-auto p-4 space-y-6">
+      <div className="container mx-auto p-3 sm:p-4 space-y-4 sm:space-y-6 max-w-full overflow-hidden">
         <div className="flex justify-between items-center">
           <Skeleton className="h-8 w-32" />
           <Skeleton className="h-10 w-32" />
@@ -538,14 +549,14 @@ export default function Fixtures() {
   }
 
   return (
-    <div className="container mx-auto p-4 space-y-6">
+    <div className="container mx-auto p-3 sm:p-4 space-y-4 sm:space-y-6 max-w-full overflow-hidden">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Fixtures</h1>
           <p className="text-muted-foreground">Manage team fixtures and matches</p>
         </div>
         
-        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto shrink-0">
           {/* Date Filter Dialog */}
           <Dialog open={dateFilterOpen} onOpenChange={setDateFilterOpen}>
             <DialogTrigger asChild>

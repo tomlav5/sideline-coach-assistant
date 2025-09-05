@@ -163,7 +163,7 @@ export default function ClubManagement() {
 
   if (loading) {
     return (
-      <div className="container mx-auto p-4 space-y-6">
+      <div className="container mx-auto p-3 sm:p-4 space-y-4 sm:space-y-6">
         <div className="flex justify-between items-center">
           <Skeleton className="h-8 w-48" />
           <Skeleton className="h-10 w-32" />
@@ -178,7 +178,7 @@ export default function ClubManagement() {
   }
 
   return (
-    <div className="container mx-auto p-4 space-y-6 max-w-7xl">
+    <div className="container mx-auto p-3 sm:p-4 space-y-4 sm:space-y-6 max-w-7xl">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="w-full sm:w-auto">
           <h1 className="text-2xl font-bold text-foreground">Club Management</h1>
