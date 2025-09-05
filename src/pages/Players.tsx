@@ -4,11 +4,13 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, User } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Plus, User, Users } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PlayerCard } from '@/components/players/PlayerCard';
 import { PlayerDialog } from '@/components/players/PlayerDialog';
 import { TeamAssignmentDialog } from '@/components/players/TeamAssignmentDialog';
+import { BulkTeamAssignmentDialog } from '@/components/players/BulkTeamAssignmentDialog';
 
 interface Club {
   id: string;
@@ -37,12 +39,16 @@ export default function Players() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [players, setPlayers] = useState<Player[]>([]);
+  const [filteredPlayers, setFilteredPlayers] = useState<Player[]>([]);
   const [clubs, setClubs] = useState<Club[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [bulkAssignDialogOpen, setBulkAssignDialogOpen] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+  const [selectedPlayers, setSelectedPlayers] = useState<Player[]>([]);
+  const [teamFilter, setTeamFilter] = useState<string>('all');
 
   useEffect(() => {
     if (user) {
@@ -111,6 +117,7 @@ export default function Players() {
       );
       
       setPlayers(playersWithTeams);
+      setFilteredPlayers(playersWithTeams);
     } catch (error) {
       console.error('Error fetching players:', error);
       toast({
@@ -130,7 +137,39 @@ export default function Players() {
 
   const handleAssignmentUpdate = () => {
     fetchPlayers();
+    setSelectedPlayers([]);
   };
+
+  const handlePlayerSelection = (player: Player, selected: boolean) => {
+    if (selected) {
+      setSelectedPlayers([...selectedPlayers, player]);
+    } else {
+      setSelectedPlayers(selectedPlayers.filter(p => p.id !== player.id));
+    }
+  };
+
+  const handleBulkTeamAssignment = () => {
+    setBulkAssignDialogOpen(true);
+  };
+
+  const filterPlayersByTeam = (teamId: string) => {
+    if (teamId === 'all') {
+      setFilteredPlayers(players);
+    } else if (teamId === 'unassigned') {
+      setFilteredPlayers(players.filter(player => !player.teams || player.teams.length === 0));
+    } else {
+      setFilteredPlayers(players.filter(player => 
+        player.teams?.some(team => team.id === teamId)
+      ));
+    }
+    setTeamFilter(teamId);
+    setSelectedPlayers([]);
+  };
+
+  // Update filtered players when players change
+  useEffect(() => {
+    filterPlayersByTeam(teamFilter);
+  }, [players, teamFilter]);
 
   if (loading) {
     return (
@@ -150,28 +189,72 @@ export default function Players() {
 
   return (
     <div className="container mx-auto p-4 space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Players</h1>
-          <p className="text-muted-foreground">Manage club players and team assignments</p>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Players</h1>
+            <p className="text-muted-foreground">Manage club players and team assignments</p>
+          </div>
+          
+          <div className="flex gap-2">
+            {selectedPlayers.length > 0 && (
+              <Button 
+                variant="outline"
+                onClick={handleBulkTeamAssignment}
+              >
+                <Users className="h-4 w-4 mr-2" />
+                Assign {selectedPlayers.length} to Teams
+              </Button>
+            )}
+            <Button 
+              className="touch-target"
+              onClick={() => setCreateDialogOpen(true)}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Player
+            </Button>
+          </div>
         </div>
-        
-        <Button 
-          className="touch-target"
-          onClick={() => setCreateDialogOpen(true)}
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add Player
-        </Button>
+
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">Filter by team:</span>
+            <Select value={teamFilter} onValueChange={filterPlayersByTeam}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="All teams" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All teams</SelectItem>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
+                {teams.map((team) => (
+                  <SelectItem key={team.id} value={team.id}>
+                    {team.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          {selectedPlayers.length > 0 && (
+            <div className="text-sm text-muted-foreground">
+              {selectedPlayers.length} player(s) selected
+            </div>
+          )}
+        </div>
       </div>
 
-      {players.length === 0 ? (
+      {filteredPlayers.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <User className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No players yet</h3>
+            <h3 className="text-lg font-semibold mb-2">
+              {teamFilter === 'all' ? 'No players yet' : 'No players found'}
+            </h3>
             <p className="text-muted-foreground text-center mb-4">
-              Add your first player to start building your squad
+              {teamFilter === 'all' 
+                ? 'Add your first player to start building your squad'
+                : 'No players match the current filter'
+              }
             </p>
             <Button onClick={() => setCreateDialogOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
@@ -180,13 +263,15 @@ export default function Players() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {players.map((player) => (
+        <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+          {filteredPlayers.map((player) => (
             <PlayerCard
               key={player.id}
               player={player}
               onPlayerUpdate={fetchPlayers}
               onTeamAssignment={handleTeamAssignment}
+              isSelected={selectedPlayers.some(p => p.id === player.id)}
+              onSelectionChange={handlePlayerSelection}
             />
           ))}
         </div>
@@ -203,6 +288,14 @@ export default function Players() {
         open={assignDialogOpen}
         onOpenChange={setAssignDialogOpen}
         player={selectedPlayer}
+        availableTeams={teams}
+        onAssignmentUpdate={handleAssignmentUpdate}
+      />
+
+      <BulkTeamAssignmentDialog
+        open={bulkAssignDialogOpen}
+        onOpenChange={setBulkAssignDialogOpen}
+        players={selectedPlayers}
         availableTeams={teams}
         onAssignmentUpdate={handleAssignmentUpdate}
       />
