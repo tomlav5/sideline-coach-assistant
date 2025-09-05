@@ -366,9 +366,9 @@ export default function Fixtures() {
   const renderFixtures = (fixtureList: Fixture[], type: 'upcoming' | 'past') => {
     if (loading) {
       return (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {[...Array(6)].map((_, i) => (
-            <Skeleton key={i} className="h-48" />
+        <div className="space-y-3">
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={i} className="h-20" />
           ))}
         </div>
       );
@@ -399,45 +399,96 @@ export default function Fixtures() {
     }
 
     return (
-      <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+      <div className="space-y-3">
         {fixtureList.map((fixture) => {
           const TypeIcon = getFixtureTypeIcon(fixture.fixture_type);
           const isUpcoming = type === 'upcoming';
           
           return (
-            <Card key={fixture.id} className="hover:shadow-md transition-shadow">
-              <CardHeader>
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <TypeIcon className="h-5 w-5" />
-                      {fixture.team.name} vs {fixture.opponent_name}
-                    </CardTitle>
-                    <CardDescription>{fixture.team.club.name}</CardDescription>
+            <Card 
+              key={fixture.id} 
+              className="hover:shadow-md transition-shadow cursor-pointer"
+              onClick={() => navigate(`/fixture/${fixture.id}`)}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  {/* Main fixture info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3 mb-2">
+                      <TypeIcon className="h-5 w-5 text-muted-foreground" />
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold truncate">
+                          {fixture.team.name} vs {fixture.opponent_name}
+                        </h3>
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
+                          <span>{format(new Date(fixture.scheduled_date), 'dd/MM/yyyy')}</span>
+                          <span>{format(new Date(fixture.scheduled_date), 'HH:mm')}</span>
+                          <span className="capitalize">
+                            {fixture.competition_type === 'league' ? 'League' : 
+                             fixture.competition_type === 'tournament' ? 'Tournament' : 'Friendly'}
+                          </span>
+                          {fixture.location && (
+                            <span className="hidden sm:inline truncate max-w-32">
+                              {fixture.location}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
+
+                  {/* Status and actions */}
+                  <div className="flex items-center gap-2 ml-4">
                     <Badge variant={getStatusBadgeVariant(fixture.status)}>
                       {fixture.status.replace('_', ' ')}
                     </Badge>
+                    
                     <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
+                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                         <Button variant="ghost" size="sm">
                           <Settings className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => editFixture(fixture)}>
+                        <DropdownMenuItem onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/fixture/${fixture.id}`);
+                        }}>
+                          <Calendar className="h-4 w-4 mr-2" />
+                          View Details
+                        </DropdownMenuItem>
+                        {isUpcoming && fixture.status === 'scheduled' && (
+                          <>
+                            <DropdownMenuItem onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/squad/${fixture.id}`);
+                            }}>
+                              <Users className="h-4 w-4 mr-2" />
+                              Select Squad
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                        <DropdownMenuItem onClick={(e) => {
+                          e.stopPropagation();
+                          editFixture(fixture);
+                        }}>
                           <Settings className="h-4 w-4 mr-2" />
                           Edit Details
                         </DropdownMenuItem>
                         {fixture.status === 'scheduled' && (
-                          <DropdownMenuItem onClick={() => cancelFixture(fixture.id)}>
+                          <DropdownMenuItem onClick={(e) => {
+                            e.stopPropagation();
+                            cancelFixture(fixture.id);
+                          }}>
                             <X className="h-4 w-4 mr-2" />
                             Cancel Match
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuItem 
-                          onClick={() => deleteFixture(fixture.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteFixture(fixture.id);
+                          }}
                           className="text-destructive"
                         >
                           <Trash2 className="h-4 w-4 mr-2" />
@@ -447,54 +498,6 @@ export default function Fixtures() {
                     </DropdownMenu>
                   </div>
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center text-sm text-muted-foreground">
-                  <Calendar className="h-4 w-4 mr-2" />
-                  {formatDate(fixture.scheduled_date)}
-                </div>
-                
-                <div className="flex items-center text-sm text-muted-foreground">
-                  <Clock className="h-4 w-4 mr-2" />
-                  {formatTime(fixture.scheduled_date)} ({fixture.half_length}min halves)
-                </div>
-                
-                {fixture.location && (
-                  <div className="flex items-center text-sm text-muted-foreground">
-                    <MapPin className="h-4 w-4 mr-2" />
-                    {fixture.location}
-                  </div>
-                )}
-                
-                {fixture.competition_type !== 'friendly' && (
-                  <div className="flex items-center text-sm text-muted-foreground">
-                    <Trophy className="h-4 w-4 mr-2" />
-                    {fixture.competition_type === 'league' ? 'League' : 'Tournament'}
-                    {fixture.competition_name && `: ${fixture.competition_name}`}
-                  </div>
-                )}
-                
-                {isUpcoming && fixture.status === 'scheduled' && (
-                  <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 mt-4">
-                    <Button 
-                      size="sm" 
-                      onClick={() => navigate(`/squad/${fixture.id}`)}
-                      className="flex-1 bg-blue-600 hover:bg-blue-700 min-h-[44px]"
-                    >
-                      <Users className="h-4 w-4 mr-1" />
-                      Select Squad
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      variant="outline"
-                      disabled={true}
-                      className="flex-1 min-h-[44px]"
-                    >
-                      <Play className="h-4 w-4 mr-1" />
-                      Start Match
-                    </Button>
-                  </div>
-                )}
               </CardContent>
             </Card>
           );

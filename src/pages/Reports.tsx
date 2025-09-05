@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -381,7 +381,38 @@ export default function Reports() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="matches">
+        <TabsContent value="matches" className="space-y-6">
+          {/* Last 5 Results Summary */}
+          {completedMatches.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Form</CardTitle>
+                <CardDescription>Last 5 match results</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-center space-x-2">
+                  {completedMatches.slice(0, 5).map((match, index) => {
+                    const { result, color } = getMatchResult(match.our_score, match.opponent_score);
+                    return (
+                      <div
+                        key={match.id}
+                        className={`w-10 h-10 rounded-full ${color} text-white flex items-center justify-center font-bold text-sm`}
+                        title={`${match.team_name} ${match.our_score}-${match.opponent_score} ${match.opponent_name}`}
+                      >
+                        {result}
+                      </div>
+                    );
+                  })}
+                  {completedMatches.length < 5 && (
+                    <span className="text-muted-foreground text-sm ml-4">
+                      {5 - completedMatches.length} more matches needed for full form
+                    </span>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader>
               <CardTitle>Completed Matches</CardTitle>

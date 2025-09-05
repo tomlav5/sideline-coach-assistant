@@ -16,6 +16,8 @@ import ClubManagement from "./pages/ClubManagement";
 import SquadSelection from "./pages/SquadSelection";
 import MatchDay from "./pages/MatchDay";
 import Reports from "./pages/Reports";
+import Settings from "./pages/Settings";
+import FixtureDetail from "./pages/FixtureDetail";
 
 const queryClient = new QueryClient();
 
@@ -33,11 +35,12 @@ const App = () => (
               <Route path="/teams" element={<Layout><Teams /></Layout>} />
               <Route path="/players" element={<Layout><Players /></Layout>} />
               <Route path="/fixtures" element={<Layout><Fixtures /></Layout>} />
+              <Route path="/fixture/:fixtureId" element={<Layout><FixtureDetail /></Layout>} />
               <Route path="/squad/:fixtureId" element={<Layout><SquadSelection /></Layout>} />
               <Route path="/match/:fixtureId" element={<Layout><MatchDay /></Layout>} />
               <Route path="/match" element={<Layout><div className="p-6"><h1 className="text-2xl font-bold">Match Day - Coming Soon</h1></div></Layout>} />
               <Route path="/reports" element={<Layout><Reports /></Layout>} />
-              <Route path="/settings" element={<Layout><div className="p-6"><h1 className="text-2xl font-bold">Settings - Coming Soon</h1></div></Layout>} />
+              <Route path="/settings" element={<Layout><Settings /></Layout>} />
               <Route path="/club-management" element={<Layout><ClubManagement /></Layout>} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />

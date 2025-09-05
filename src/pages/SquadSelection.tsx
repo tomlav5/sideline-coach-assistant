@@ -174,6 +174,54 @@ export default function SquadSelection() {
     return startingPlayers.size === teamSize && isSquadValid();
   };
 
+  const loadMostRecentSquad = async () => {
+    if (!team) return;
+    
+    try {
+      // Find the most recent fixture with a saved squad for this team
+      const { data: recentFixture, error } = await supabase
+        .from('fixtures')
+        .select('selected_squad_data')
+        .eq('team_id', team.id)
+        .not('selected_squad_data', 'is', null)
+        .neq('id', fixtureId) // Exclude current fixture
+        .order('scheduled_date', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error;
+      
+      if (recentFixture?.selected_squad_data) {
+        const savedData = recentFixture.selected_squad_data as any;
+        const recentSelectedPlayers = availablePlayers.filter(p => savedData.selectedPlayerIds?.includes(p.id));
+        const recentStartingPlayers = new Set<string>(
+          savedData.startingPlayerIds?.filter((id: string) => recentSelectedPlayers.some(p => p.id === id)) || []
+        );
+        
+        setSelectedPlayers(recentSelectedPlayers);
+        setStartingPlayers(recentStartingPlayers);
+        
+        toast({
+          title: "Recent Squad Loaded",
+          description: `Loaded squad from previous fixture (${recentSelectedPlayers.length} players)`,
+        });
+      } else {
+        toast({
+          title: "No Recent Squad",
+          description: "No previous squad selections found for this team",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error loading recent squad:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load recent squad",
+        variant: "destructive",
+      });
+    }
+  };
+
   const saveSquadSelection = async () => {
     if (!fixtureId) return;
     
@@ -183,6 +231,12 @@ export default function SquadSelection() {
       const squadData = {
         selectedPlayerIds: selectedPlayers.map(p => p.id),
         startingPlayerIds: Array.from(startingPlayers),
+        startingLineup: selectedPlayers
+          .filter(p => startingPlayers.has(p.id))
+          .map(p => ({ id: p.id, first_name: p.first_name, last_name: p.last_name, jersey_number: p.jersey_number })),
+        substitutes: selectedPlayers
+          .filter(p => !startingPlayers.has(p.id))
+          .map(p => ({ id: p.id, first_name: p.first_name, last_name: p.last_name, jersey_number: p.jersey_number })),
         savedAt: new Date().toISOString()
       };
 
@@ -338,15 +392,23 @@ export default function SquadSelection() {
         </div>
         
         <div className="flex space-x-2 sm:ml-auto">
-          <Button 
-            onClick={saveSquadSelection} 
-            disabled={selectedPlayers.length === 0 || saving}
-            variant="default"
-            size="sm"
-            className="bg-blue-600 hover:bg-blue-700"
-          >
-            {saving ? 'Saving...' : 'Save Squad'}
-          </Button>
+           <Button 
+             onClick={loadMostRecentSquad} 
+             disabled={loading}
+             variant="outline"
+             size="sm"
+           >
+             Load Recent Squad
+           </Button>
+           <Button 
+             onClick={saveSquadSelection} 
+             disabled={selectedPlayers.length === 0 || saving}
+             variant="default"
+             size="sm"
+             className="bg-blue-600 hover:bg-blue-700"
+           >
+             {saving ? 'Saving...' : 'Save Squad'}
+           </Button>
           <Button 
             onClick={startMatch} 
             disabled={!canStartMatch()}

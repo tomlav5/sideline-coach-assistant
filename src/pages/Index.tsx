@@ -151,7 +151,7 @@ const Index = () => {
             Welcome back, {firstName}!
           </h1>
           <p className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto">
-            Your sideline coaching assistant is ready. Manage fixtures, track matches, 
+            Your SideLine Assist is ready. Manage fixtures, track matches, 
             and analyze your team's performance all in one place.
           </p>
         </div>
@@ -298,7 +298,7 @@ const Index = () => {
         <Card className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 border-dashed">
           <CardContent className="p-6 sm:p-8 text-center">
             <div className="text-xl sm:text-2xl font-bold text-muted-foreground mb-2">
-              🤖 AI Assistant Coming Soon
+              🤖 SideLine Assist AI Coming Soon
             </div>
             <div className="text-muted-foreground">
               Get intelligent insights and recommendations powered by AI to help improve your team's performance
