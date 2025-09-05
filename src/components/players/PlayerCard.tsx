@@ -1,8 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Users, Settings } from 'lucide-react';
+import { Users, Settings, X } from 'lucide-react';
 import { useState } from 'react';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 import { PlayerSettings } from './PlayerSettings';
 
 interface Club {
@@ -44,6 +46,33 @@ export function PlayerCard({
   onSelectionChange 
 }: PlayerCardProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const { toast } = useToast();
+
+  const handleRemoveFromTeam = async (teamId: string, teamName: string) => {
+    try {
+      const { error } = await supabase
+        .from('team_players')
+        .delete()
+        .eq('player_id', player.id)
+        .eq('team_id', teamId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: `Removed ${player.first_name} ${player.last_name} from ${teamName}`,
+      });
+
+      onPlayerUpdate();
+    } catch (error) {
+      console.error('Error removing player from team:', error);
+      toast({
+        title: "Error",
+        description: "Failed to remove player from team",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <>
@@ -74,17 +103,25 @@ export function PlayerCard({
               <div className="flex items-center gap-2 mt-1">
                 <p className="text-xs text-muted-foreground">{player.club.name}</p>
                 {player.teams && player.teams.length > 0 && (
-                  <div className="flex gap-1">
-                    {player.teams.slice(0, 2).map((team) => (
-                      <Badge key={team.id} variant="secondary" className="text-xs px-1 py-0">
-                        {team.name}
+                  <div className="flex flex-wrap gap-1">
+                    {player.teams.map((team) => (
+                      <Badge 
+                        key={team.id} 
+                        variant="secondary" 
+                        className="text-xs px-1 py-0 flex items-center gap-1 group hover:bg-destructive hover:text-destructive-foreground"
+                      >
+                        <span>{team.name}</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveFromTeam(team.id, team.name);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="h-2 w-2" />
+                        </button>
                       </Badge>
                     ))}
-                    {player.teams.length > 2 && (
-                      <Badge variant="secondary" className="text-xs px-1 py-0">
-                        +{player.teams.length - 2}
-                      </Badge>
-                    )}
                   </div>
                 )}
               </div>

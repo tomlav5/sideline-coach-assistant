@@ -121,21 +121,31 @@ export function TeamAssignmentDialog({
         </DialogHeader>
         <div className="space-y-4">
           {player && getPlayerTeamsForClub().length > 0 ? (
-            getPlayerTeamsForClub().map((team) => (
-              <div key={team.id} className="flex items-center space-x-2">
-                <Checkbox
-                  id={`team-${team.id}`}
-                  checked={selectedTeams.includes(team.id)}
-                  onCheckedChange={(checked) => handleTeamToggle(team.id, checked as boolean)}
-                />
-                <label
-                  htmlFor={`team-${team.id}`}
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                >
-                  {team.name} ({team.team_type.replace('-', ' ')})
-                </label>
-              </div>
-            ))
+            getPlayerTeamsForClub().map((team) => {
+              const isAlreadyMember = player.teams?.some(t => t.id === team.id) || false;
+              const isCurrentlySelected = selectedTeams.includes(team.id);
+              
+              return (
+                <div key={team.id} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`team-${team.id}`}
+                    checked={isCurrentlySelected}
+                    onCheckedChange={(checked) => handleTeamToggle(team.id, checked as boolean)}
+                  />
+                  <label
+                    htmlFor={`team-${team.id}`}
+                    className={`text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 ${
+                      isAlreadyMember && !isCurrentlySelected ? 'text-muted-foreground' : ''
+                    }`}
+                  >
+                    {team.name} ({team.team_type.replace('-', ' ')})
+                    {isAlreadyMember && !isCurrentlySelected && (
+                      <span className="ml-2 text-xs">(currently assigned)</span>
+                    )}
+                  </label>
+                </div>
+              );
+            })
           ) : (
             <p className="text-sm text-muted-foreground">
               No teams available for this club. Create teams first.
