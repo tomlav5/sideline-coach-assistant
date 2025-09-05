@@ -865,46 +865,6 @@ export default function MatchDay() {
                   <Target className="h-4 w-4 mr-2" />
                   Goal
                 </Button>
-                <Button
-                  onClick={() => openEventDialog('corner', true)}
-                  variant="outline"
-                  className="w-full"
-                >
-                  <Flag className="h-4 w-4 mr-2" />
-                  Corner
-                </Button>
-                <Button
-                  onClick={() => openEventDialog('free_kick', true)}
-                  variant="outline"
-                  className="w-full"
-                >
-                  <Trophy className="h-4 w-4 mr-2" />
-                  Free Kick
-                </Button>
-                <Button
-                  onClick={() => openEventDialog('throw_in', true)}
-                  variant="outline"
-                  className="w-full"
-                >
-                  <Users className="h-4 w-4 mr-2" />
-                  Throw In
-                </Button>
-                <Button
-                  onClick={() => openEventDialog('penalty', true)}
-                  variant="outline"
-                  className="w-full"
-                >
-                  <Target className="h-4 w-4 mr-2" />
-                  Penalty
-                </Button>
-                <Button
-                  onClick={() => openEventDialog('goal_kick', true)}
-                  variant="outline"
-                  className="w-full"
-                >
-                  <Flag className="h-4 w-4 mr-2" />
-                  Goal Kick
-                </Button>
               </CardContent>
             </Card>
 
@@ -920,46 +880,6 @@ export default function MatchDay() {
                 >
                   <Target className="h-4 w-4 mr-2" />
                   Goal
-                </Button>
-                <Button
-                  onClick={() => openEventDialog('corner', false)}
-                  variant="outline"
-                  className="w-full"
-                >
-                  <Flag className="h-4 w-4 mr-2" />
-                  Corner
-                </Button>
-                <Button
-                  onClick={() => openEventDialog('free_kick', false)}
-                  variant="outline"
-                  className="w-full"
-                >
-                  <Trophy className="h-4 w-4 mr-2" />
-                  Free Kick
-                </Button>
-                <Button
-                  onClick={() => openEventDialog('throw_in', false)}
-                  variant="outline"
-                  className="w-full"
-                >
-                  <Users className="h-4 w-4 mr-2" />
-                  Throw In
-                </Button>
-                <Button
-                  onClick={() => openEventDialog('penalty', false)}
-                  variant="outline"
-                  className="w-full"
-                >
-                  <Target className="h-4 w-4 mr-2" />
-                  Penalty
-                </Button>
-                <Button
-                  onClick={() => openEventDialog('goal_kick', false)}
-                  variant="outline"
-                  className="w-full"
-                >
-                  <Flag className="h-4 w-4 mr-2" />
-                  Goal Kick
                 </Button>
               </CardContent>
             </Card>
@@ -1083,7 +1003,7 @@ export default function MatchDay() {
         </TabsContent>
 
         <TabsContent value="stats" className="space-y-4 md:space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
             <Card>
               <CardHeader>
                 <CardTitle className="text-center">Goals</CardTitle>
@@ -1102,27 +1022,15 @@ export default function MatchDay() {
             
             <Card>
               <CardHeader>
-                <CardTitle className="text-center">Corners</CardTitle>
+                <CardTitle className="text-center">Assists</CardTitle>
               </CardHeader>
               <CardContent className="text-center">
                 <div className="text-3xl font-bold">
-                  {gameState.events.filter(e => e.event_type === 'corner' && e.is_our_team).length}
-                  {' - '}
-                  {gameState.events.filter(e => e.event_type === 'corner' && !e.is_our_team).length}
+                  {gameState.events.filter(e => e.event_type === 'assist' && e.is_our_team).length}
                 </div>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-center">Free Kicks</CardTitle>
-              </CardHeader>
-              <CardContent className="text-center">
-                <div className="text-3xl font-bold">
-                  {gameState.events.filter(e => e.event_type === 'free_kick' && e.is_our_team).length}
-                  {' - '}
-                  {gameState.events.filter(e => e.event_type === 'free_kick' && !e.is_our_team).length}
-                </div>
+                <p className="text-sm text-muted-foreground">
+                  {fixture.teams.name}
+                </p>
               </CardContent>
             </Card>
           </div>
