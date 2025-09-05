@@ -268,7 +268,7 @@ export default function SquadSelection() {
     if (!canStartMatch()) return;
     
     // Navigate to match tracking with squad data
-    navigate(`/match/${fixtureId}`, {
+    navigate(`/match-day/${fixtureId}`, {
       state: {
         squad: selectedPlayers,
         starters: Array.from(startingPlayers),

@@ -87,7 +87,7 @@ export default function FixtureDetail() {
       return;
     }
 
-    navigate(`/match/${fixture.id}`);
+    navigate(`/match-day/${fixture.id}`);
   };
 
   if (loading) {

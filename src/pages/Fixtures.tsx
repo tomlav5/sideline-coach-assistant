@@ -40,6 +40,7 @@ interface Fixture {
   created_at: string;
   competition_type: 'league' | 'tournament' | 'friendly';
   competition_name: string | null;
+  selected_squad_data: any;
 }
 
 const FIXTURE_TYPES = [
@@ -451,6 +452,11 @@ export default function Fixtures() {
                           {fixture.location}
                         </span>
                       )}
+                      {fixture.selected_squad_data && fixture.selected_squad_data.startingLineup?.length > 0 && (
+                        <span className="hidden sm:inline text-green-600 text-xs font-medium">
+                          ✓ Squad Ready
+                        </span>
+                      )}
                     </div>
                     
                     {/* Status and actions */}
@@ -490,6 +496,18 @@ export default function Fixtures() {
                             }}>
                               <Users className="h-4 w-4 mr-2" />
                               Select Squad
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={(e) => {
+                              e.stopPropagation();
+                              // Check if squad is selected before starting match
+                              if (fixture.selected_squad_data && fixture.selected_squad_data.startingLineup?.length > 0) {
+                                navigate(`/match-day/${fixture.id}`);
+                              } else {
+                                navigate(`/squad/${fixture.id}`);
+                              }
+                            }}>
+                              <Play className="h-4 w-4 mr-2" />
+                              Start Match
                             </DropdownMenuItem>
                           </>
                         )}
