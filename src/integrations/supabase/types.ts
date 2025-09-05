@@ -84,6 +84,7 @@ export type Database = {
           half_length: number
           id: string
           location: string | null
+          match_status: string | null
           opponent_name: string
           scheduled_date: string
           selected_squad_data: Json | null
@@ -101,6 +102,7 @@ export type Database = {
           half_length?: number
           id?: string
           location?: string | null
+          match_status?: string | null
           opponent_name: string
           scheduled_date: string
           selected_squad_data?: Json | null
@@ -118,6 +120,7 @@ export type Database = {
           half_length?: number
           id?: string
           location?: string | null
+          match_status?: string | null
           opponent_name?: string
           scheduled_date?: string
           selected_squad_data?: Json | null

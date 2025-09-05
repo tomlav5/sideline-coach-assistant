@@ -14,7 +14,8 @@ import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import ClubManagement from "./pages/ClubManagement";
 import SquadSelection from "./pages/SquadSelection";
-import MatchDay from "./pages/MatchDay";
+import MatchTracker from "./pages/MatchTracker";
+import MatchDayHub from "./pages/MatchDayHub";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import FixtureDetail from "./pages/FixtureDetail";
@@ -37,8 +38,8 @@ const App = () => (
               <Route path="/fixtures" element={<Layout><Fixtures /></Layout>} />
               <Route path="/fixture/:fixtureId" element={<Layout><FixtureDetail /></Layout>} />
               <Route path="/squad/:fixtureId" element={<Layout><SquadSelection /></Layout>} />
-              <Route path="/match/:fixtureId" element={<Layout><MatchDay /></Layout>} />
-              <Route path="/match" element={<Layout><div className="p-6"><h1 className="text-2xl font-bold">Match Day - Coming Soon</h1></div></Layout>} />
+              <Route path="/match-day/:fixtureId" element={<Layout><MatchTracker /></Layout>} />
+              <Route path="/match" element={<Layout><MatchDayHub /></Layout>} />
               <Route path="/reports" element={<Layout><Reports /></Layout>} />
               <Route path="/settings" element={<Layout><Settings /></Layout>} />
               <Route path="/club-management" element={<Layout><ClubManagement /></Layout>} />
