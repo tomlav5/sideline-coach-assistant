@@ -1,34 +1,28 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { useMatchTimer } from '@/hooks/useMatchTimer';
+import { useMatchStorage } from '@/hooks/useMatchStorage';
+import { useWakeLock } from '@/hooks/useWakeLock';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { MatchControls } from '@/components/match/MatchControls';
+import { EventDialog } from '@/components/match/EventDialog';
+import { SubstitutionDialog } from '@/components/match/SubstitutionDialog';
 import { 
-  Play, 
-  Pause, 
-  Square, 
-  Clock, 
-  Target, 
   Users, 
-  Flag, 
-  RotateCcw,
   Timer,
   UserCheck,
   UserX,
   Trophy,
-  TrendingUp,
-  ArrowUpDown
+  TrendingUp
 } from 'lucide-react';
-import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface Player {
   id: string;
@@ -41,17 +35,6 @@ interface MatchState {
   squad: Player[];
   starters: string[];
   substitutes: Player[];
-}
-
-interface GameState {
-  currentHalf: 'first' | 'second';
-  isRunning: boolean;
-  halfLength: number; // in minutes
-  firstHalfTime: number; // in seconds
-  secondHalfTime: number; // in seconds
-  events: MatchEvent[];
-  playerTimes: PlayerTimeLog[];
-  matchPhase: 'pre-match' | 'first-half' | 'half-time' | 'second-half' | 'completed';
 }
 
 interface MatchEvent {
@@ -81,29 +64,52 @@ export default function MatchTracker() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
+  const { requestWakeLock, releaseWakeLock } = useWakeLock();
   
   const [matchState, setMatchState] = useState<MatchState | null>(
     location.state as MatchState || (window as any).tempMatchState || null
   );
-  const intervalRef = useRef<NodeJS.Timeout>();
-  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   
   const [fixture, setFixture] = useState<any>(null);
-  const [gameState, setGameState] = useState<GameState>({
-    currentHalf: 'first',
-    isRunning: false,
-    halfLength: 25,
-    firstHalfTime: 0,
-    secondHalfTime: 0,
-    events: [],
-    playerTimes: [],
-    matchPhase: 'pre-match',
-  });
-  
-  const [startTimes, setStartTimes] = useState({
-    matchStart: 0,
-    firstHalfStart: 0,
-    secondHalfStart: 0,
+  const [events, setEvents] = useState<MatchEvent[]>([]);
+  const [playerTimes, setPlayerTimes] = useState<PlayerTimeLog[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const { saveMatchStateToStorage, recoverMatchState, clearMatchFromStorage } = useMatchStorage(fixtureId);
+
+  const handleSaveState = () => {
+    if (fixture && matchState) {
+      saveMatchStateToStorage({
+        fixture,
+        matchState,
+        gameState: { 
+          ...timerState, 
+          events, 
+          playerTimes,
+          halfLength: fixture.half_length || 25 
+        },
+        startTimes,
+      });
+    }
+  };
+
+  const {
+    timerState,
+    setTimerState,
+    startTimes,
+    setStartTimes,
+    startMatch: timerStartMatch,
+    toggleTimer,
+    endFirstHalf: timerEndFirstHalf,
+    startSecondHalf: timerStartSecondHalf,
+    endMatch: timerEndMatch,
+    getCurrentTime,
+    getCurrentMinute,
+    formatTime,
+  } = useMatchTimer({ 
+    halfLength: fixture?.half_length || 25,
+    onSaveState: handleSaveState
   });
   
   const [eventDialog, setEventDialog] = useState({
@@ -119,9 +125,6 @@ export default function MatchTracker() {
     playerOut: '',
     playerIn: '',
   });
-  
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     const initializeMatch = async () => {
@@ -131,10 +134,21 @@ export default function MatchTracker() {
         // Try to recover match state first
         const recovered = recoverMatchState();
         if (recovered) {
+          setFixture(recovered.fixture);
+          setTimerState(recovered.gameState);
+          setStartTimes(recovered.startTimes);
+          setEvents(recovered.gameState.events || []);
+          setPlayerTimes(recovered.gameState.playerTimes || []);
+          
+          if (recovered.matchState) {
+            setMatchState(recovered.matchState);
+          }
+          
           toast({
             title: "Match Recovered",
             description: "Continuing from where you left off.",
           });
+          setIsLoading(false);
           return;
         }
 
@@ -159,82 +173,21 @@ export default function MatchTracker() {
     };
 
     initializeMatch();
-
-    // Request wake lock
     requestWakeLock();
 
-    // Handle visibility change (app going to background/foreground)
     const handleVisibilityChange = () => {
-      if (document.hidden && gameState.isRunning) {
-        // Save state when going to background
-        saveMatchStateToStorage();
+      if (document.hidden && timerState.isRunning) {
+        handleSaveState();
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
       releaseWakeLock();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [fixtureId, user]);
-
-  useEffect(() => {
-    if (gameState.isRunning) {
-      intervalRef.current = setInterval(() => {
-        setGameState(prev => {
-          const newState = { ...prev };
-          if (newState.currentHalf === 'first') {
-            newState.firstHalfTime += 1;
-          } else {
-            newState.secondHalfTime += 1;
-          }
-          return newState;
-        });
-      }, 1000);
-    } else {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    }
-
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
-  }, [gameState.isRunning]);
-
-  // Auto-save every 30 seconds during active match
-  useEffect(() => {
-    if (gameState.matchPhase !== 'pre-match') {
-      const autoSaveInterval = setInterval(() => {
-        saveMatchStateToStorage();
-      }, 30000);
-
-      return () => clearInterval(autoSaveInterval);
-    }
-  }, [gameState.matchPhase]);
-
-  const requestWakeLock = async () => {
-    try {
-      if ('wakeLock' in navigator) {
-        wakeLockRef.current = await navigator.wakeLock.request('screen');
-      }
-    } catch (error) {
-      console.error('Wake lock failed:', error);
-    }
-  };
-
-  const releaseWakeLock = () => {
-    if (wakeLockRef.current) {
-      wakeLockRef.current.release();
-      wakeLockRef.current = null;
-    }
-  };
 
   const fetchFixture = async () => {
     const { data, error } = await supabase
@@ -253,72 +206,21 @@ export default function MatchTracker() {
     if (error) throw error;
     
     setFixture(data);
-    setGameState(prev => ({
+    setTimerState(prev => ({
       ...prev,
       halfLength: data.half_length || 25,
     }));
-  };
-
-  const saveMatchStateToStorage = () => {
-    if (!fixtureId) return;
-    
-    const matchData = {
-      fixture,
-      matchState,
-      gameState,
-      startTimes,
-      timestamp: Date.now(),
-    };
-    
-    localStorage.setItem(`match_${fixtureId}`, JSON.stringify(matchData));
-  };
-
-  const recoverMatchState = () => {
-    if (!fixtureId) return false;
-    
-    const stored = localStorage.getItem(`match_${fixtureId}`);
-    if (!stored) return false;
-    
-    try {
-      const matchData = JSON.parse(stored);
-      const timeSinceLastSave = Date.now() - matchData.timestamp;
-      
-      // Only recover if less than 12 hours old and not completed
-      if (timeSinceLastSave < 12 * 60 * 60 * 1000 && matchData.gameState?.matchPhase !== 'completed') {
-        setFixture(matchData.fixture);
-        setGameState(matchData.gameState);
-        setStartTimes(matchData.startTimes);
-        
-        // Restore the match state (squad data) to the component
-        if (matchData.matchState) {
-          setMatchState(matchData.matchState);
-        }
-        
-        setIsLoading(false);
-        return true;
-      }
-    } catch (error) {
-      console.error('Error recovering match state:', error);
-    }
-    
-    return false;
-  };
-
-  const clearMatchFromStorage = () => {
-    if (fixtureId) {
-      localStorage.removeItem(`match_${fixtureId}`);
-    }
   };
 
   const initializePlayerTimes = () => {
     const currentMatchState = matchState || (location.state as MatchState);
     if (!currentMatchState?.squad || !currentMatchState?.starters) return;
 
-    const playerTimes: PlayerTimeLog[] = [];
+    const newPlayerTimes: PlayerTimeLog[] = [];
     
     // Add starters
     currentMatchState.starters.forEach(playerId => {
-      playerTimes.push({
+      newPlayerTimes.push({
         player_id: playerId,
         is_starter: true,
         time_on: 0,
@@ -331,7 +233,7 @@ export default function MatchTracker() {
     // Add substitutes (not yet playing)
     currentMatchState.squad.forEach(player => {
       if (!currentMatchState.starters.includes(player.id)) {
-        playerTimes.push({
+        newPlayerTimes.push({
           player_id: player.id,
           is_starter: false,
           time_on: null,
@@ -342,25 +244,13 @@ export default function MatchTracker() {
       }
     });
 
-    setGameState(prev => ({
-      ...prev,
-      playerTimes,
-    }));
+    setPlayerTimes(newPlayerTimes);
   };
 
   const startMatch = async () => {
     if (!fixture) return;
     
-    const newStartTimes = { ...startTimes };
-    newStartTimes.matchStart = Date.now();
-    newStartTimes.firstHalfStart = Date.now();
-    setStartTimes(newStartTimes);
-
-    setGameState(prev => ({
-      ...prev,
-      isRunning: true,
-      matchPhase: 'first-half',
-    }));
+    timerStartMatch();
 
     // Update fixture status to in_progress
     try {
@@ -372,11 +262,7 @@ export default function MatchTracker() {
       console.error('Error updating fixture status:', error);
     }
 
-    // Request wake lock when match starts
     requestWakeLock();
-
-    // Save state immediately
-    saveMatchStateToStorage();
 
     toast({
       title: "Match Started",
@@ -384,77 +270,192 @@ export default function MatchTracker() {
     });
   };
 
-  const toggleTimer = () => {
-    setGameState(prev => ({
-      ...prev,
-      isRunning: !prev.isRunning,
-    }));
-
-    // Save state when pausing/resuming
-    saveMatchStateToStorage();
-  };
-
   const endFirstHalf = () => {
-    setGameState(prev => ({
-      ...prev,
-      isRunning: false,
-      matchPhase: 'half-time',
-    }));
-
-    // Update player times for first half
+    timerEndFirstHalf();
     updatePlayerTimesForHalfEnd('first');
 
     toast({
       title: "First Half Ended",
       description: "Time for a break. Review your strategy!",
     });
-
-    saveMatchStateToStorage();
   };
 
   const startSecondHalf = () => {
-    const newStartTimes = { ...startTimes };
-    newStartTimes.secondHalfStart = Date.now();
-    setStartTimes(newStartTimes);
-
-    setGameState(prev => ({
-      ...prev,
-      currentHalf: 'second',
-      isRunning: true,
-      matchPhase: 'second-half',
-      secondHalfTime: 0,
-    }));
-
-    // Reset player times for second half
+    timerStartSecondHalf();
     resetPlayerTimesForSecondHalf();
 
     toast({
       title: "Second Half Started",
       description: "Let's go for the win!",
     });
-
-    saveMatchStateToStorage();
   };
 
   const endMatch = () => {
-    setGameState(prev => ({
-      ...prev,
-      isRunning: false,
-      matchPhase: 'completed',
-    }));
-
-    // Update player times for second half
+    timerEndMatch();
     updatePlayerTimesForHalfEnd('second');
-
-    // Release wake lock
     releaseWakeLock();
 
     toast({
       title: "Match Completed",
       description: "Great game! Don't forget to save your match data.",
     });
+  };
 
-    saveMatchStateToStorage();
+  const recordGoal = () => {
+    setEventDialog({
+      open: true,
+      type: 'goal',
+      isOurTeam: true,
+      selectedPlayer: '',
+      assistPlayer: '',
+    });
+  };
+
+  const handleEventConfirm = () => {
+    if (!eventDialog.selectedPlayer && eventDialog.isOurTeam) return;
+
+    const newEvent: MatchEvent = {
+      event_type: 'goal',
+      player_id: eventDialog.isOurTeam ? eventDialog.selectedPlayer : undefined,
+      assist_player_id: eventDialog.assistPlayer || undefined,
+      is_our_team: eventDialog.isOurTeam,
+      half: timerState.currentHalf,
+      minute: getCurrentMinute(),
+      is_penalty: false,
+    };
+
+    setEvents(prev => [...prev, newEvent]);
+
+    // Also add assist event if there's an assist player
+    if (eventDialog.assistPlayer) {
+      const assistEvent: MatchEvent = {
+        event_type: 'assist',
+        player_id: eventDialog.assistPlayer,
+        is_our_team: true,
+        half: timerState.currentHalf,
+        minute: getCurrentMinute(),
+      };
+      setEvents(prev => [...prev, assistEvent]);
+    }
+
+    setEventDialog({
+      open: false,
+      type: 'goal',
+      isOurTeam: true,
+      selectedPlayer: '',
+      assistPlayer: '',
+    });
+
+    handleSaveState();
+
+    toast({
+      title: eventDialog.isOurTeam ? "Goal Recorded!" : "Opposition Goal Recorded",
+      description: eventDialog.isOurTeam 
+        ? `Goal by ${getPlayerName(eventDialog.selectedPlayer)}` 
+        : "Opposition goal recorded",
+    });
+  };
+
+  const makeSubstitution = () => {
+    setSubstitutionDialog({
+      open: true,
+      playerOut: '',
+      playerIn: '',
+    });
+  };
+
+  const handleSubstitutionConfirm = () => {
+    const { playerOut, playerIn } = substitutionDialog;
+    if (!playerOut || !playerIn) return;
+
+    const currentMinute = getCurrentMinute();
+    
+    setPlayerTimes(prev => prev.map(pt => {
+      if (pt.player_id === playerOut && pt.time_off === null) {
+        // Player coming off
+        return {
+          ...pt,
+          time_off: currentMinute,
+          total_minutes: getActiveMinutes(pt, currentMinute),
+        };
+      }
+      if (pt.player_id === playerIn && pt.time_on === null) {
+        // Player coming on
+        return {
+          ...pt,
+          time_on: currentMinute,
+          half: timerState.currentHalf,
+        };
+      }
+      return pt;
+    }));
+
+    setSubstitutionDialog({
+      open: false,
+      playerOut: '',
+      playerIn: '',
+    });
+
+    handleSaveState();
+
+    toast({
+      title: "Substitution Made",
+      description: `${getPlayerName(playerIn)} replaces ${getPlayerName(playerOut)}`,
+    });
+  };
+
+  // Helper functions
+  const getPlayerName = (playerId: string) => {
+    const player = matchState?.squad.find(p => p.id === playerId);
+    return player ? `${player.first_name} ${player.last_name}` : 'Unknown';
+  };
+
+  const getActiveMinutes = (playerTime: PlayerTimeLog, currentMinute: number) => {
+    if (playerTime.time_on === null) return 0;
+    const endTime = playerTime.time_off || currentMinute;
+    return Math.max(0, endTime - playerTime.time_on);
+  };
+
+  const updatePlayerTimesForHalfEnd = (half: 'first' | 'second') => {
+    const halfLength = fixture?.half_length || 25;
+    
+    setPlayerTimes(prev => prev.map(pt => {
+      if (pt.half === half && pt.time_on !== null && pt.time_off === null) {
+        return {
+          ...pt,
+          total_minutes: pt.total_minutes + getActiveMinutes(pt, halfLength),
+        };
+      }
+      return pt;
+    }));
+  };
+
+  const resetPlayerTimesForSecondHalf = () => {
+    setPlayerTimes(prev => prev.map(pt => {
+      if (pt.time_on !== null && pt.time_off === null) {
+        // Active players continue into second half
+        return {
+          ...pt,
+          half: 'second',
+          time_on: 0,
+        };
+      }
+      return pt;
+    }));
+  };
+
+  const getActivePlayers = () => {
+    return matchState?.squad.filter(player => {
+      const playerTime = playerTimes.find(pt => pt.player_id === player.id);
+      return playerTime?.time_on !== null && playerTime?.time_off === null;
+    }) || [];
+  };
+
+  const getSubstitutePlayers = () => {
+    return matchState?.squad.filter(player => {
+      const playerTime = playerTimes.find(pt => pt.player_id === player.id);
+      return playerTime?.time_on === null;
+    }) || [];
   };
 
   const saveMatchData = async () => {
@@ -463,17 +464,17 @@ export default function MatchTracker() {
     try {
       setIsSaving(true);
 
-        // Save all match events
-        if (gameState.events.length > 0) {
-          const eventsToSave = gameState.events.map(event => ({
-            fixture_id: fixtureId,
-            event_type: event.event_type,
-            player_id: event.player_id || null,
-            is_our_team: event.is_our_team,
-            half: event.half,
-            minute: event.minute,
-            is_penalty: event.is_penalty || false,
-          }));
+      // Save all match events
+      if (events.length > 0) {
+        const eventsToSave = events.map(event => ({
+          fixture_id: fixtureId,
+          event_type: event.event_type,
+          player_id: event.player_id || null,
+          is_our_team: event.is_our_team,
+          half: event.half,
+          minute: event.minute,
+          is_penalty: event.is_penalty || false,
+        }));
 
         const { error: eventsError } = await supabase
           .from('match_events')
@@ -486,8 +487,8 @@ export default function MatchTracker() {
       }
 
       // Save player time logs
-      if (gameState.playerTimes.length > 0) {
-        const timesToSave = gameState.playerTimes.map(playerTime => ({
+      if (playerTimes.length > 0) {
+        const timesToSave = playerTimes.map(playerTime => ({
           fixture_id: fixtureId,
           player_id: playerTime.player_id,
           is_starter: playerTime.is_starter,
@@ -507,38 +508,37 @@ export default function MatchTracker() {
         }
       }
 
-      // Update fixture with final score and completion status
-      const ourGoals = gameState.events.filter(e => e.event_type === 'goal' && e.is_our_team).length;
-      const opponentGoals = gameState.events.filter(e => e.event_type === 'goal' && !e.is_our_team).length;
-      
-      const { error: fixtureError } = await supabase
+      // Update fixture status
+      await supabase
         .from('fixtures')
         .update({ 
-          status: 'completed',
-          match_status: 'completed'
+          match_status: 'completed',
+          selected_squad_data: {
+            startingLineup: matchState?.starters || [],
+            substitutes: matchState?.substitutes?.map(p => ({ 
+              id: p.id, 
+              first_name: p.first_name, 
+              last_name: p.last_name, 
+              jersey_number: p.jersey_number 
+            })) || []
+          }
         })
         .eq('id', fixtureId);
 
-      if (fixtureError) {
-        console.error('Error updating fixture:', fixtureError);
-        throw fixtureError;
-      }
-
-      // Clear the stored match data
       clearMatchFromStorage();
 
       toast({
-        title: "Match Saved",
-        description: "All match data has been saved successfully.",
+        title: "Match Data Saved",
+        description: "All match events and player times have been saved successfully.",
       });
 
-      // Navigate back to fixtures
+      // Navigate to match report or fixtures
       navigate('/fixtures');
 
     } catch (error) {
       console.error('Error saving match data:', error);
       toast({
-        title: "Error",
+        title: "Error Saving Data",
         description: "Failed to save match data. Please try again.",
         variant: "destructive",
       });
@@ -547,434 +547,102 @@ export default function MatchTracker() {
     }
   };
 
-  const updatePlayerTimesForHalfEnd = (half: 'first' | 'second') => {
-    const currentTime = getCurrentTime();
-    
-    setGameState(prev => ({
-      ...prev,
-      playerTimes: prev.playerTimes.map(playerTime => {
-        // Only update players currently on field for this half
-        if (playerTime.half === half && playerTime.time_on !== null && playerTime.time_off === null) {
-          const timeOnField = currentTime - playerTime.time_on;
-          const minutesPlayed = Math.floor(timeOnField / 60);
-          return {
-            ...playerTime,
-            time_off: currentTime,
-            total_minutes: playerTime.total_minutes + minutesPlayed,
-          };
-        }
-        return playerTime;
-      }),
-    }));
-  };
-
-  const resetPlayerTimesForSecondHalf = () => {
-    setGameState(prev => {
-      const newPlayerTimes = [...prev.playerTimes];
-      
-      // For players who were on field at end of first half, create new second half entries
-      prev.playerTimes.forEach(playerTime => {
-        if (playerTime.half === 'first' && playerTime.time_off === null) {
-          // Create new entry for second half
-          newPlayerTimes.push({
-            player_id: playerTime.player_id,
-            is_starter: false, // They're continuing, not starting
-            time_on: 0, // Start of second half
-            time_off: null,
-            half: 'second',
-            total_minutes: 0, // Will accumulate during second half
-          });
-        }
-      });
-      
-      return {
-        ...prev,
-        playerTimes: newPlayerTimes,
-      };
-    });
-  };
-
-  const getCurrentTime = () => {
-    return gameState.currentHalf === 'first' ? gameState.firstHalfTime : gameState.secondHalfTime;
-  };
-
-  const getCurrentMinute = () => {
-    return Math.floor(getCurrentTime() / 60) + 1;
-  };
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const openEventDialog = (type: 'goal' | 'assist', isOurTeam: boolean = true) => {
-    setEventDialog({
-      open: true,
-      type,
-      isOurTeam,
-      selectedPlayer: '',
-      assistPlayer: '',
-    });
-  };
-
-  const closeEventDialog = () => {
-    setEventDialog({
-      open: false,
-      type: 'goal',
-      isOurTeam: true,
-      selectedPlayer: '',
-      assistPlayer: '',
-    });
-  };
-
-  const addEvent = (goalScorerId: string | null, assistPlayerId: string | null = null, isPenalty: boolean = false) => {
-    const events: MatchEvent[] = [];
-    
-    // Always add the goal event
-    const goalEvent: MatchEvent = {
-      event_type: 'goal',
-      player_id: goalScorerId || undefined,
-      is_our_team: eventDialog.isOurTeam,
-      half: gameState.currentHalf,
-      minute: getCurrentMinute(),
-      is_penalty: isPenalty,
-    };
-    events.push(goalEvent);
-
-    // Add assist event if provided
-    if (assistPlayerId && assistPlayerId !== goalScorerId) {
-      const assistEvent: MatchEvent = {
-        event_type: 'assist',
-        player_id: assistPlayerId,
-        is_our_team: eventDialog.isOurTeam,
-        half: gameState.currentHalf,
-        minute: getCurrentMinute(),
-        is_penalty: false,
-      };
-      events.push(assistEvent);
-    }
-
-    setGameState(prev => ({
-      ...prev,
-      events: [...prev.events, ...events],
-    }));
-
-    closeEventDialog();
-    saveMatchStateToStorage();
-
-    const assistText = assistPlayerId && assistPlayerId !== goalScorerId ? 
-      ` (assist: ${getPlayerName(assistPlayerId)})` : '';
-    
-    toast({
-      title: "Goal Recorded",
-      description: `${eventDialog.isOurTeam ? 'Our' : 'Opponent'} goal at ${getCurrentMinute()}'${assistText}`,
-    });
-  };
-
-  const makeSubstitution = (playerOutId: string, playerInId: string) => {
-    const currentTime = getCurrentTime();
-    
-    setGameState(prev => ({
-      ...prev,
-      playerTimes: prev.playerTimes.map(playerTime => {
-        // Player coming off
-        if (playerTime.player_id === playerOutId && playerTime.time_off === null) {
-          const minutesPlayed = Math.floor((currentTime - (playerTime.time_on || 0)) / 60);
-          return {
-            ...playerTime,
-            time_off: currentTime,
-            total_minutes: playerTime.total_minutes + minutesPlayed,
-          };
-        }
-        // Player coming on
-        if (playerTime.player_id === playerInId && playerTime.time_on === null) {
-          return {
-            ...playerTime,
-            time_on: currentTime,
-            half: gameState.currentHalf,
-          };
-        }
-        return playerTime;
-      }),
-    }));
-
-    setSubstitutionDialog({ open: false, playerOut: '', playerIn: '' });
-    saveMatchStateToStorage();
-
-    const playerOutName = getPlayerName(playerOutId);
-    const playerInName = getPlayerName(playerInId);
-
-    toast({
-      title: "Substitution Made",
-      description: `${playerInName} on for ${playerOutName} at ${getCurrentMinute()}'`,
-    });
-  };
-
-  const getPlayerName = (playerId: string) => {
-    const player = matchState?.squad?.find(p => p.id === playerId);
-    return player ? `${player.first_name} ${player.last_name}` : 'Unknown';
-  };
-
-  const getActiveMinutes = (playerId: string) => {
-    // Get all time logs for this player in this match
-    const playerTimes = gameState.playerTimes.filter(pt => pt.player_id === playerId);
-    let totalMinutes = 0;
-    
-    playerTimes.forEach(playerTime => {
-      if (playerTime.time_on !== null) {
-        const currentTime = getCurrentTime();
-        const endTime = playerTime.time_off || (playerTime.half === gameState.currentHalf ? currentTime : 0);
-        
-        // Only count time if player was on field
-        if (endTime > 0) {
-          const minutesPlayed = Math.floor((endTime - playerTime.time_on) / 60);
-          totalMinutes += minutesPlayed;
-        }
-      }
-    });
-    
-    return totalMinutes;
-  };
-
-  const getPlayersOnField = () => {
-    return gameState.playerTimes.filter(pt => 
-      pt.time_on !== null && pt.time_off === null
-    ).map(pt => pt.player_id);
-  };
-
-  const getAvailableSubstitutes = () => {
-    const onField = getPlayersOnField();
-    return matchState?.squad?.filter(p => !onField.includes(p.id)) || [];
-  };
-
   if (isLoading) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-center">
-          <div className="text-lg">Loading match...</div>
+      <div className="p-6 space-y-6">
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 bg-muted rounded w-1/3"></div>
+          <div className="h-32 bg-muted rounded"></div>
+          <div className="h-64 bg-muted rounded"></div>
         </div>
       </div>
     );
   }
 
-  if (!fixture) {
+  if (!matchState?.squad) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div className="p-6 space-y-6">
         <Card>
           <CardContent className="p-6 text-center">
-            <h2 className="text-xl font-semibold mb-4">Invalid Match Setup</h2>
+            <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No Squad Selected</h3>
             <p className="text-muted-foreground mb-4">
-              This match doesn't have a proper squad selected. Please go back and select your squad first.
+              Please select your squad from the fixture details before starting the match.
             </p>
-            <div className="space-x-2">
-              <Button onClick={() => navigate(`/squad/${fixtureId}`)}>
-                Select Squad
-              </Button>
-              <Button variant="outline" onClick={() => navigate('/fixtures')}>
-                Back to Fixtures
-              </Button>
-            </div>
+            <Button onClick={() => navigate(`/fixture/${fixtureId}`)}>
+              Go to Fixture Details
+            </Button>
           </CardContent>
         </Card>
       </div>
     );
   }
-
-  // Don't show "No Squad Selected" during initial loading as recovery might restore the squad
-  if (!isLoading && !matchState?.squad && !gameState.playerTimes?.length) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <Card>
-          <CardContent className="p-6 text-center">
-            <h2 className="text-xl font-semibold mb-4">No Squad Selected</h2>
-            <p className="text-muted-foreground mb-4">
-              You need to select a squad before starting the match.
-            </p>
-            <div className="space-x-2">
-              <Button onClick={() => navigate(`/squad/${fixtureId}`)}>
-                Select Squad
-              </Button>
-              <Button variant="outline" onClick={() => navigate('/fixtures')}>
-                Back to Fixtures
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  const ourGoals = gameState.events.filter(e => e.event_type === 'goal' && e.is_our_team).length;
-  const opponentGoals = gameState.events.filter(e => e.event_type === 'goal' && !e.is_our_team).length;
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl">
+    <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-bold">Live Match Tracking</h1>
-            <p className="text-muted-foreground">
-              {fixture.team.name} vs {fixture.opponent_name}
-            </p>
-          </div>
-        </div>
-
-        {/* Score and Timer */}
-        <Card className="mb-6">
-          <CardContent className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-              {/* Score */}
-              <div className="text-center">
-                <div className="text-4xl font-bold mb-2">
-                  {ourGoals} - {opponentGoals}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  {fixture.team.name} vs {fixture.opponent_name}
-                </div>
-              </div>
-
-              {/* Timer */}
-              <div className="text-center">
-                <div className="text-3xl font-mono font-bold mb-2">
-                  {formatTime(getCurrentTime())}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  {gameState.currentHalf === 'first' ? 'First Half' : 'Second Half'}
-                  {gameState.matchPhase === 'half-time' && ' - Half Time'}
-                  {gameState.matchPhase === 'completed' && ' - Full Time'}
-                </div>
-              </div>
-
-              {/* Controls */}
-              <div className="flex justify-center gap-2">
-                {gameState.matchPhase === 'pre-match' && (
-                  <Button onClick={startMatch} size="lg">
-                    <Play className="h-5 w-5 mr-2" />
-                    Start Match
-                  </Button>
-                )}
-
-                {gameState.matchPhase === 'first-half' && (
-                  <>
-                    <Button onClick={toggleTimer} variant="outline">
-                      {gameState.isRunning ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                    </Button>
-                    <Button onClick={endFirstHalf}>
-                      <Square className="h-4 w-4 mr-2" />
-                      End Half
-                    </Button>
-                  </>
-                )}
-
-                {gameState.matchPhase === 'half-time' && (
-                  <Button onClick={startSecondHalf} size="lg">
-                    <Play className="h-5 w-5 mr-2" />
-                    Start 2nd Half
-                  </Button>
-                )}
-
-                {gameState.matchPhase === 'second-half' && (
-                  <>
-                    <Button onClick={toggleTimer} variant="outline">
-                      {gameState.isRunning ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                    </Button>
-                    <Button onClick={endMatch}>
-                      <Square className="h-4 w-4 mr-2" />
-                      End Match
-                    </Button>
-                  </>
-                )}
-
-                {gameState.matchPhase === 'completed' && (
-                  <Button onClick={saveMatchData} disabled={isSaving}>
-                    {isSaving ? 'Saving...' : 'Save Match'}
-                  </Button>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="space-y-2">
+        <h1 className="text-3xl font-bold">Match Tracker</h1>
+        {fixture && (
+          <p className="text-muted-foreground">
+            {fixture.team.name} vs {fixture.opponent_name}
+          </p>
+        )}
       </div>
 
-      {/* Main Content */}
-      <Tabs defaultValue="events" className="space-y-4">
+      {/* Match Controls */}
+      <MatchControls
+        matchPhase={timerState.matchPhase}
+        isRunning={timerState.isRunning}
+        currentHalf={timerState.currentHalf}
+        currentTime={getCurrentTime()}
+        formatTime={formatTime}
+        onStartMatch={startMatch}
+        onToggleTimer={toggleTimer}
+        onEndFirstHalf={endFirstHalf}
+        onStartSecondHalf={startSecondHalf}
+        onEndMatch={endMatch}
+        onRecordGoal={recordGoal}
+        onMakeSubstitution={makeSubstitution}
+        isSquadSelected={!!matchState?.squad}
+      />
+
+      {/* Tabs for detailed views */}
+      <Tabs defaultValue="events" className="w-full">
         <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="events">Events</TabsTrigger>
-          <TabsTrigger value="lineup">Lineup</TabsTrigger>
-          <TabsTrigger value="stats">Stats</TabsTrigger>
+          <TabsTrigger value="events">Match Events</TabsTrigger>
+          <TabsTrigger value="squad">Squad</TabsTrigger>
+          <TabsTrigger value="stats">Player Times</TabsTrigger>
         </TabsList>
 
         <TabsContent value="events" className="space-y-4">
-          {/* Event Buttons */}
-          {gameState.matchPhase !== 'pre-match' && gameState.matchPhase !== 'completed' && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Target className="h-5 w-5" />
-                  Record Events
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <Button
-                    onClick={() => openEventDialog('goal', true)}
-                    variant="default"
-                    className="flex items-center gap-2"
-                  >
-                    <Trophy className="h-4 w-4" />
-                    Our Goal
-                  </Button>
-                  <Button
-                    onClick={() => openEventDialog('goal', false)}
-                    variant="outline"
-                    className="flex items-center gap-2"
-                  >
-                    <Trophy className="h-4 w-4" />
-                    Opponent Goal
-                  </Button>
-                  <Button
-                    onClick={() => setSubstitutionDialog({ ...substitutionDialog, open: true })}
-                    variant="outline"
-                    className="flex items-center gap-2"
-                  >
-                    <ArrowUpDown className="h-4 w-4" />
-                    Substitution
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Events Timeline */}
           <Card>
             <CardHeader>
               <CardTitle>Match Events</CardTitle>
+              <CardDescription>Goals and assists recorded during the match</CardDescription>
             </CardHeader>
             <CardContent>
               <ScrollArea className="h-64">
-                {gameState.events.length === 0 ? (
-                  <div className="text-center text-muted-foreground py-8">
+                {events.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Trophy className="h-8 w-8 mx-auto mb-2" />
                     No events recorded yet
                   </div>
                 ) : (
-                  <div className="space-y-2">
-                    {gameState.events.map((event, index) => (
-                      <div key={index} className="flex items-center gap-3 p-2 border rounded">
-                        <Badge variant={event.is_our_team ? "default" : "secondary"}>
-                          {event.minute}'
-                        </Badge>
-                        <div className="flex items-center gap-2">
-                          {event.event_type === 'goal' && <Trophy className="h-4 w-4" />}
-                          {event.event_type === 'assist' && <TrendingUp className="h-4 w-4" />}
-                          <span className="capitalize">{event.event_type}</span>
-                          {event.is_penalty && <Badge variant="outline">Penalty</Badge>}
-                        </div>
-                        <div className="flex-1 text-right">
-                          {event.player_id ? getPlayerName(event.player_id) : 'Unknown Player'}
-                          <div className="text-xs text-muted-foreground">
-                            {event.is_our_team ? fixture.team.name : fixture.opponent_name}
+                  <div className="space-y-3">
+                    {events.map((event, index) => (
+                      <div key={index} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                        <div className="flex items-center space-x-3">
+                          <Badge variant={event.is_our_team ? "default" : "secondary"}>
+                            {event.event_type}
+                          </Badge>
+                          <div>
+                            <p className="font-medium">
+                              {event.player_id ? getPlayerName(event.player_id) : 'Opposition'}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {event.half} half - {event.minute}'
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -986,43 +654,24 @@ export default function MatchTracker() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="lineup" className="space-y-4">
-          {/* Current Lineup */}
+        <TabsContent value="squad" className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <UserCheck className="h-5 w-5" />
-                  On Field
+                  Active Players
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <ScrollArea className="h-64">
                   <div className="space-y-2">
-                    {getPlayersOnField().map(playerId => {
-                      const player = matchState.squad.find(p => p.id === playerId);
-                      if (!player) return null;
-                      
-                      return (
-                        <div key={playerId} className="flex items-center justify-between p-2 border rounded">
-                          <div>
-                            <div className="font-medium">
-                              {player.first_name} {player.last_name}
-                            </div>
-                            {player.jersey_number && (
-                              <div className="text-xs text-muted-foreground">
-                                #{player.jersey_number}
-                              </div>
-                            )}
-                          </div>
-                          <div className="text-right">
-                            <div className="text-sm font-medium">
-                              {getActiveMinutes(playerId)}min
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
+                    {getActivePlayers().map((player) => (
+                      <div key={player.id} className="flex items-center justify-between p-2 bg-green-50 rounded">
+                        <span>#{player.jersey_number || '?'} {player.first_name} {player.last_name}</span>
+                        <Badge variant="secondary">Active</Badge>
+                      </div>
+                    ))}
                   </div>
                 </ScrollArea>
               </CardContent>
@@ -1032,24 +681,15 @@ export default function MatchTracker() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <UserX className="h-5 w-5" />
-                  Substitutes
+                  Available Substitutes
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <ScrollArea className="h-64">
                   <div className="space-y-2">
-                    {getAvailableSubstitutes().map(player => (
-                      <div key={player.id} className="flex items-center justify-between p-2 border rounded">
-                        <div>
-                          <div className="font-medium">
-                            {player.first_name} {player.last_name}
-                          </div>
-                          {player.jersey_number && (
-                            <div className="text-xs text-muted-foreground">
-                              #{player.jersey_number}
-                            </div>
-                          )}
-                        </div>
+                    {getSubstitutePlayers().map((player) => (
+                      <div key={player.id} className="flex items-center justify-between p-2 bg-muted rounded">
+                        <span>#{player.jersey_number || '?'} {player.first_name} {player.last_name}</span>
                         <Badge variant="outline">Available</Badge>
                       </div>
                     ))}
@@ -1061,222 +701,87 @@ export default function MatchTracker() {
         </TabsContent>
 
         <TabsContent value="stats" className="space-y-4">
-          {/* Match Statistics */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Goals</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span>{fixture.team.name}</span>
-                    <Badge variant="default" className="text-lg px-3 py-1">
-                      {ourGoals}
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span>{fixture.opponent_name}</span>
-                    <Badge variant="secondary" className="text-lg px-3 py-1">
-                      {opponentGoals}
-                    </Badge>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Timer className="h-5 w-5" />
+                Player Minutes
+              </CardTitle>
+              <CardDescription>Time played by each player</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-64">
+                <div className="space-y-2">
+                  {playerTimes.map((playerTime) => {
+                    const player = matchState?.squad.find(p => p.id === playerTime.player_id);
+                    const currentMinutes = playerTime.time_on !== null 
+                      ? getActiveMinutes(playerTime, getCurrentMinute()) + playerTime.total_minutes
+                      : playerTime.total_minutes;
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Assists</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span>{fixture.team.name}</span>
-                    <Badge variant="default" className="text-lg px-3 py-1">
-                      {gameState.events.filter(e => e.event_type === 'assist' && e.is_our_team).length}
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span>{fixture.opponent_name}</span>
-                    <Badge variant="secondary" className="text-lg px-3 py-1">
-                      {gameState.events.filter(e => e.event_type === 'assist' && !e.is_our_team).length}
-                    </Badge>
-                  </div>
+                    return (
+                      <div key={playerTime.player_id} className="flex items-center justify-between p-2 bg-muted rounded">
+                        <span>
+                          #{player?.jersey_number || '?'} {player?.first_name} {player?.last_name}
+                        </span>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm font-mono">{currentMinutes} min</span>
+                          <Badge variant={playerTime.is_starter ? "default" : "secondary"}>
+                            {playerTime.is_starter ? "Starter" : "Sub"}
+                          </Badge>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              </CardContent>
-            </Card>
-          </div>
+              </ScrollArea>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 
-      {/* Event Dialog */}
-      <Dialog open={eventDialog.open} onOpenChange={closeEventDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Record Goal</DialogTitle>
-            <DialogDescription>
-              Select the goal scorer and optional assist for this goal.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Goal Scorer</Label>
-              <Select 
-                value={eventDialog.selectedPlayer} 
-                onValueChange={(value) => 
-                  setEventDialog(prev => ({ ...prev, selectedPlayer: value }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select goal scorer" />
-                </SelectTrigger>
-                <SelectContent>
-                  {eventDialog.isOurTeam ? (
-                    getPlayersOnField().map(playerId => {
-                      const player = matchState.squad.find(p => p.id === playerId);
-                      return player ? (
-                        <SelectItem key={player.id} value={player.id}>
-                          {player.first_name} {player.last_name}
-                          {player.jersey_number && ` (#${player.jersey_number})`}
-                        </SelectItem>
-                      ) : null;
-                    })
-                  ) : (
-                    <SelectItem value="unknown">Opponent Player</SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {eventDialog.isOurTeam && (
-              <div>
-                <Label>Assist (Optional)</Label>
-                <Select 
-                  value={eventDialog.assistPlayer} 
-                  onValueChange={(value) => 
-                    setEventDialog(prev => ({ ...prev, assistPlayer: value }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select assist provider (optional)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">No Assist</SelectItem>
-                    {getPlayersOnField()
-                      .filter(playerId => playerId !== eventDialog.selectedPlayer)
-                      .map(playerId => {
-                        const player = matchState.squad.find(p => p.id === playerId);
-                        return player ? (
-                          <SelectItem key={player.id} value={player.id}>
-                            {player.first_name} {player.last_name}
-                            {player.jersey_number && ` (#${player.jersey_number})`}
-                          </SelectItem>
-                        ) : null;
-                      })}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="penalty"
-                onCheckedChange={(checked) => {
-                  if (checked) {
-                    // Auto-submit penalty goal
-                    const goalScorer = eventDialog.selectedPlayer || (eventDialog.isOurTeam ? getPlayersOnField()[0] : 'unknown');
-                    addEvent(goalScorer === 'unknown' ? null : goalScorer, null, true);
-                  }
-                }}
-              />
-              <Label htmlFor="penalty">Penalty Goal</Label>
-            </div>
-
-            <Button
-              onClick={() => {
-                const goalScorer = eventDialog.selectedPlayer || (eventDialog.isOurTeam ? getPlayersOnField()[0] : 'unknown');
-                const assistPlayer = eventDialog.assistPlayer || null;
-                addEvent(goalScorer === 'unknown' ? null : goalScorer, assistPlayer);
-              }}
-              disabled={!eventDialog.selectedPlayer && eventDialog.isOurTeam}
-              className="w-full"
-            >
-              Record Goal
+      {/* Save Match Data */}
+      {timerState.matchPhase === 'completed' && (
+        <Card>
+          <CardContent className="p-6 text-center">
+            <TrendingUp className="h-12 w-12 text-primary mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Match Completed!</h3>
+            <p className="text-muted-foreground mb-4">
+              Save your match data to keep track of events and player performance.
+            </p>
+            <Button onClick={saveMatchData} disabled={isSaving} size="lg">
+              {isSaving ? "Saving..." : "Save Match Data"}
             </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Event Dialog */}
+      <EventDialog
+        open={eventDialog.open}
+        onOpenChange={(open) => setEventDialog(prev => ({ ...prev, open }))}
+        type={eventDialog.type}
+        isOurTeam={eventDialog.isOurTeam}
+        selectedPlayer={eventDialog.selectedPlayer}
+        assistPlayer={eventDialog.assistPlayer}
+        players={matchState?.squad || []}
+        onTypeChange={(type) => setEventDialog(prev => ({ ...prev, type }))}
+        onTeamChange={(isOurTeam) => setEventDialog(prev => ({ ...prev, isOurTeam }))}
+        onPlayerChange={(playerId) => setEventDialog(prev => ({ ...prev, selectedPlayer: playerId }))}
+        onAssistPlayerChange={(playerId) => setEventDialog(prev => ({ ...prev, assistPlayer: playerId }))}
+        onConfirm={handleEventConfirm}
+      />
 
       {/* Substitution Dialog */}
-      <Dialog open={substitutionDialog.open} onOpenChange={(open) => 
-        setSubstitutionDialog({ ...substitutionDialog, open })
-      }>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Make Substitution</DialogTitle>
-            <DialogDescription>
-              Select which player to substitute and who comes on.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Player Coming Off</Label>
-              <Select
-                value={substitutionDialog.playerOut}
-                onValueChange={(value) => 
-                  setSubstitutionDialog({ ...substitutionDialog, playerOut: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select player to substitute" />
-                </SelectTrigger>
-                <SelectContent>
-                  {getPlayersOnField().map(playerId => {
-                    const player = matchState.squad.find(p => p.id === playerId);
-                    return player ? (
-                      <SelectItem key={player.id} value={player.id}>
-                        {player.first_name} {player.last_name}
-                        {player.jersey_number && ` (#${player.jersey_number})`}
-                      </SelectItem>
-                    ) : null;
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label>Player Coming On</Label>
-              <Select
-                value={substitutionDialog.playerIn}
-                onValueChange={(value) => 
-                  setSubstitutionDialog({ ...substitutionDialog, playerIn: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select substitute" />
-                </SelectTrigger>
-                <SelectContent>
-                  {getAvailableSubstitutes().map(player => (
-                    <SelectItem key={player.id} value={player.id}>
-                      {player.first_name} {player.last_name}
-                      {player.jersey_number && ` (#${player.jersey_number})`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <Button
-              onClick={() => makeSubstitution(substitutionDialog.playerOut, substitutionDialog.playerIn)}
-              disabled={!substitutionDialog.playerOut || !substitutionDialog.playerIn}
-              className="w-full"
-            >
-              Make Substitution
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <SubstitutionDialog
+        open={substitutionDialog.open}
+        onOpenChange={(open) => setSubstitutionDialog(prev => ({ ...prev, open }))}
+        playerOut={substitutionDialog.playerOut}
+        playerIn={substitutionDialog.playerIn}
+        onPlayersChange={(playerOut, playerIn) => setSubstitutionDialog(prev => ({ ...prev, playerOut, playerIn }))}
+        activePlayers={getActivePlayers()}
+        substitutePlayers={getSubstitutePlayers()}
+        onConfirm={handleSubstitutionConfirm}
+      />
     </div>
   );
 }

@@ -17,6 +17,8 @@ import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { CreateFixtureDialog } from '@/components/fixtures/CreateFixtureDialog';
+import { EditFixtureDialog } from '@/components/fixtures/EditFixtureDialog';
 
 interface Team {
   id: string;
