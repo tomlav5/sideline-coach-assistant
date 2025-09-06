@@ -20,11 +20,13 @@ interface EventDialogProps {
   isOurTeam: boolean;
   selectedPlayer: string;
   assistPlayer: string;
+  isPenalty: boolean;
   players: Player[];
   onTypeChange: (type: 'goal' | 'assist') => void;
   onTeamChange: (isOurTeam: boolean) => void;
   onPlayerChange: (playerId: string) => void;
   onAssistPlayerChange: (playerId: string) => void;
+  onPenaltyChange: (isPenalty: boolean) => void;
   onConfirm: () => void;
 }
 
@@ -35,23 +37,22 @@ export function EventDialog({
   isOurTeam,
   selectedPlayer,
   assistPlayer,
+  isPenalty,
   players,
   onTypeChange,
   onTeamChange,
   onPlayerChange,
   onAssistPlayerChange,
+  onPenaltyChange,
   onConfirm
 }: EventDialogProps) {
-  const [isPenalty, setIsPenalty] = useState(false);
 
   const handleConfirm = () => {
     onConfirm();
-    setIsPenalty(false);
   };
 
   const handleCancel = () => {
     onOpenChange(false);
-    setIsPenalty(false);
   };
 
   return (
@@ -118,7 +119,7 @@ export function EventDialog({
                 <Checkbox 
                   id="penalty" 
                   checked={isPenalty}
-                  onCheckedChange={(checked) => setIsPenalty(checked === true)}
+                  onCheckedChange={onPenaltyChange}
                 />
                 <Label htmlFor="penalty">Penalty goal</Label>
               </div>

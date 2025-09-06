@@ -118,6 +118,7 @@ export default function MatchTracker() {
     isOurTeam: true,
     selectedPlayer: '',
     assistPlayer: '',
+    isPenalty: false,
   });
   
   const [substitutionDialog, setSubstitutionDialog] = useState({
@@ -308,6 +309,7 @@ export default function MatchTracker() {
       isOurTeam: true,
       selectedPlayer: '',
       assistPlayer: '',
+      isPenalty: false,
     });
   };
 
@@ -321,7 +323,7 @@ export default function MatchTracker() {
       is_our_team: eventDialog.isOurTeam,
       half: timerState.currentHalf,
       minute: getCurrentMinute(),
-      is_penalty: false,
+      is_penalty: eventDialog.isPenalty,
     };
 
     setEvents(prev => [...prev, newEvent]);
@@ -344,15 +346,18 @@ export default function MatchTracker() {
       isOurTeam: true,
       selectedPlayer: '',
       assistPlayer: '',
+      isPenalty: false,
     });
 
     handleSaveState();
 
+    const goalDescription = eventDialog.isOurTeam 
+      ? `${eventDialog.isPenalty ? 'Penalty ' : ''}Goal by ${getPlayerName(eventDialog.selectedPlayer)}${eventDialog.assistPlayer ? ` (assist: ${getPlayerName(eventDialog.assistPlayer)})` : ''}` 
+      : "Opposition goal recorded";
+
     toast({
       title: eventDialog.isOurTeam ? "Goal Recorded!" : "Opposition Goal Recorded",
-      description: eventDialog.isOurTeam 
-        ? `Goal by ${getPlayerName(eventDialog.selectedPlayer)}` 
-        : "Opposition goal recorded",
+      description: goalDescription,
     });
   };
 
@@ -763,11 +768,13 @@ export default function MatchTracker() {
         isOurTeam={eventDialog.isOurTeam}
         selectedPlayer={eventDialog.selectedPlayer}
         assistPlayer={eventDialog.assistPlayer}
+        isPenalty={eventDialog.isPenalty}
         players={matchState?.squad || []}
         onTypeChange={(type) => setEventDialog(prev => ({ ...prev, type }))}
         onTeamChange={(isOurTeam) => setEventDialog(prev => ({ ...prev, isOurTeam }))}
         onPlayerChange={(playerId) => setEventDialog(prev => ({ ...prev, selectedPlayer: playerId }))}
         onAssistPlayerChange={(playerId) => setEventDialog(prev => ({ ...prev, assistPlayer: playerId }))}
+        onPenaltyChange={(isPenalty) => setEventDialog(prev => ({ ...prev, isPenalty }))}
         onConfirm={handleEventConfirm}
       />
 
