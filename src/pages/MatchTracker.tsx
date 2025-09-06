@@ -584,25 +584,25 @@ export default function MatchTracker() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-full overflow-hidden">
       {/* Header */}
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold">Match Tracker</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold">Match Tracker</h1>
         {fixture && (
           <div className="space-y-2">
-            <p className="text-muted-foreground">
+            <p className="text-muted-foreground text-sm sm:text-base truncate">
               {fixture.team.name} vs {fixture.opponent_name}
             </p>
             {/* Current Score */}
-            <div className="flex items-center justify-center gap-8 p-4 bg-muted rounded-lg">
-              <div className="text-center">
-                <p className="text-sm text-muted-foreground">{fixture.team.name}</p>
-                <p className="text-3xl font-bold">{events.filter(e => e.event_type === 'goal' && e.is_our_team).length}</p>
+            <div className="flex items-center justify-center gap-4 sm:gap-8 p-3 sm:p-4 bg-muted rounded-lg">
+              <div className="text-center flex-1 min-w-0">
+                <p className="text-xs sm:text-sm text-muted-foreground truncate">{fixture.team.name}</p>
+                <p className="text-2xl sm:text-3xl font-bold">{events.filter(e => e.event_type === 'goal' && e.is_our_team).length}</p>
               </div>
-              <div className="text-2xl font-bold text-muted-foreground">-</div>
-              <div className="text-center">
-                <p className="text-sm text-muted-foreground">{fixture.opponent_name}</p>
-                <p className="text-3xl font-bold">{events.filter(e => e.event_type === 'goal' && !e.is_our_team).length}</p>
+              <div className="text-xl sm:text-2xl font-bold text-muted-foreground">-</div>
+              <div className="text-center flex-1 min-w-0">
+                <p className="text-xs sm:text-sm text-muted-foreground truncate">{fixture.opponent_name}</p>
+                <p className="text-2xl sm:text-3xl font-bold">{events.filter(e => e.event_type === 'goal' && !e.is_our_team).length}</p>
               </div>
             </div>
           </div>
@@ -686,8 +686,8 @@ export default function MatchTracker() {
                 <ScrollArea className="h-64">
                   <div className="space-y-2">
                     {getActivePlayers().map((player) => (
-                      <div key={player.id} className="flex items-center justify-between p-2 bg-green-50 rounded">
-                        <span>#{player.jersey_number || '?'} {player.first_name} {player.last_name}</span>
+                      <div key={player.id} className="flex items-center justify-between p-2 bg-green-50 rounded min-w-0">
+                        <span className="truncate">{player.jersey_number ? `#${player.jersey_number} ` : ''}{player.first_name} {player.last_name}</span>
                         <Badge variant="secondary">Active</Badge>
                       </div>
                     ))}
@@ -707,8 +707,8 @@ export default function MatchTracker() {
                 <ScrollArea className="h-64">
                   <div className="space-y-2">
                     {getSubstitutePlayers().map((player) => (
-                      <div key={player.id} className="flex items-center justify-between p-2 bg-muted rounded">
-                        <span>#{player.jersey_number || '?'} {player.first_name} {player.last_name}</span>
+                      <div key={player.id} className="flex items-center justify-between p-2 bg-muted rounded min-w-0">
+                        <span className="truncate">{player.jersey_number ? `#${player.jersey_number} ` : ''}{player.first_name} {player.last_name}</span>
                         <Badge variant="outline">Available</Badge>
                       </div>
                     ))}
@@ -738,11 +738,11 @@ export default function MatchTracker() {
                       : playerTime.total_minutes;
 
                     return (
-                      <div key={playerTime.player_id} className="flex items-center justify-between p-2 bg-muted rounded">
-                        <span>
-                          #{player?.jersey_number || '?'} {player?.first_name} {player?.last_name}
+                      <div key={playerTime.player_id} className="flex items-center justify-between p-2 bg-muted rounded min-w-0">
+                        <span className="truncate flex-1 min-w-0">
+                          {player?.jersey_number ? `#${player.jersey_number} ` : ''}{player?.first_name} {player?.last_name}
                         </span>
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-2 flex-shrink-0">
                           <span className="text-sm font-mono">{currentMinutes} min</span>
                           <Badge variant={playerTime.is_starter ? "default" : "secondary"}>
                             {playerTime.is_starter ? "Starter" : "Sub"}
