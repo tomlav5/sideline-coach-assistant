@@ -81,7 +81,9 @@ export default function MatchTracker() {
   const { user } = useAuth();
   const { toast } = useToast();
   
-  const matchState = location.state as MatchState || (window as any).tempMatchState;
+  const [matchState, setMatchState] = useState<MatchState | null>(
+    location.state as MatchState || (window as any).tempMatchState || null
+  );
   const intervalRef = useRef<NodeJS.Timeout>();
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   
@@ -283,6 +285,12 @@ export default function MatchTracker() {
         setFixture(matchData.fixture);
         setGameState(matchData.gameState);
         setStartTimes(matchData.startTimes);
+        
+        // Restore the match state (squad data) to the component
+        if (matchData.matchState) {
+          setMatchState(matchData.matchState);
+        }
+        
         setIsLoading(false);
         return true;
       }
@@ -300,12 +308,13 @@ export default function MatchTracker() {
   };
 
   const initializePlayerTimes = () => {
-    if (!matchState?.squad || !matchState?.starters) return;
+    const currentMatchState = matchState || (location.state as MatchState);
+    if (!currentMatchState?.squad || !currentMatchState?.starters) return;
 
     const playerTimes: PlayerTimeLog[] = [];
     
     // Add starters
-    matchState.starters.forEach(playerId => {
+    currentMatchState.starters.forEach(playerId => {
       playerTimes.push({
         player_id: playerId,
         is_starter: true,
@@ -317,8 +326,8 @@ export default function MatchTracker() {
     });
     
     // Add substitutes (not yet playing)
-    matchState.squad.forEach(player => {
-      if (!matchState.starters.includes(player.id)) {
+    currentMatchState.squad.forEach(player => {
+      if (!currentMatchState.starters.includes(player.id)) {
         playerTimes.push({
           player_id: player.id,
           is_starter: false,
@@ -723,7 +732,8 @@ export default function MatchTracker() {
     );
   }
 
-  if (!matchState?.squad) {
+  // Don't show "No Squad Selected" during initial loading as recovery might restore the squad
+  if (!isLoading && !matchState?.squad && !gameState.playerTimes?.length) {
     return (
       <div className="container mx-auto px-4 py-8">
         <Card>
