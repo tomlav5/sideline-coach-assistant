@@ -584,7 +584,7 @@ export default function MatchTracker() {
   }
 
   return (
-    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-full overflow-hidden">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 w-full max-w-full min-w-0 overflow-x-hidden">
       {/* Header */}
       <div className="space-y-2">
         <h1 className="text-2xl sm:text-3xl font-bold">Match Tracker</h1>
@@ -594,14 +594,14 @@ export default function MatchTracker() {
               {fixture.team.name} vs {fixture.opponent_name}
             </p>
             {/* Current Score */}
-            <div className="flex items-center justify-center gap-4 sm:gap-8 p-3 sm:p-4 bg-muted rounded-lg">
-              <div className="text-center flex-1 min-w-0">
-                <p className="text-xs sm:text-sm text-muted-foreground truncate">{fixture.team.name}</p>
+            <div className="flex items-center justify-center gap-2 sm:gap-4 p-3 sm:p-4 bg-muted rounded-lg w-full min-w-0">
+              <div className="text-center flex-1 min-w-0 max-w-[40%]">
+                <p className="text-xs sm:text-sm text-muted-foreground truncate px-1">{fixture.team.name}</p>
                 <p className="text-2xl sm:text-3xl font-bold">{events.filter(e => e.event_type === 'goal' && e.is_our_team).length}</p>
               </div>
-              <div className="text-xl sm:text-2xl font-bold text-muted-foreground">-</div>
-              <div className="text-center flex-1 min-w-0">
-                <p className="text-xs sm:text-sm text-muted-foreground truncate">{fixture.opponent_name}</p>
+              <div className="text-xl sm:text-2xl font-bold text-muted-foreground flex-shrink-0">-</div>
+              <div className="text-center flex-1 min-w-0 max-w-[40%]">
+                <p className="text-xs sm:text-sm text-muted-foreground truncate px-1">{fixture.opponent_name}</p>
                 <p className="text-2xl sm:text-3xl font-bold">{events.filter(e => e.event_type === 'goal' && !e.is_our_team).length}</p>
               </div>
             </div>
@@ -627,7 +627,7 @@ export default function MatchTracker() {
       />
 
       {/* Tabs for detailed views */}
-      <Tabs defaultValue="events" className="w-full">
+      <Tabs defaultValue="events" className="w-full min-w-0">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="events">Match Events</TabsTrigger>
           <TabsTrigger value="squad">Squad</TabsTrigger>
@@ -674,7 +674,7 @@ export default function MatchTracker() {
         </TabsContent>
 
         <TabsContent value="squad" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full min-w-0">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
