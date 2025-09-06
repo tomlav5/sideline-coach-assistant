@@ -119,7 +119,7 @@ export function EventDialog({
                   <SelectContent>
                     {players.map((player) => (
                       <SelectItem key={player.id} value={player.id}>
-                        #{player.jersey_number || '?'} {player.first_name} {player.last_name}
+                        {player.jersey_number ? `#${player.jersey_number} ` : ''}{player.first_name} {player.last_name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -138,7 +138,7 @@ export function EventDialog({
                       .filter(player => player.id !== selectedPlayer)
                       .map((player) => (
                         <SelectItem key={player.id} value={player.id}>
-                          #{player.jersey_number || '?'} {player.first_name} {player.last_name}
+                          {player.jersey_number ? `#${player.jersey_number} ` : ''}{player.first_name} {player.last_name}
                         </SelectItem>
                       ))}
                   </SelectContent>
