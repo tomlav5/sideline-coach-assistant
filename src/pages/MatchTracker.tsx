@@ -314,22 +314,22 @@ export default function MatchTracker() {
   };
 
   const handleEventConfirm = () => {
-    if (!eventDialog.selectedPlayer && eventDialog.isOurTeam) return;
+    if (eventDialog.isOurTeam && !eventDialog.selectedPlayer) return;
 
     const newEvent: MatchEvent = {
       event_type: 'goal',
       player_id: eventDialog.isOurTeam ? eventDialog.selectedPlayer : undefined,
-      assist_player_id: (eventDialog.assistPlayer && eventDialog.assistPlayer !== 'none') ? eventDialog.assistPlayer : undefined,
+      assist_player_id: (eventDialog.isOurTeam && eventDialog.assistPlayer && eventDialog.assistPlayer !== 'none') ? eventDialog.assistPlayer : undefined,
       is_our_team: eventDialog.isOurTeam,
       half: timerState.currentHalf,
       minute: getCurrentMinute(),
-      is_penalty: eventDialog.isPenalty,
+      is_penalty: eventDialog.isOurTeam ? eventDialog.isPenalty : false,
     };
 
     setEvents(prev => [...prev, newEvent]);
 
-    // Also add assist event if there's an assist player
-    if (eventDialog.assistPlayer && eventDialog.assistPlayer !== 'none') {
+    // Also add assist event if there's an assist player for our team
+    if (eventDialog.isOurTeam && eventDialog.assistPlayer && eventDialog.assistPlayer !== 'none') {
       const assistEvent: MatchEvent = {
         event_type: 'assist',
         player_id: eventDialog.assistPlayer,
@@ -589,9 +589,23 @@ export default function MatchTracker() {
       <div className="space-y-2">
         <h1 className="text-3xl font-bold">Match Tracker</h1>
         {fixture && (
-          <p className="text-muted-foreground">
-            {fixture.team.name} vs {fixture.opponent_name}
-          </p>
+          <div className="space-y-2">
+            <p className="text-muted-foreground">
+              {fixture.team.name} vs {fixture.opponent_name}
+            </p>
+            {/* Current Score */}
+            <div className="flex items-center justify-center gap-8 p-4 bg-muted rounded-lg">
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground">{fixture.team.name}</p>
+                <p className="text-3xl font-bold">{events.filter(e => e.event_type === 'goal' && e.is_our_team).length}</p>
+              </div>
+              <div className="text-2xl font-bold text-muted-foreground">-</div>
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground">{fixture.opponent_name}</p>
+                <p className="text-3xl font-bold">{events.filter(e => e.event_type === 'goal' && !e.is_our_team).length}</p>
+              </div>
+            </div>
+          </div>
         )}
       </div>
 
