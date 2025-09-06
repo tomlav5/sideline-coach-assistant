@@ -117,7 +117,7 @@ export default function MatchTracker() {
     type: 'goal' as 'goal' | 'assist',
     isOurTeam: true,
     selectedPlayer: '',
-    assistPlayer: '',
+    assistPlayer: 'none',
     isPenalty: false,
   });
   
@@ -308,7 +308,7 @@ export default function MatchTracker() {
       type: 'goal',
       isOurTeam: true,
       selectedPlayer: '',
-      assistPlayer: '',
+      assistPlayer: 'none',
       isPenalty: false,
     });
   };
@@ -319,7 +319,7 @@ export default function MatchTracker() {
     const newEvent: MatchEvent = {
       event_type: 'goal',
       player_id: eventDialog.isOurTeam ? eventDialog.selectedPlayer : undefined,
-      assist_player_id: eventDialog.assistPlayer || undefined,
+      assist_player_id: (eventDialog.assistPlayer && eventDialog.assistPlayer !== 'none') ? eventDialog.assistPlayer : undefined,
       is_our_team: eventDialog.isOurTeam,
       half: timerState.currentHalf,
       minute: getCurrentMinute(),
@@ -329,7 +329,7 @@ export default function MatchTracker() {
     setEvents(prev => [...prev, newEvent]);
 
     // Also add assist event if there's an assist player
-    if (eventDialog.assistPlayer) {
+    if (eventDialog.assistPlayer && eventDialog.assistPlayer !== 'none') {
       const assistEvent: MatchEvent = {
         event_type: 'assist',
         player_id: eventDialog.assistPlayer,
@@ -345,14 +345,14 @@ export default function MatchTracker() {
       type: 'goal',
       isOurTeam: true,
       selectedPlayer: '',
-      assistPlayer: '',
+      assistPlayer: 'none',
       isPenalty: false,
     });
 
     handleSaveState();
 
     const goalDescription = eventDialog.isOurTeam 
-      ? `${eventDialog.isPenalty ? 'Penalty ' : ''}Goal by ${getPlayerName(eventDialog.selectedPlayer)}${eventDialog.assistPlayer ? ` (assist: ${getPlayerName(eventDialog.assistPlayer)})` : ''}` 
+      ? `${eventDialog.isPenalty ? 'Penalty ' : ''}Goal by ${getPlayerName(eventDialog.selectedPlayer)}${(eventDialog.assistPlayer && eventDialog.assistPlayer !== 'none') ? ` (assist: ${getPlayerName(eventDialog.assistPlayer)})` : ''}` 
       : "Opposition goal recorded";
 
     toast({

@@ -103,7 +103,7 @@ export function EventDialog({
                     <SelectValue placeholder="Select player who assisted (optional)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No assist</SelectItem>
+                    <SelectItem value="none">No assist</SelectItem>
                     {players
                       .filter(player => player.id !== selectedPlayer)
                       .map((player) => (
