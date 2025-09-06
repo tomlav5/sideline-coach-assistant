@@ -58,6 +58,7 @@ interface MatchEvent {
   id?: string;
   event_type: 'goal' | 'assist';
   player_id?: string;
+  assist_player_id?: string;
   is_our_team: boolean;
   half: 'first' | 'second';
   minute: number;
@@ -109,6 +110,8 @@ export default function MatchTracker() {
     open: false,
     type: 'goal' as 'goal' | 'assist',
     isOurTeam: true,
+    selectedPlayer: '',
+    assistPlayer: '',
   });
   
   const [substitutionDialog, setSubstitutionDialog] = useState({
@@ -460,17 +463,17 @@ export default function MatchTracker() {
     try {
       setIsSaving(true);
 
-      // Save all match events
-      if (gameState.events.length > 0) {
-        const eventsToSave = gameState.events.map(event => ({
-          fixture_id: fixtureId,
-          event_type: event.event_type,
-          player_id: event.player_id || null,
-          is_our_team: event.is_our_team,
-          half: event.half,
-          minute: event.minute,
-          is_penalty: event.is_penalty || false,
-        }));
+        // Save all match events
+        if (gameState.events.length > 0) {
+          const eventsToSave = gameState.events.map(event => ({
+            fixture_id: fixtureId,
+            event_type: event.event_type,
+            player_id: event.player_id || null,
+            is_our_team: event.is_our_team,
+            half: event.half,
+            minute: event.minute,
+            is_penalty: event.is_penalty || false,
+          }));
 
         const { error: eventsError } = await supabase
           .from('match_events')
@@ -550,8 +553,10 @@ export default function MatchTracker() {
     setGameState(prev => ({
       ...prev,
       playerTimes: prev.playerTimes.map(playerTime => {
+        // Only update players currently on field for this half
         if (playerTime.half === half && playerTime.time_on !== null && playerTime.time_off === null) {
-          const minutesPlayed = Math.floor((currentTime - playerTime.time_on) / 60);
+          const timeOnField = currentTime - playerTime.time_on;
+          const minutesPlayed = Math.floor(timeOnField / 60);
           return {
             ...playerTime,
             time_off: currentTime,
@@ -564,21 +569,29 @@ export default function MatchTracker() {
   };
 
   const resetPlayerTimesForSecondHalf = () => {
-    setGameState(prev => ({
-      ...prev,
-      playerTimes: prev.playerTimes.map(playerTime => {
-        // Keep players who were on the field at end of first half
+    setGameState(prev => {
+      const newPlayerTimes = [...prev.playerTimes];
+      
+      // For players who were on field at end of first half, create new second half entries
+      prev.playerTimes.forEach(playerTime => {
         if (playerTime.half === 'first' && playerTime.time_off === null) {
-          return {
-            ...playerTime,
-            half: 'second',
-            time_on: 0, // Reset for second half
+          // Create new entry for second half
+          newPlayerTimes.push({
+            player_id: playerTime.player_id,
+            is_starter: false, // They're continuing, not starting
+            time_on: 0, // Start of second half
             time_off: null,
-          };
+            half: 'second',
+            total_minutes: 0, // Will accumulate during second half
+          });
         }
-        return playerTime;
-      }),
-    }));
+      });
+      
+      return {
+        ...prev,
+        playerTimes: newPlayerTimes,
+      };
+    });
   };
 
   const getCurrentTime = () => {
@@ -600,6 +613,8 @@ export default function MatchTracker() {
       open: true,
       type,
       isOurTeam,
+      selectedPlayer: '',
+      assistPlayer: '',
     });
   };
 
@@ -608,30 +623,52 @@ export default function MatchTracker() {
       open: false,
       type: 'goal',
       isOurTeam: true,
+      selectedPlayer: '',
+      assistPlayer: '',
     });
   };
 
-  const addEvent = (playerId: string | null, isPenalty: boolean = false) => {
-    const newEvent: MatchEvent = {
-      event_type: eventDialog.type,
-      player_id: playerId || undefined,
+  const addEvent = (goalScorerId: string | null, assistPlayerId: string | null = null, isPenalty: boolean = false) => {
+    const events: MatchEvent[] = [];
+    
+    // Always add the goal event
+    const goalEvent: MatchEvent = {
+      event_type: 'goal',
+      player_id: goalScorerId || undefined,
       is_our_team: eventDialog.isOurTeam,
       half: gameState.currentHalf,
       minute: getCurrentMinute(),
       is_penalty: isPenalty,
     };
+    events.push(goalEvent);
+
+    // Add assist event if provided
+    if (assistPlayerId && assistPlayerId !== goalScorerId) {
+      const assistEvent: MatchEvent = {
+        event_type: 'assist',
+        player_id: assistPlayerId,
+        is_our_team: eventDialog.isOurTeam,
+        half: gameState.currentHalf,
+        minute: getCurrentMinute(),
+        is_penalty: false,
+      };
+      events.push(assistEvent);
+    }
 
     setGameState(prev => ({
       ...prev,
-      events: [...prev.events, newEvent],
+      events: [...prev.events, ...events],
     }));
 
     closeEventDialog();
     saveMatchStateToStorage();
 
+    const assistText = assistPlayerId && assistPlayerId !== goalScorerId ? 
+      ` (assist: ${getPlayerName(assistPlayerId)})` : '';
+    
     toast({
-      title: `${eventDialog.type.charAt(0).toUpperCase() + eventDialog.type.slice(1)} Recorded`,
-      description: `${eventDialog.isOurTeam ? 'Our' : 'Opponent'} ${eventDialog.type} at ${getCurrentMinute()}'`,
+      title: "Goal Recorded",
+      description: `${eventDialog.isOurTeam ? 'Our' : 'Opponent'} goal at ${getCurrentMinute()}'${assistText}`,
     });
   };
 
@@ -680,12 +717,24 @@ export default function MatchTracker() {
   };
 
   const getActiveMinutes = (playerId: string) => {
-    const playerTime = gameState.playerTimes.find(pt => pt.player_id === playerId);
-    if (!playerTime || playerTime.time_on === null) return 0;
+    // Get all time logs for this player in this match
+    const playerTimes = gameState.playerTimes.filter(pt => pt.player_id === playerId);
+    let totalMinutes = 0;
     
-    const currentTime = getCurrentTime();
-    const endTime = playerTime.time_off || currentTime;
-    return Math.floor((endTime - playerTime.time_on) / 60);
+    playerTimes.forEach(playerTime => {
+      if (playerTime.time_on !== null) {
+        const currentTime = getCurrentTime();
+        const endTime = playerTime.time_off || (playerTime.half === gameState.currentHalf ? currentTime : 0);
+        
+        // Only count time if player was on field
+        if (endTime > 0) {
+          const minutesPlayed = Math.floor((endTime - playerTime.time_on) / 60);
+          totalMinutes += minutesPlayed;
+        }
+      }
+    });
+    
+    return totalMinutes;
   };
 
   const getPlayersOnField = () => {
@@ -886,14 +935,6 @@ export default function MatchTracker() {
                     Opponent Goal
                   </Button>
                   <Button
-                    onClick={() => openEventDialog('assist', true)}
-                    variant="secondary"
-                    className="flex items-center gap-2"
-                  >
-                    <TrendingUp className="h-4 w-4" />
-                    Our Assist
-                  </Button>
-                  <Button
                     onClick={() => setSubstitutionDialog({ ...substitutionDialog, open: true })}
                     variant="outline"
                     className="flex items-center gap-2"
@@ -1073,25 +1114,22 @@ export default function MatchTracker() {
       <Dialog open={eventDialog.open} onOpenChange={closeEventDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              Record {eventDialog.type.charAt(0).toUpperCase() + eventDialog.type.slice(1)}
-            </DialogTitle>
+            <DialogTitle>Record Goal</DialogTitle>
             <DialogDescription>
-              Select the player and event details for this {eventDialog.type}.
+              Select the goal scorer and optional assist for this goal.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>Player</Label>
-              <Select onValueChange={(value) => {
-                if (value === 'unknown') {
-                  addEvent(null);
-                } else {
-                  addEvent(value);
+              <Label>Goal Scorer</Label>
+              <Select 
+                value={eventDialog.selectedPlayer} 
+                onValueChange={(value) => 
+                  setEventDialog(prev => ({ ...prev, selectedPlayer: value }))
                 }
-              }}>
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select player" />
+                  <SelectValue placeholder="Select goal scorer" />
                 </SelectTrigger>
                 <SelectContent>
                   {eventDialog.isOurTeam ? (
@@ -1110,21 +1148,62 @@ export default function MatchTracker() {
                 </SelectContent>
               </Select>
             </div>
-            
-            {eventDialog.type === 'goal' && (
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="penalty"
-                  onCheckedChange={(checked) => {
-                    if (checked && eventDialog.isOurTeam) {
-                      const playerId = getPlayersOnField()[0]; // Default to first player
-                      addEvent(playerId, true);
-                    }
-                  }}
-                />
-                <Label htmlFor="penalty">Penalty Goal</Label>
+
+            {eventDialog.isOurTeam && (
+              <div>
+                <Label>Assist (Optional)</Label>
+                <Select 
+                  value={eventDialog.assistPlayer} 
+                  onValueChange={(value) => 
+                    setEventDialog(prev => ({ ...prev, assistPlayer: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select assist provider (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">No Assist</SelectItem>
+                    {getPlayersOnField()
+                      .filter(playerId => playerId !== eventDialog.selectedPlayer)
+                      .map(playerId => {
+                        const player = matchState.squad.find(p => p.id === playerId);
+                        return player ? (
+                          <SelectItem key={player.id} value={player.id}>
+                            {player.first_name} {player.last_name}
+                            {player.jersey_number && ` (#${player.jersey_number})`}
+                          </SelectItem>
+                        ) : null;
+                      })}
+                  </SelectContent>
+                </Select>
               </div>
             )}
+            
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="penalty"
+                onCheckedChange={(checked) => {
+                  if (checked) {
+                    // Auto-submit penalty goal
+                    const goalScorer = eventDialog.selectedPlayer || (eventDialog.isOurTeam ? getPlayersOnField()[0] : 'unknown');
+                    addEvent(goalScorer === 'unknown' ? null : goalScorer, null, true);
+                  }
+                }}
+              />
+              <Label htmlFor="penalty">Penalty Goal</Label>
+            </div>
+
+            <Button
+              onClick={() => {
+                const goalScorer = eventDialog.selectedPlayer || (eventDialog.isOurTeam ? getPlayersOnField()[0] : 'unknown');
+                const assistPlayer = eventDialog.assistPlayer || null;
+                addEvent(goalScorer === 'unknown' ? null : goalScorer, assistPlayer);
+              }}
+              disabled={!eventDialog.selectedPlayer && eventDialog.isOurTeam}
+              className="w-full"
+            >
+              Record Goal
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

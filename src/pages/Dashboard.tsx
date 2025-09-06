@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Users, Calendar, Play, TrendingUp } from 'lucide-react';
+import { Plus, Users, Calendar, Play, TrendingUp, Clock, MapPin } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
+import { format } from 'date-fns';
 
 interface Club {
   id: string;
@@ -21,6 +22,18 @@ interface DashboardStats {
   upcomingFixtures: number;
 }
 
+interface ActiveMatch {
+  id: string;
+  scheduled_date: string;
+  opponent_name: string;
+  location: string | null;
+  fixture_type: 'home' | 'away';
+  match_status: string;
+  team: {
+    name: string;
+  };
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -32,6 +45,7 @@ export default function Dashboard() {
     upcomingFixtures: 0
   });
   const [loading, setLoading] = useState(true);
+  const [activeMatch, setActiveMatch] = useState<ActiveMatch | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -53,6 +67,9 @@ export default function Dashboard() {
         if (clubsError) throw clubsError;
 
         setClubs(clubsData || []);
+
+        // Check for active match
+        await checkActiveMatch(clubsData?.map(club => club.id) || []);
 
         // Fetch aggregate stats
         const clubIds = clubsData?.map(club => club.id) || [];
@@ -87,6 +104,145 @@ export default function Dashboard() {
 
     fetchData();
   }, [user]);
+
+  const checkActiveMatch = async (clubIds: string[]) => {
+    if (clubIds.length === 0) return;
+
+    try {
+      // Check for active matches or matches that might be resumable from localStorage
+      const { data: inProgressMatches, error } = await supabase
+        .from('fixtures')
+        .select(`
+          id,
+          scheduled_date,
+          opponent_name,
+          location,
+          fixture_type,
+          match_status,
+          team:teams!inner(
+            name,
+            club_id
+          )
+        `)
+        .in('teams.club_id', clubIds)
+        .eq('match_status', 'in_progress')
+        .order('scheduled_date', { ascending: false })
+        .limit(1);
+
+      if (error) throw error;
+
+      if (inProgressMatches && inProgressMatches.length > 0) {
+        setActiveMatch(inProgressMatches[0]);
+        return;
+      }
+
+      // Check localStorage for resumable matches
+      const localStorageKeys = Object.keys(localStorage).filter(key => key.startsWith('match_'));
+      if (localStorageKeys.length > 0) {
+        // Check if any stored matches are from recent fixtures
+        for (const key of localStorageKeys) {
+          try {
+            const fixtureId = key.replace('match_', '');
+            const stored = localStorage.getItem(key);
+            if (stored) {
+              const matchData = JSON.parse(stored);
+              const timeSinceLastSave = Date.now() - matchData.timestamp;
+              
+              // Only consider matches less than 12 hours old and not completed
+              if (timeSinceLastSave < 12 * 60 * 60 * 1000 && matchData.gameState?.matchPhase !== 'completed') {
+                const { data: fixtureData } = await supabase
+                  .from('fixtures')
+                  .select(`
+                    id,
+                    scheduled_date,
+                    opponent_name,
+                    location,
+                    fixture_type,
+                    match_status,
+                    team:teams!inner(
+                      name,
+                      club_id
+                    )
+                  `)
+                  .eq('id', fixtureId)
+                  .in('teams.club_id', clubIds)
+                  .single();
+
+                if (fixtureData) {
+                  setActiveMatch(fixtureData);
+                  return;
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Error checking stored match:', error);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error checking active match:', error);
+    }
+  };
+
+  const resumeMatch = () => {
+    if (activeMatch) {
+      navigate(`/match-day/${activeMatch.id}`);
+    }
+  };
+
+  const ActiveMatchCard = () => {
+    if (!activeMatch) return null;
+
+    return (
+      <Card className="mb-6 border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <div className="h-3 w-3 bg-orange-500 rounded-full animate-pulse"></div>
+              <CardTitle className="text-orange-800 dark:text-orange-200">Active Match</CardTitle>
+            </div>
+            <Badge variant="secondary" className="bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
+              {activeMatch.match_status === 'in_progress' ? 'In Progress' : 'Resumable'}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            <div>
+              <h3 className="text-lg font-semibold text-orange-900 dark:text-orange-100">
+                {activeMatch.team.name} vs {activeMatch.opponent_name}
+              </h3>
+            </div>
+            <div className="flex items-center space-x-4 text-sm text-orange-700 dark:text-orange-300">
+              <div className="flex items-center space-x-1">
+                <Calendar className="h-4 w-4" />
+                <span>{format(new Date(activeMatch.scheduled_date), 'MMM d, h:mm a')}</span>
+              </div>
+              {activeMatch.location && (
+                <div className="flex items-center space-x-1">
+                  <MapPin className="h-4 w-4" />
+                  <span>{activeMatch.location}</span>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={resumeMatch} className="bg-orange-600 hover:bg-orange-700 text-white">
+                <Play className="h-4 w-4 mr-2" />
+                Resume Match
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => navigate(`/fixtures/${activeMatch.id}`)}
+                className="border-orange-300 text-orange-700 hover:bg-orange-100"
+              >
+                View Details
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
 
   if (loading) {
     return (
@@ -251,6 +407,9 @@ export default function Dashboard() {
         )}
       </div>
 
+      {/* Active Match Section */}
+      <ActiveMatchCard />
+
       {/* Quick Actions */}
       <Card>
         <CardHeader>
@@ -280,7 +439,7 @@ export default function Dashboard() {
             <Button 
               variant="outline" 
               className="h-20 flex-col space-y-2"
-              onClick={() => navigate('/match')}
+              onClick={() => navigate('/fixtures')}
             >
               <Play className="h-6 w-6" />
               <span>Start Match</span>
