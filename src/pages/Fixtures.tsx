@@ -961,6 +961,56 @@ export default function Fixtures() {
                   />
                 </div>
                 
+                <div>
+                  <Label htmlFor="edit-competition_type">Competition Type</Label>
+                  <Select 
+                    value={newFixture.competition_type} 
+                    onValueChange={(value: 'league' | 'tournament' | 'friendly') => setNewFixture({ 
+                      ...newFixture, 
+                      competition_type: value,
+                      competition_name: value === 'friendly' ? '' : newFixture.competition_name
+                    })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {COMPETITION_TYPES.map((type) => (
+                        <SelectItem key={type.value} value={type.value}>
+                          {type.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {(newFixture.competition_type === 'tournament' || newFixture.competition_type === 'league') && (
+                  <div>
+                    <Label htmlFor="edit-competition_name">
+                      {newFixture.competition_type === 'tournament' ? 'Tournament Name' : 'League Name'} 
+                      {newFixture.competition_type === 'tournament' && <span className="text-destructive">*</span>}
+                    </Label>
+                    <Input
+                      id="edit-competition_name"
+                      value={newFixture.competition_name}
+                      onChange={(e) => setNewFixture({ ...newFixture, competition_name: e.target.value })}
+                      placeholder={`Enter ${newFixture.competition_type} name`}
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <Label htmlFor="edit-half_length">Half Length (minutes)</Label>
+                  <Input
+                    id="edit-half_length"
+                    type="number"
+                    value={newFixture.half_length}
+                    onChange={(e) => setNewFixture({ ...newFixture, half_length: parseInt(e.target.value) || 25 })}
+                    min="1"
+                    max="60"
+                  />
+                </div>
+                
                 <div className="flex gap-2 pt-4">
                   <Button onClick={updateFixture} disabled={updating} className="flex-1">
                     {updating ? "Updating..." : "Update Fixture"}
