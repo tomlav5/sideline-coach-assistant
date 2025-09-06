@@ -58,7 +58,7 @@ export function SubstitutionDialog({
               <SelectContent>
                 {activePlayers.map((player) => (
                   <SelectItem key={player.id} value={player.id}>
-                    #{player.jersey_number || '?'} {player.first_name} {player.last_name}
+                    {player.jersey_number ? `#${player.jersey_number} ` : ''}{player.first_name} {player.last_name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -77,7 +77,7 @@ export function SubstitutionDialog({
               <SelectContent>
                 {substitutePlayers.map((player) => (
                   <SelectItem key={player.id} value={player.id}>
-                    #{player.jersey_number || '?'} {player.first_name} {player.last_name}
+                    {player.jersey_number ? `#${player.jersey_number} ` : ''}{player.first_name} {player.last_name}
                   </SelectItem>
                 ))}
               </SelectContent>
