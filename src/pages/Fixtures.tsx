@@ -501,7 +501,13 @@ export default function Fixtures() {
                               e.stopPropagation();
                               // Check if squad is selected before starting match
                               if (fixture.selected_squad_data && fixture.selected_squad_data.startingLineup?.length > 0) {
-                                navigate(`/match-day/${fixture.id}`);
+                                navigate(`/match-day/${fixture.id}`, {
+                                  state: {
+                                    squad: fixture.selected_squad_data.startingLineup.concat(fixture.selected_squad_data.substitutes || []),
+                                    starters: fixture.selected_squad_data.startingLineup.map((player: any) => player.id),
+                                    substitutes: fixture.selected_squad_data.substitutes || []
+                                  }
+                                });
                               } else {
                                 navigate(`/squad/${fixture.id}`);
                               }

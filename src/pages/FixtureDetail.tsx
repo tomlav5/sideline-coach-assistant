@@ -87,7 +87,13 @@ export default function FixtureDetail() {
       return;
     }
 
-    navigate(`/match-day/${fixture.id}`);
+    navigate(`/match-day/${fixture.id}`, {
+      state: {
+        squad: fixture.selected_squad_data.startingLineup.concat(fixture.selected_squad_data.substitutes || []),
+        starters: fixture.selected_squad_data.startingLineup.map((player: any) => player.id),
+        substitutes: fixture.selected_squad_data.substitutes || []
+      }
+    });
   };
 
   if (loading) {
