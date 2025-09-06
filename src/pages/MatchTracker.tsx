@@ -685,12 +685,12 @@ export default function MatchTracker() {
               <CardContent>
                 <ScrollArea className="h-64">
                   <div className="space-y-2">
-                    {getActivePlayers().map((player) => (
-                      <div key={player.id} className="flex items-center justify-between p-2 bg-green-50 rounded min-w-0">
-                        <span className="truncate">{player.jersey_number ? `#${player.jersey_number} ` : ''}{player.first_name} {player.last_name}</span>
-                        <Badge variant="secondary">Active</Badge>
-                      </div>
-                    ))}
+                     {getActivePlayers().map((player) => (
+                       <div key={player.id} className="flex items-center justify-between p-2 bg-muted/50 rounded min-w-0">
+                         <span className="truncate">{player.jersey_number ? `#${player.jersey_number} ` : ''}{player.first_name} {player.last_name}</span>
+                         <Badge variant="secondary">Active</Badge>
+                       </div>
+                     ))}
                   </div>
                 </ScrollArea>
               </CardContent>
