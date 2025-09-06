@@ -150,7 +150,8 @@ export default function Dashboard() {
               
               // Only consider matches less than 12 hours old and not completed
               if (timeSinceLastSave < 12 * 60 * 60 * 1000 && matchData.gameState?.matchPhase !== 'completed') {
-                const { data: fixtureData } = await supabase
+                // Check if the fixture still exists in the database
+                const { data: fixtureData, error: fixtureError } = await supabase
                   .from('fixtures')
                   .select(`
                     id,
@@ -168,14 +169,25 @@ export default function Dashboard() {
                   .in('teams.club_id', clubIds)
                   .single();
 
-                if (fixtureData) {
-                  setActiveMatch(fixtureData);
-                  return;
+                if (fixtureError || !fixtureData) {
+                  // Fixture no longer exists, clean up localStorage
+                  localStorage.removeItem(key);
+                  console.log(`Cleaned up orphaned match data for deleted fixture: ${fixtureId}`);
+                  continue;
                 }
+
+                setActiveMatch(fixtureData);
+                return;
+              } else if (matchData.gameState?.matchPhase === 'completed' || timeSinceLastSave >= 12 * 60 * 60 * 1000) {
+                // Clean up old or completed matches
+                localStorage.removeItem(key);
+                console.log(`Cleaned up old/completed match data: ${fixtureId}`);
               }
             }
           } catch (error) {
             console.error('Error checking stored match:', error);
+            // If there's an error parsing the stored data, remove it
+            localStorage.removeItem(key);
           }
         }
       }
