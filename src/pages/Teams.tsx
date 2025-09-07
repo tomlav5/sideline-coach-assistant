@@ -69,20 +69,28 @@ export default function Teams() {
         .from('teams')
         .select(`
           *,
-          club:clubs(id, name),
-          team_players(count)
+          club:clubs(id, name)
         `)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       
-      // Transform data to include player count
-      const teamsWithCount = data?.map(team => ({
-        ...team,
-        _count: {
-          team_players: team.team_players?.length || 0
-        }
-      })) || [];
+      // Get player counts for each team
+      const teamsWithCount = await Promise.all(
+        (data || []).map(async (team) => {
+          const { count } = await supabase
+            .from('team_players')
+            .select('*', { count: 'exact', head: true })
+            .eq('team_id', team.id);
+          
+          return {
+            ...team,
+            _count: {
+              team_players: count || 0
+            }
+          };
+        })
+      );
       
       setTeams(teamsWithCount);
     } catch (error) {

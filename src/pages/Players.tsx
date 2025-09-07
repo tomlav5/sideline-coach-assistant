@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -36,6 +37,7 @@ interface Player {
 }
 
 export default function Players() {
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const { toast } = useToast();
   const [players, setPlayers] = useState<Player[]>([]);
@@ -57,6 +59,14 @@ export default function Players() {
       fetchTeams();
     }
   }, [user]);
+
+  // Handle URL team filter parameter
+  useEffect(() => {
+    const teamParam = searchParams.get('team');
+    if (teamParam && teamParam !== teamFilter) {
+      setTeamFilter(teamParam);
+    }
+  }, [searchParams]);
 
   const fetchClubs = async () => {
     try {
