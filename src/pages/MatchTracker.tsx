@@ -304,6 +304,7 @@ export default function MatchTracker() {
 
   const endMatch = () => {
     timerEndMatch();
+    // Update times for any players still on the field at match end
     updatePlayerTimesForHalfEnd('second');
     releaseWakeLock();
 
@@ -440,9 +441,11 @@ export default function MatchTracker() {
     
     setPlayerTimes(prev => prev.map(pt => {
       if (pt.half === half && pt.time_on !== null && pt.time_off === null) {
+        // Player was active when the half ended - add their playing time for this half
+        const minutesThisHalf = getActiveMinutes(pt, halfLength);
         return {
           ...pt,
-          total_minutes: pt.total_minutes + getActiveMinutes(pt, halfLength),
+          total_minutes: pt.total_minutes + minutesThisHalf,
         };
       }
       return pt;
@@ -452,11 +455,11 @@ export default function MatchTracker() {
   const resetPlayerTimesForSecondHalf = () => {
     setPlayerTimes(prev => prev.map(pt => {
       if (pt.time_on !== null && pt.time_off === null) {
-        // Active players continue into second half
+        // Active players continue into second half - reset their time_on for the new half
         return {
           ...pt,
           half: 'second',
-          time_on: 0,
+          time_on: 0, // Start from minute 0 of second half
         };
       }
       return pt;

@@ -18,6 +18,7 @@ import MatchTracker from "./pages/MatchTracker";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import FixtureDetail from "./pages/FixtureDetail";
+import MatchReport from "./pages/MatchReport";
 
 const queryClient = new QueryClient();
 
@@ -39,6 +40,7 @@ const App = () => (
               <Route path="/squad/:fixtureId" element={<Layout><SquadSelection /></Layout>} />
               <Route path="/match-day/:fixtureId" element={<Layout><MatchTracker /></Layout>} />
               <Route path="/reports" element={<Layout><Reports /></Layout>} />
+              <Route path="/match-report/:fixtureId" element={<Layout><MatchReport /></Layout>} />
               <Route path="/settings" element={<Layout><Settings /></Layout>} />
               <Route path="/club-management" element={<Layout><ClubManagement /></Layout>} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

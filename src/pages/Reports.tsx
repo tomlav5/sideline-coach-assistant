@@ -206,6 +206,7 @@ export default function Reports() {
         .from('player_time_logs')
         .select(`
           player_id,
+          fixture_id,
           total_minutes,
           fixtures!inner (
             status,
@@ -234,7 +235,8 @@ export default function Reports() {
 
       if (playingTimeError) throw playingTimeError;
 
-      // Process playing time data
+      // Process playing time data - aggregate by player and match
+      const playerMatchMap = new Map<string, Map<string, number>>(); // playerId -> matchId -> totalMinutes
       const playingTimeMap = new Map<string, PlayerPlayingTime>();
       
       (playingTimeData || []).forEach((record) => {
@@ -243,7 +245,14 @@ export default function Reports() {
         const playerId = record.player_id;
         const playerName = `${record.players.first_name} ${record.players.last_name}`;
         const teamName = record.fixtures?.teams?.name || 'Unknown Team';
+        const fixtureId = record.fixture_id || 'unknown';
         
+        // Initialize player match tracking
+        if (!playerMatchMap.has(playerId)) {
+          playerMatchMap.set(playerId, new Map());
+        }
+        
+        // Initialize player stats
         if (!playingTimeMap.has(playerId)) {
           playingTimeMap.set(playerId, {
             player_id: playerId,
@@ -255,9 +264,22 @@ export default function Reports() {
           });
         }
         
+        const playerMatches = playerMatchMap.get(playerId)!;
+        const currentMatchMinutes = playerMatches.get(fixtureId) || 0;
+        playerMatches.set(fixtureId, currentMatchMinutes + (record.total_minutes || 0));
+      });
+
+      // Calculate totals from aggregated match data
+      playerMatchMap.forEach((matches, playerId) => {
         const playerStats = playingTimeMap.get(playerId)!;
-        playerStats.total_minutes += record.total_minutes || 0;
-        playerStats.matches_played += 1;
+        let totalMinutes = 0;
+        
+        matches.forEach((minutes) => {
+          totalMinutes += minutes;
+        });
+        
+        playerStats.total_minutes = totalMinutes;
+        playerStats.matches_played = matches.size; // Number of different matches
       });
 
       // Calculate averages and sort
@@ -427,7 +449,7 @@ export default function Reports() {
                   {completedMatches.map((match) => {
                     const { result, color } = getMatchResult(match.our_score, match.opponent_score);
                     return (
-                      <Card key={match.id} className="sm:hidden">
+                      <Card key={match.id} className="sm:hidden cursor-pointer hover:bg-muted/50" onClick={() => window.open(`/match-report/${match.id}`, '_blank')}>
                         <CardContent className="p-4">
                           <div className="flex items-center justify-between mb-3">
                             <div className="text-sm text-muted-foreground">
@@ -476,7 +498,7 @@ export default function Reports() {
                         {completedMatches.map((match) => {
                           const { result, color } = getMatchResult(match.our_score, match.opponent_score);
                           return (
-                            <tr key={match.id} className="border-b hover:bg-muted/50">
+                            <tr key={match.id} className="border-b hover:bg-muted/50 cursor-pointer" onClick={() => window.open(`/match-report/${match.id}`, '_blank')}>
                               <td className="p-3 text-sm">
                                 {format(new Date(match.scheduled_date), 'dd/MM/yyyy')}
                               </td>
