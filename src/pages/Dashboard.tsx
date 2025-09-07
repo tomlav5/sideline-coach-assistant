@@ -84,7 +84,7 @@ export default function Dashboard() {
               .in('team_id', 
                 (await supabase.from('teams').select('id').in('club_id', clubIds)).data?.map(t => t.id) || []
               )
-              .eq('status', 'scheduled')
+              .not('status', 'in', '(completed,cancelled)')
               .gte('scheduled_date', new Date().toISOString())
           ]);
 
