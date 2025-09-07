@@ -798,7 +798,7 @@ export default function MatchTracker() {
         selectedPlayer={eventDialog.selectedPlayer}
         assistPlayer={eventDialog.assistPlayer}
         isPenalty={eventDialog.isPenalty}
-        players={matchState?.squad || []}
+        players={getActivePlayers()}
         onTypeChange={(type) => setEventDialog(prev => ({ ...prev, type }))}
         onTeamChange={(isOurTeam) => setEventDialog(prev => ({ ...prev, isOurTeam }))}
         onPlayerChange={(playerId) => setEventDialog(prev => ({ ...prev, selectedPlayer: playerId }))}
