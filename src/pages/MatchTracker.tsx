@@ -397,11 +397,12 @@ export default function MatchTracker() {
           total_minutes: getActiveMinutes(pt, currentMinute),
         };
       }
-      if (pt.player_id === playerIn && pt.time_on === null) {
-        // Player coming on
+      if (pt.player_id === playerIn && (pt.time_on === null || pt.time_off !== null)) {
+        // Player coming on - either for first time or returning after being substituted
         return {
           ...pt,
           time_on: currentMinute,
+          time_off: null, // Clear any previous time_off
           half: timerState.currentHalf,
         };
       }
@@ -472,7 +473,8 @@ export default function MatchTracker() {
   const getSubstitutePlayers = () => {
     return matchState?.squad.filter(player => {
       const playerTime = playerTimes.find(pt => pt.player_id === player.id);
-      return playerTime?.time_on === null;
+      // A player can be substituted if they're currently not on the field (time_off is not null or time_on is null)
+      return playerTime?.time_on === null || playerTime?.time_off !== null;
     }) || [];
   };
 

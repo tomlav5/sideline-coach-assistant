@@ -77,7 +77,8 @@ export default function FixtureDetail() {
     if (!fixture) return;
     
     // Check if squad is selected
-    if (!fixture.selected_squad_data || !fixture.selected_squad_data.startingLineup?.length) {
+    if (!fixture.selected_squad_data || 
+        (!fixture.selected_squad_data.startingLineup?.length && !fixture.selected_squad_data.selectedPlayerIds?.length)) {
       toast({
         title: "Squad Required",
         description: "Please select your squad before starting the match",
@@ -89,9 +90,13 @@ export default function FixtureDetail() {
 
     navigate(`/match-day/${fixture.id}`, {
       state: {
-        squad: fixture.selected_squad_data.startingLineup.concat(fixture.selected_squad_data.substitutes || []),
-        starters: fixture.selected_squad_data.startingLineup.map((player: any) => player.id),
-        substitutes: fixture.selected_squad_data.substitutes || []
+        squad: fixture.selected_squad_data.startingLineup?.concat(fixture.selected_squad_data.substitutes || []) || 
+               fixture.selected_squad_data.selectedPlayers || [],
+        starters: fixture.selected_squad_data.startingLineup?.map((player: any) => player.id) || 
+                 fixture.selected_squad_data.startingPlayerIds || [],
+        substitutes: fixture.selected_squad_data.substitutes || 
+                    fixture.selected_squad_data.selectedPlayers?.filter((p: any) => 
+                      !fixture.selected_squad_data.startingPlayerIds?.includes(p.id)) || []
       }
     });
   };
@@ -121,7 +126,8 @@ export default function FixtureDetail() {
   }
 
   const isUpcoming = fixture.status === 'scheduled';
-  const hasSquad = fixture.selected_squad_data && fixture.selected_squad_data.startingLineup?.length > 0;
+  const hasSquad = fixture.selected_squad_data && 
+    (fixture.selected_squad_data.startingLineup?.length > 0 || fixture.selected_squad_data.selectedPlayerIds?.length > 0);
   const TypeIcon = fixture.fixture_type === 'home' ? Home : Plane;
 
   const getStatusColor = (status: string) => {
@@ -242,7 +248,7 @@ export default function FixtureDetail() {
                     <div className="font-medium">Squad Selection</div>
                     <div className="text-sm text-muted-foreground">
                       {hasSquad 
-                        ? `${fixture.selected_squad_data.startingLineup.length} players selected`
+                        ? `${fixture.selected_squad_data.startingLineup?.length || fixture.selected_squad_data.selectedPlayerIds?.length || 0} players selected`
                         : 'No squad selected yet'
                       }
                     </div>
@@ -302,7 +308,7 @@ export default function FixtureDetail() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                {fixture.selected_squad_data.startingLineup.map((player: any, index: number) => (
+                {(fixture.selected_squad_data.startingLineup || []).map((player: any, index: number) => (
                   <div
                     key={player.id}
                     className="p-3 bg-muted rounded-lg text-center"
@@ -318,7 +324,7 @@ export default function FixtureDetail() {
                   </div>
                 ))}
               </div>
-              {fixture.selected_squad_data.substitutes && fixture.selected_squad_data.substitutes.length > 0 && (
+              {(fixture.selected_squad_data.substitutes && fixture.selected_squad_data.substitutes.length > 0) && (
                 <div className="mt-4">
                   <h4 className="font-medium mb-2">Substitutes</h4>
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
