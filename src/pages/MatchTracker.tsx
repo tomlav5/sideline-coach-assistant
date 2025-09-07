@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useMatchTimer } from '@/hooks/useMatchTimer';
 import { useMatchStorage } from '@/hooks/useMatchStorage';
 import { useWakeLock } from '@/hooks/useWakeLock';
+import { useAutoSave } from '@/hooks/useAutoSave';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -76,20 +77,20 @@ export default function MatchTracker() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  const { saveMatchStateToStorage, recoverMatchState, clearMatchFromStorage } = useMatchStorage(fixtureId);
+  const { saveMatchStateToStorage, recoverMatchState, clearMatchFromStorage, clearExpiredMatches } = useMatchStorage(fixtureId);
 
   const handleSaveState = () => {
-    if (fixture && matchState) {
+    if (fixture && matchState && timerStateRef.current) {
       saveMatchStateToStorage({
         fixture,
         matchState,
         gameState: { 
-          ...timerState, 
+          ...timerStateRef.current, 
           events, 
           playerTimes,
           halfLength: fixture.half_length || 25 
         },
-        startTimes,
+        startTimes: startTimesRef.current,
       });
     }
   };
@@ -110,6 +111,22 @@ export default function MatchTracker() {
   } = useMatchTimer({ 
     halfLength: fixture?.half_length || 25,
     onSaveState: handleSaveState
+  });
+
+  // Keep refs for the auto-save callback
+  const timerStateRef = useRef(timerState);
+  const startTimesRef = useRef(startTimes);
+  
+  useEffect(() => {
+    timerStateRef.current = timerState;
+    startTimesRef.current = startTimes;
+  }, [timerState, startTimes]);
+
+  // Auto-save functionality - saves every 30 seconds during active match
+  useAutoSave({
+    enabled: timerState.matchPhase !== 'pre-match' && timerState.matchPhase !== 'completed',
+    interval: 30000, // 30 seconds
+    onSave: handleSaveState,
   });
   
   const [eventDialog, setEventDialog] = useState({
@@ -132,7 +149,10 @@ export default function MatchTracker() {
       if (!fixtureId || !user) return;
 
       try {
-        // Try to recover match state first
+        // Clear any expired match data first
+        clearExpiredMatches();
+        
+        // Try to recover match state
         const recovered = recoverMatchState();
         if (recovered) {
           setFixture(recovered.fixture);
@@ -176,17 +196,8 @@ export default function MatchTracker() {
     initializeMatch();
     requestWakeLock();
 
-    const handleVisibilityChange = () => {
-      if (document.hidden && timerState.isRunning) {
-        handleSaveState();
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
     return () => {
       releaseWakeLock();
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [fixtureId, user]);
 
@@ -257,7 +268,7 @@ export default function MatchTracker() {
     try {
       await supabase
         .from('fixtures')
-        .update({ match_status: 'in_progress' })
+        .update({ status: 'in_progress' })
         .eq('id', fixtureId);
     } catch (error) {
       console.error('Error updating fixture status:', error);
@@ -326,8 +337,8 @@ export default function MatchTracker() {
       is_penalty: eventDialog.isOurTeam ? eventDialog.isPenalty : false,
     };
 
-    setEvents(prev => [...prev, newEvent]);
-
+    const updatedEvents = [newEvent];
+    
     // Also add assist event if there's an assist player for our team
     if (eventDialog.isOurTeam && eventDialog.assistPlayer && eventDialog.assistPlayer !== 'none') {
       const assistEvent: MatchEvent = {
@@ -337,8 +348,10 @@ export default function MatchTracker() {
         half: timerState.currentHalf,
         minute: getCurrentMinute(),
       };
-      setEvents(prev => [...prev, assistEvent]);
+      updatedEvents.push(assistEvent);
     }
+
+    setEvents(prev => [...prev, ...updatedEvents]);
 
     setEventDialog({
       open: false,
@@ -517,7 +530,7 @@ export default function MatchTracker() {
       await supabase
         .from('fixtures')
         .update({ 
-          match_status: 'completed',
+          status: 'completed',
           selected_squad_data: {
             startingLineup: matchState?.starters || [],
             substitutes: matchState?.substitutes?.map(p => ({ 

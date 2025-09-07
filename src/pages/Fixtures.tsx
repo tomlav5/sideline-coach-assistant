@@ -79,7 +79,7 @@ export default function Fixtures() {
   const [dateFilterOpen, setDateFilterOpen] = useState(false);
   const [startDate, setStartDate] = useState<Date>();
   const [endDate, setEndDate] = useState<Date>();
-  const [activeTab, setActiveTab] = useState<string>('upcoming');
+  const [activeTab, setActiveTab] = useState<'upcoming' | 'completed'>('upcoming');
   
   const [newFixture, setNewFixture] = useState<{
     team_id: string;
@@ -321,13 +321,15 @@ export default function Fixtures() {
     return fixtureType?.icon || Home;
   };
 
-  // Filter fixtures based on date range and past/upcoming
-  const getFilteredFixtures = (isPast: boolean) => {
+  // Filter fixtures based on status and date
+  const getFilteredFixtures = (isCompleted: boolean) => {
     const now = new Date();
     let filtered = fixtures.filter(fixture => {
-      const fixtureDate = new Date(fixture.scheduled_date);
-      return isPast ? isBefore(fixtureDate, now) : isAfter(fixtureDate, now) || 
-             (fixtureDate.toDateString() === now.toDateString());
+      if (isCompleted) {
+        return fixture.status === 'completed';
+      } else {
+        return fixture.status !== 'completed' && fixture.status !== 'cancelled';
+      }
     });
 
     // Apply date range filter if set
@@ -343,7 +345,7 @@ export default function Fixtures() {
   };
 
   const upcomingFixtures = getFilteredFixtures(false);
-  const pastFixtures = getFilteredFixtures(true);
+  const completedFixtures = getFilteredFixtures(true);
 
   // Quick date filter options
   const applyQuickFilter = (days: number) => {
@@ -357,7 +359,7 @@ export default function Fixtures() {
       // Past dates
       setStartDate(addDays(now, days));
       setEndDate(now);
-      setActiveTab('past');
+      setActiveTab('completed');
     }
   };
 
@@ -366,7 +368,7 @@ export default function Fixtures() {
     setEndDate(undefined);
   };
 
-  const renderFixtures = (fixtureList: Fixture[], type: 'upcoming' | 'past') => {
+  const renderFixtures = (fixtureList: Fixture[], type: 'upcoming' | 'completed') => {
     if (loading) {
       return (
         <div className="space-y-3">
@@ -388,7 +390,7 @@ export default function Fixtures() {
             <p className="text-muted-foreground text-center mb-4">
               {type === 'upcoming' 
                 ? 'Create your first fixture to start scheduling matches'
-                : 'No past fixtures to display'}
+                : 'No completed fixtures to display'}
             </p>
             {type === 'upcoming' && (
               <Button onClick={() => setCreateDialogOpen(true)}>
@@ -1028,7 +1030,7 @@ export default function Fixtures() {
       </div>
 
       {/* Tabs for Past/Upcoming Fixtures */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'upcoming' | 'completed')} className="w-full">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="upcoming" className="relative">
             Upcoming
@@ -1038,11 +1040,11 @@ export default function Fixtures() {
               </Badge>
             )}
           </TabsTrigger>
-          <TabsTrigger value="past" className="relative">
-            Past
-            {pastFixtures.length > 0 && (
+          <TabsTrigger value="completed" className="relative">
+            Completed
+            {completedFixtures.length > 0 && (
               <Badge variant="secondary" className="ml-2 h-5 text-xs">
-                {pastFixtures.length}
+                {completedFixtures.length}
               </Badge>
             )}
           </TabsTrigger>
@@ -1052,8 +1054,8 @@ export default function Fixtures() {
           {renderFixtures(upcomingFixtures, 'upcoming')}
         </TabsContent>
         
-        <TabsContent value="past" className="space-y-4">
-          {renderFixtures(pastFixtures, 'past')}
+        <TabsContent value="completed" className="space-y-4">
+          {renderFixtures(completedFixtures, 'completed')}
         </TabsContent>
       </Tabs>
     </div>

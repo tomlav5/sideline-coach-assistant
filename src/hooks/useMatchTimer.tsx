@@ -32,13 +32,21 @@ export function useMatchTimer({ halfLength, onSaveState }: UseMatchTimerProps) {
 
   useEffect(() => {
     if (timerState.isRunning) {
+      // Store the actual start time instead of relying on setInterval
+      const startTime = Date.now();
+      const currentSeconds = timerState.currentHalf === 'first' 
+        ? timerState.firstHalfTime 
+        : timerState.secondHalfTime;
+      
       intervalRef.current = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        
         setTimerState(prev => {
           const newState = { ...prev };
           if (newState.currentHalf === 'first') {
-            newState.firstHalfTime += 1;
+            newState.firstHalfTime = currentSeconds + elapsed;
           } else {
-            newState.secondHalfTime += 1;
+            newState.secondHalfTime = currentSeconds + elapsed;
           }
           return newState;
         });
@@ -54,7 +62,7 @@ export function useMatchTimer({ halfLength, onSaveState }: UseMatchTimerProps) {
         clearInterval(intervalRef.current);
       }
     };
-  }, [timerState.isRunning]);
+  }, [timerState.isRunning, timerState.currentHalf]);
 
   const startMatch = () => {
     const newStartTimes = { ...startTimes };
