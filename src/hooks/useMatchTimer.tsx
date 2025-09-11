@@ -69,6 +69,17 @@ export function useMatchTimer({ halfLength, onSaveState }: UseMatchTimerProps) {
     };
   }, [timerState.isRunning, timerState.currentHalf, startTimes]);
 
+  // Persist key state transitions (after state commits) to ensure storage has correct start times
+  useEffect(() => {
+    onSaveState?.();
+  }, [
+    timerState.isRunning,
+    timerState.matchPhase,
+    timerState.currentHalf,
+    startTimes.firstHalfStart,
+    startTimes.secondHalfStart,
+  ]);
+
   const startMatch = () => {
     const newStartTimes = { ...startTimes };
     newStartTimes.matchStart = Date.now();

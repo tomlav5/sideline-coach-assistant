@@ -128,6 +128,15 @@ export default function MatchTracker() {
     interval: 30000, // 30 seconds
     onSave: handleSaveState,
   });
+
+  // Save immediately when events or player times change to avoid losing the latest action
+  useEffect(() => {
+    if (!fixture || !matchState) return;
+    if (timerState.matchPhase === 'pre-match') return;
+    handleSaveState();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [events, playerTimes]);
+
   
   const [eventDialog, setEventDialog] = useState({
     open: false,
