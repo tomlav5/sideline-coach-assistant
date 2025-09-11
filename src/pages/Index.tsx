@@ -49,26 +49,38 @@ const Index = () => {
   }, [user]);
 
   const checkForLiveMatch = () => {
-    // Check localStorage for any active match sessions
-    const keys = Object.keys(localStorage);
-    const matchKeys = keys.filter(key => key.startsWith('match_'));
-    
-    if (matchKeys.length > 0) {
-      const latestMatchKey = matchKeys[0];
-      const matchId = latestMatchKey.replace('match_', '');
-      
+    // Find the most recent, resumable match in localStorage
+    const keys = Object.keys(localStorage).filter((key) => key.startsWith('match_'));
+
+    let latest: { id: string; timestamp: number } | null = null;
+
+    for (const key of keys) {
       try {
-        const matchData = JSON.parse(localStorage.getItem(latestMatchKey) || '{}');
-        const timeSinceLastSave = Date.now() - (matchData.timestamp || 0);
-        
-        // If match was active within last 12 hours
-        if (timeSinceLastSave < 12 * 60 * 60 * 1000 && matchData.gameState?.matchPhase !== 'completed') {
-          setHasLiveMatch(true);
-          setLiveMatchId(matchId);
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        const data = JSON.parse(raw);
+        const ts = Number(data?.timestamp) || 0;
+        const isCompleted = data?.gameState?.matchPhase === 'completed';
+        const isFresh = Date.now() - ts < 12 * 60 * 60 * 1000;
+
+        if (ts && isFresh && !isCompleted) {
+          const id = key.replace('match_', '');
+          if (!latest || ts > latest.timestamp) {
+            latest = { id, timestamp: ts };
+          }
         }
       } catch (error) {
-        console.error('Error checking live match:', error);
+        // Corrupt key, remove it to avoid future issues
+        localStorage.removeItem(key);
       }
+    }
+
+    if (latest) {
+      setHasLiveMatch(true);
+      setLiveMatchId(latest.id);
+    } else {
+      setHasLiveMatch(false);
+      setLiveMatchId(null);
     }
   };
 
