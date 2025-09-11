@@ -693,12 +693,6 @@ export default function Fixtures() {
           </Dialog>
 
           <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="touch-target w-full sm:w-auto">
-                <Plus className="h-4 w-4 mr-2" />
-                Create Fixture
-              </Button>
-            </DialogTrigger>
             <DialogContent className="max-w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Create New Fixture</DialogTitle>
