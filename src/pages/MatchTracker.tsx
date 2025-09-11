@@ -156,8 +156,25 @@ export default function MatchTracker() {
         const recovered = recoverMatchState();
         if (recovered) {
           setFixture(recovered.fixture);
-          setTimerState(recovered.gameState);
-          setStartTimes(recovered.startTimes);
+          
+          // Restore timer state and start times together
+          const restoredStartTimes = recovered.startTimes;
+          setStartTimes(restoredStartTimes);
+          
+          // Calculate current time based on stored start times if timer is running
+          let restoredTimerState = recovered.gameState;
+          if (restoredTimerState.isRunning && restoredStartTimes) {
+            const now = Date.now();
+            if (restoredTimerState.currentHalf === 'first' && restoredStartTimes.firstHalfStart) {
+              const elapsed = Math.floor((now - restoredStartTimes.firstHalfStart) / 1000);
+              restoredTimerState = { ...restoredTimerState, firstHalfTime: elapsed };
+            } else if (restoredTimerState.currentHalf === 'second' && restoredStartTimes.secondHalfStart) {
+              const elapsed = Math.floor((now - restoredStartTimes.secondHalfStart) / 1000);
+              restoredTimerState = { ...restoredTimerState, secondHalfTime: elapsed };
+            }
+          }
+          
+          setTimerState(restoredTimerState);
           setEvents(recovered.gameState.events || []);
           setPlayerTimes(recovered.gameState.playerTimes || []);
           
@@ -302,15 +319,18 @@ export default function MatchTracker() {
     });
   };
 
-  const endMatch = () => {
+  const endMatch = async () => {
     timerEndMatch();
     // Update times for any players still on the field at match end
     updatePlayerTimesForHalfEnd('second');
     releaseWakeLock();
 
+    // Auto-save match data when ending the game
+    await saveMatchData();
+
     toast({
       title: "Match Completed",
-      description: "Great game! Don't forget to save your match data.",
+      description: "Match data has been automatically saved.",
     });
   };
 
@@ -441,11 +461,13 @@ export default function MatchTracker() {
     
     setPlayerTimes(prev => prev.map(pt => {
       if (pt.half === half && pt.time_on !== null && pt.time_off === null) {
-        // Player was active when the half ended - add their playing time for this half
-        const minutesThisHalf = getActiveMinutes(pt, halfLength);
+        // Player was active when the half ended - calculate correct minutes for this half
+        const startMinute = pt.time_on || 0;
+        const minutesThisHalf = Math.max(0, halfLength - startMinute);
         return {
           ...pt,
           total_minutes: pt.total_minutes + minutesThisHalf,
+          time_off: halfLength, // Mark as substituted at end of half
         };
       }
       return pt;
@@ -555,8 +577,8 @@ export default function MatchTracker() {
         description: "All match events and player times have been saved successfully.",
       });
 
-      // Navigate to match report or fixtures
-      navigate('/fixtures');
+      // Navigate to match report
+      navigate(`/match-report/${fixtureId}`);
 
     } catch (error) {
       console.error('Error saving match data:', error);
@@ -776,21 +798,6 @@ export default function MatchTracker() {
         </TabsContent>
       </Tabs>
 
-      {/* Save Match Data */}
-      {timerState.matchPhase === 'completed' && (
-        <Card>
-          <CardContent className="p-6 text-center">
-            <TrendingUp className="h-12 w-12 text-primary mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Match Completed!</h3>
-            <p className="text-muted-foreground mb-4">
-              Save your match data to keep track of events and player performance.
-            </p>
-            <Button onClick={saveMatchData} disabled={isSaving} size="lg">
-              {isSaving ? "Saving..." : "Save Match Data"}
-            </Button>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Event Dialog */}
       <EventDialog

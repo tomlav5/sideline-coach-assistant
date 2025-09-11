@@ -32,21 +32,26 @@ export function useMatchTimer({ halfLength, onSaveState }: UseMatchTimerProps) {
 
   useEffect(() => {
     if (timerState.isRunning) {
-      // Store the actual start time instead of relying on setInterval
-      const startTime = Date.now();
-      const currentSeconds = timerState.currentHalf === 'first' 
+      // Get current time for the active half
+      const currentHalfTime = timerState.currentHalf === 'first' 
         ? timerState.firstHalfTime 
         : timerState.secondHalfTime;
       
+      // Get start time for this half, or use current time if not set
+      const halfStartTime = timerState.currentHalf === 'first' 
+        ? startTimes.firstHalfStart || Date.now()
+        : startTimes.secondHalfStart || Date.now();
+      
       intervalRef.current = setInterval(() => {
-        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        const now = Date.now();
+        const elapsedSeconds = Math.floor((now - halfStartTime) / 1000);
         
         setTimerState(prev => {
           const newState = { ...prev };
           if (newState.currentHalf === 'first') {
-            newState.firstHalfTime = currentSeconds + elapsed;
+            newState.firstHalfTime = elapsedSeconds;
           } else {
-            newState.secondHalfTime = currentSeconds + elapsed;
+            newState.secondHalfTime = elapsedSeconds;
           }
           return newState;
         });
@@ -62,7 +67,7 @@ export function useMatchTimer({ halfLength, onSaveState }: UseMatchTimerProps) {
         clearInterval(intervalRef.current);
       }
     };
-  }, [timerState.isRunning, timerState.currentHalf]);
+  }, [timerState.isRunning, timerState.currentHalf, startTimes]);
 
   const startMatch = () => {
     const newStartTimes = { ...startTimes };

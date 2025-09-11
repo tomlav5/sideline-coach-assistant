@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -67,6 +67,8 @@ export function CreateFixtureDialog({
   onConfirm,
   isCreating
 }: CreateFixtureDialogProps) {
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  
   const updateFixtureData = (updates: Partial<FixtureFormData>) => {
     onFixtureDataChange({ ...fixtureData, ...updates });
   };
@@ -129,7 +131,7 @@ export function CreateFixtureDialog({
           
           <div>
             <Label>Match Date</Label>
-            <Popover>
+            <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
@@ -146,7 +148,10 @@ export function CreateFixtureDialog({
                 <CalendarComponent
                   mode="single"
                   selected={selectedDate}
-                  onSelect={onDateChange}
+                  onSelect={(date) => {
+                    onDateChange(date);
+                    setIsCalendarOpen(false);
+                  }}
                   initialFocus
                   className="p-3 pointer-events-auto"
                 />
@@ -155,12 +160,13 @@ export function CreateFixtureDialog({
           </div>
           
           <div>
-            <Label htmlFor="time">Match Time</Label>
+            <Label htmlFor="time">Match Time (Optional)</Label>
             <Input
               id="time"
               type="time"
               value={selectedTime}
               onChange={(e) => onTimeChange(e.target.value)}
+              placeholder="Not set"
             />
           </div>
           

@@ -117,7 +117,7 @@ export default function MatchReport() {
       if (eventsError) throw eventsError;
       setEvents(eventsData || []);
 
-      // Fetch player times
+      // Fetch player times and calculate totals correctly
       const { data: playerTimesData, error: playerTimesError } = await supabase
         .from('player_time_logs')
         .select(`
@@ -135,6 +135,35 @@ export default function MatchReport() {
         `)
         .eq('fixture_id', fixtureId)
         .order('is_starter', { ascending: false });
+
+      if (playerTimesError) throw playerTimesError;
+      
+      // Group player times by player_id and calculate actual totals
+      const playerTimeMap = new Map<string, PlayerTime>();
+      
+      (playerTimesData || []).forEach((pt) => {
+        const playerId = pt.player_id;
+        if (!playerTimeMap.has(playerId)) {
+          playerTimeMap.set(playerId, {
+            player_id: playerId,
+            time_on: pt.time_on,
+            time_off: pt.time_off,
+            total_minutes: 0,
+            is_starter: pt.is_starter,
+            half: pt.half,
+            players: pt.players
+          });
+        }
+        
+        // Accumulate total minutes across all entries for this player
+        const existingPlayer = playerTimeMap.get(playerId)!;
+        existingPlayer.total_minutes += pt.total_minutes || 0;
+      });
+      
+      setPlayerTimes(Array.from(playerTimeMap.values()).sort((a, b) => {
+        if (a.is_starter !== b.is_starter) return a.is_starter ? -1 : 1;
+        return b.total_minutes - a.total_minutes;
+      }));
 
       if (playerTimesError) throw playerTimesError;
       setPlayerTimes(playerTimesData || []);
