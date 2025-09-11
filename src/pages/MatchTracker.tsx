@@ -116,11 +116,32 @@ export default function MatchTracker() {
   // Keep refs for the auto-save callback
   const timerStateRef = useRef(timerState);
   const startTimesRef = useRef(startTimes);
+  const fixtureRef = useRef(fixture);
+  const matchStateRef = useRef(matchState);
+  const eventsRef = useRef(events);
+  const playerTimesRef = useRef(playerTimes);
   
   useEffect(() => {
     timerStateRef.current = timerState;
     startTimesRef.current = startTimes;
   }, [timerState, startTimes]);
+  
+  useEffect(() => {
+    fixtureRef.current = fixture;
+  }, [fixture]);
+  
+  useEffect(() => {
+    matchStateRef.current = matchState;
+  }, [matchState]);
+  
+  useEffect(() => {
+    eventsRef.current = events;
+  }, [events]);
+  
+  useEffect(() => {
+    playerTimesRef.current = playerTimes;
+  }, [playerTimes]);
+
 
   // Auto-save functionality - saves every 30 seconds during active match
   useAutoSave({
@@ -136,6 +157,30 @@ export default function MatchTracker() {
     handleSaveState();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [events, playerTimes]);
+
+  // Persist on unmount (route changes/navigation within app)
+  useEffect(() => {
+    return () => {
+      const timer = timerStateRef.current;
+      const starts = startTimesRef.current;
+      const fx = fixtureRef.current;
+      const ms = matchStateRef.current;
+      if (!fx || !ms || !timer) return;
+      if (timer.matchPhase === 'pre-match') return;
+      saveMatchStateToStorage({
+        fixture: fx,
+        matchState: ms,
+        gameState: {
+          ...timer,
+          events: eventsRef.current || [],
+          playerTimes: playerTimesRef.current || [],
+          halfLength: fx.half_length || 25,
+        },
+        startTimes: starts,
+      });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   
   const [eventDialog, setEventDialog] = useState({
