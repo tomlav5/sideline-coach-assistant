@@ -603,9 +603,31 @@ export default function MatchTracker() {
   };
 
   const getSubstitutePlayers = () => {
+    if (timerState.matchPhase === 'half-time') {
+      // At halftime, "coming on" should show only players who were NOT active when the first half ended
+      // and who are not already scheduled to start the second half
+      const halfLength = fixture?.half_length || 25;
+      const endMinute = Math.min(Math.floor(timerState.firstHalfTime / 60), halfLength);
+
+      return matchState?.squad.filter(player => {
+        const pt = playerTimes.find(p => p.player_id === player.id);
+        if (!pt) return false;
+
+        // If this player has already been queued to start the second half, exclude
+        if (pt.pending_second_half) return false;
+
+        // Determine if the player was active exactly at the end of the first half
+        const wasActiveAtEndOfFirst =
+          pt.half === 'first' && pt.time_on !== null && pt.time_off === endMinute && !pt.bench_second_half;
+
+        // Show only players who were NOT active at end of first half
+        return !wasActiveAtEndOfFirst;
+      }) || [];
+    }
+
+    // During active play, a player can come on if they're currently not on the field
     return matchState?.squad.filter(player => {
       const playerTime = playerTimes.find(pt => pt.player_id === player.id);
-      // A player can be substituted if they're currently not on the field (time_off is not null or time_on is null)
       return playerTime?.time_on === null || playerTime?.time_off !== null;
     }) || [];
   };
