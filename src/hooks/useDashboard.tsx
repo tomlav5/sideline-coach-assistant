@@ -96,7 +96,7 @@ export function useDashboardData() {
             location,
             fixture_type,
             match_status,
-            team:teams!inner(
+            team:teams!fixtures_team_id_fkey(
               name,
               club_id
             )
@@ -119,7 +119,22 @@ export function useDashboardData() {
                 const matchData = JSON.parse(stored);
                 const timeSinceLastSave = Date.now() - matchData.timestamp;
                 
+                // Check if fixture exists first (lightweight check)
+                const { data: fixtureExists, error: existsError } = await supabase
+                  .from('fixtures')
+                  .select('id')
+                  .eq('id', fixtureId)
+                  .single();
+
+                if (existsError || !fixtureExists) {
+                  // Fixture no longer exists, clean up localStorage immediately
+                  localStorage.removeItem(key);
+                  console.log(`Cleaned up orphaned match data for deleted fixture: ${fixtureId}`);
+                  continue;
+                }
+                
                 if (timeSinceLastSave < 12 * 60 * 60 * 1000 && matchData.gameState?.matchPhase !== 'completed') {
+                  // Fetch full fixture data since we know it exists
                   const { data: fixtureData } = await supabase
                     .from('fixtures')
                     .select(`
@@ -129,10 +144,10 @@ export function useDashboardData() {
                       location,
                       fixture_type,
                       match_status,
-                      team:teams!inner(
-                        name,
-                        club_id
-                      )
+                        team:teams!fixtures_team_id_fkey(
+                          name,
+                          club_id
+                        )
                     `)
                     .eq('id', fixtureId)
                     .in('teams.club_id', clubIds)
@@ -142,14 +157,18 @@ export function useDashboardData() {
                     activeMatch = fixtureData;
                     break;
                   } else {
+                    // User doesn't have access to this fixture
                     localStorage.removeItem(key);
+                    console.log(`Cleaned up inaccessible match data: ${fixtureId}`);
                   }
                 } else {
                   localStorage.removeItem(key);
+                  console.log(`Cleaned up old/completed match data: ${fixtureId}`);
                 }
               }
             } catch (error) {
               localStorage.removeItem(key);
+              console.log(`Cleaned up corrupted match data: ${key}`);
             }
           }
         }

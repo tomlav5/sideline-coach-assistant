@@ -136,6 +136,13 @@ export type Database = {
             referencedRelation: "teams"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "fk_fixtures_team_id"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
         ]
       }
       match_events: {
@@ -173,6 +180,20 @@ export type Database = {
           player_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_match_events_fixture_id"
+            columns: ["fixture_id"]
+            isOneToOne: false
+            referencedRelation: "fixtures"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_match_events_player_id"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "match_events_fixture_id_fkey"
             columns: ["fixture_id"]
@@ -224,6 +245,20 @@ export type Database = {
           total_minutes?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_player_time_logs_fixture_id"
+            columns: ["fixture_id"]
+            isOneToOne: false
+            referencedRelation: "fixtures"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_player_time_logs_player_id"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "player_time_logs_fixture_id_fkey"
             columns: ["fixture_id"]

@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
+import { cleanupOrphanedMatchData } from '@/utils/matchStorageCleanup';
 
 interface Club {
   id: string;
@@ -68,6 +69,9 @@ export default function Dashboard() {
 
         setClubs(clubsData || []);
 
+        // Clean up any orphaned match data first
+        await cleanupOrphanedMatchData();
+
         // Check for active match
         await checkActiveMatch(clubsData?.map(club => club.id) || []);
 
@@ -119,10 +123,10 @@ export default function Dashboard() {
           location,
           fixture_type,
           match_status,
-          team:teams!inner(
-            name,
-            club_id
-          )
+           team:teams!fixtures_team_id_fkey(
+             name,
+             club_id
+           )
         `)
         .in('teams.club_id', clubIds)
         .eq('match_status', 'in_progress')
@@ -148,9 +152,23 @@ export default function Dashboard() {
               const matchData = JSON.parse(stored);
               const timeSinceLastSave = Date.now() - matchData.timestamp;
               
+              // Check if the fixture still exists in the database first
+              const { data: fixtureExists, error: existsError } = await supabase
+                .from('fixtures')
+                .select('id')
+                .eq('id', fixtureId)
+                .single();
+
+              if (existsError || !fixtureExists) {
+                // Fixture no longer exists, clean up localStorage immediately
+                localStorage.removeItem(key);
+                console.log(`Cleaned up orphaned match data for deleted fixture: ${fixtureId}`);
+                continue;
+              }
+              
               // Only consider matches less than 12 hours old and not completed
               if (timeSinceLastSave < 12 * 60 * 60 * 1000 && matchData.gameState?.matchPhase !== 'completed') {
-                // Check if the fixture still exists in the database
+                // Fetch full fixture data since we know it exists
                 const { data: fixtureData, error: fixtureError } = await supabase
                   .from('fixtures')
                   .select(`
@@ -160,19 +178,19 @@ export default function Dashboard() {
                     location,
                     fixture_type,
                     match_status,
-                    team:teams!inner(
-                      name,
-                      club_id
-                    )
+                     team:teams!fixtures_team_id_fkey(
+                       name,
+                       club_id
+                     )
                   `)
                   .eq('id', fixtureId)
                   .in('teams.club_id', clubIds)
                   .single();
 
                 if (fixtureError || !fixtureData) {
-                  // Fixture no longer exists, clean up localStorage
+                  // User doesn't have access to this fixture or it's from another club
                   localStorage.removeItem(key);
-                  console.log(`Cleaned up orphaned match data for deleted fixture: ${fixtureId}`);
+                  console.log(`Cleaned up inaccessible match data: ${fixtureId}`);
                   continue;
                 }
 
