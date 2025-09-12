@@ -586,6 +586,16 @@ export default function MatchTracker() {
   };
 
   const getActivePlayers = () => {
+    if (timerState.matchPhase === 'half-time') {
+      // At halftime, active players are those who were playing when first half ended
+      // and are not explicitly benched for second half
+      return matchState?.squad.filter(player => {
+        const playerTime = playerTimes.find(pt => pt.player_id === player.id && pt.half === 'first');
+        return playerTime?.time_on !== null && !playerTime?.bench_second_half;
+      }) || [];
+    }
+    
+    // During active play, use existing logic
     return matchState?.squad.filter(player => {
       const playerTime = playerTimes.find(pt => pt.player_id === player.id);
       return playerTime?.time_on !== null && playerTime?.time_off === null;
