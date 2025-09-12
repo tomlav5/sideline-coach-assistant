@@ -556,7 +556,6 @@ export default function MatchTracker() {
   };
 
   const resetPlayerTimesForSecondHalf = () => {
-    const halfLength = fixture?.half_length || 25;
     setPlayerTimes(prev => prev.map(pt => {
       // Players explicitly benched at halftime should not auto-start second half
       if (pt.bench_second_half) {
@@ -572,8 +571,9 @@ export default function MatchTracker() {
           time_off: null,
         };
       }
-      // Players who finished the first half on the pitch resume by default
-      if (pt.half === 'first' && pt.time_off === halfLength) {
+      // Players who were active at the end of the first half (not substituted off during the half)
+      // should continue into the second half unless explicitly benched
+      if (pt.half === 'first' && pt.time_on !== null && pt.time_off !== null && !pt.bench_second_half) {
         return {
           ...pt,
           half: 'second',
