@@ -241,28 +241,17 @@ export default function FixtureDetail() {
 
             {/* Squad Status */}
             <div className="border-t pt-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <Users className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <div className="font-medium">Squad Selection</div>
-                    <div className="text-sm text-muted-foreground">
-                      {hasSquad 
-                        ? `${fixture.selected_squad_data.startingLineup?.length || fixture.selected_squad_data.selectedPlayerIds?.length || 0} players selected`
-                        : 'No squad selected yet'
-                      }
-                    </div>
+              <div className="flex items-center space-x-3">
+                <Users className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <div className="font-medium">Squad Selection</div>
+                  <div className="text-sm text-muted-foreground">
+                    {hasSquad 
+                      ? `${fixture.selected_squad_data.startingLineup?.length || fixture.selected_squad_data.selectedPlayerIds?.length || 0} players selected`
+                      : 'No squad selected yet'
+                    }
                   </div>
                 </div>
-                {isUpcoming && (
-                  <Button
-                    variant="outline"
-                    onClick={() => navigate(`/squad/${fixture.id}`)}
-                  >
-                    <Users className="h-4 w-4 mr-2" />
-                    {hasSquad ? 'Edit Squad' : 'Select Squad'}
-                  </Button>
-                )}
               </div>
             </div>
 
