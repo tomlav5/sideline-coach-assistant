@@ -409,59 +409,81 @@ export default function Fixtures() {
           const TypeIcon = getFixtureTypeIcon(fixture.fixture_type);
           const isUpcoming = type === 'upcoming';
           
-          return (
-            <Card 
-              key={fixture.id} 
-              className="hover:shadow-md transition-shadow cursor-pointer touch-manipulation"
-              onClick={() => {
-                if (fixture.status === 'in_progress') {
-                  navigate(`/match-day/${fixture.id}`);
-                } else {
-                  navigate(`/fixture/${fixture.id}`);
-                }
-              }}
-            >
+           return (
+             <Card 
+               key={fixture.id} 
+               className={`hover:shadow-md transition-shadow cursor-pointer touch-manipulation ${
+                 fixture.status === 'in_progress' 
+                   ? 'border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950' 
+                   : ''
+               }`}
+               onClick={() => {
+                 if (fixture.status === 'in_progress') {
+                   navigate(`/match-day/${fixture.id}`);
+                 } else {
+                   navigate(`/fixture/${fixture.id}`);
+                 }
+               }}
+             >
               <CardContent className="p-3 sm:p-4">
-                <div className="space-y-3">
-                  {/* Main fixture info */}
-                  <div className="flex items-start gap-2 sm:gap-3">
-                    <TypeIcon className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-sm sm:text-base leading-tight">
-                        <span className="block sm:inline">{fixture.team.name}</span>
-                        <span className="block sm:inline text-muted-foreground sm:text-foreground"> vs </span>
-                        <span className="block sm:inline">{fixture.opponent_name}</span>
-                      </h3>
-                    </div>
-                  </div>
+                 <div className="space-y-3">
+                   {/* Live Match Indicator for in-progress matches */}
+                   {fixture.status === 'in_progress' && (
+                     <div className="flex items-center space-x-2 mb-2">
+                       <div className="h-3 w-3 bg-orange-500 rounded-full animate-pulse"></div>
+                       <Badge variant="destructive" className="animate-pulse text-xs bg-orange-600 text-white">
+                         LIVE
+                       </Badge>
+                     </div>
+                   )}
+
+                   {/* Main fixture info */}
+                   <div className="flex items-start gap-2 sm:gap-3">
+                     <TypeIcon className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
+                     <div className="flex-1 min-w-0">
+                       <h3 className={`font-semibold text-sm sm:text-base leading-tight ${
+                         fixture.status === 'in_progress' 
+                           ? 'text-orange-900 dark:text-orange-100' 
+                           : ''
+                       }`}>
+                         <span className="block sm:inline">{fixture.team.name}</span>
+                         <span className="block sm:inline text-muted-foreground sm:text-foreground"> vs </span>
+                         <span className="block sm:inline">{fixture.opponent_name}</span>
+                       </h3>
+                     </div>
+                   </div>
                   
-                  {/* Date and time info */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        {format(new Date(fixture.scheduled_date), 'dd/MM/yyyy')}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {format(new Date(fixture.scheduled_date), 'HH:mm')}
-                      </span>
-                      <span className="capitalize hidden xs:inline flex-shrink-0">
-                        {fixture.competition_type === 'league' ? 'League' : 
-                         fixture.competition_type === 'tournament' ? 'Tournament' : 'Friendly'}
-                      </span>
-                      {fixture.location && (
-                        <span className="hidden sm:inline truncate max-w-24">
-                          <MapPin className="h-3 w-3 inline mr-1" />
-                          {fixture.location}
-                        </span>
-                      )}
-                      {fixture.selected_squad_data && fixture.selected_squad_data.startingLineup?.length > 0 && (
-                        <span className="hidden sm:inline text-green-600 text-xs font-medium">
-                          ✓ Squad Ready
-                        </span>
-                      )}
-                    </div>
+                   {/* Date and time info */}
+                   <div className="flex items-center justify-between">
+                     <div className={`flex flex-wrap items-center gap-2 text-xs sm:text-sm ${
+                       fixture.status === 'in_progress' 
+                         ? 'text-orange-700 dark:text-orange-300' 
+                         : 'text-muted-foreground'
+                     }`}>
+                       <span className="flex items-center gap-1">
+                         <Calendar className="h-3 w-3" />
+                         {format(new Date(fixture.scheduled_date), 'dd/MM/yyyy')}
+                       </span>
+                       <span className="flex items-center gap-1">
+                         <Clock className="h-3 w-3" />
+                         {format(new Date(fixture.scheduled_date), 'HH:mm')}
+                       </span>
+                       <span className="capitalize hidden xs:inline flex-shrink-0">
+                         {fixture.competition_type === 'league' ? 'League' : 
+                          fixture.competition_type === 'tournament' ? 'Tournament' : 'Friendly'}
+                       </span>
+                       {fixture.location && (
+                         <span className="hidden sm:inline truncate max-w-24">
+                           <MapPin className="h-3 w-3 inline mr-1" />
+                           {fixture.location}
+                         </span>
+                       )}
+                       {fixture.selected_squad_data && fixture.selected_squad_data.startingLineup?.length > 0 && (
+                         <span className="hidden sm:inline text-green-600 text-xs font-medium">
+                           ✓ Squad Ready
+                         </span>
+                       )}
+                     </div>
                     
                     {/* Status and actions */}
                     <div className="flex items-center gap-2 flex-shrink-0">
