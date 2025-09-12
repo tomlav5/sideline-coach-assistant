@@ -12,6 +12,7 @@ import { Trophy, Calendar, Target, Clock, MoreVertical, Trash2 } from 'lucide-re
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { ResponsiveWrapper } from '@/components/ui/responsive-wrapper';
+import { ExportDialog } from '@/components/reports/ExportDialog';
 
 interface CompletedMatch {
   id: string;
@@ -403,9 +404,12 @@ export default function Reports() {
 
   return (
     <ResponsiveWrapper className="space-y-6 max-w-full">
-      <div className="flex items-center space-x-2">
-        <Trophy className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
-        <h1 className="text-2xl sm:text-3xl font-bold">Reports</h1>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-2">
+          <Trophy className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
+          <h1 className="text-2xl sm:text-3xl font-bold">Reports</h1>
+        </div>
+        <ExportDialog competitionFilter={competitionFilter} />
       </div>
 
       {/* Competition Filter */}
