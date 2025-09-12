@@ -61,6 +61,8 @@ export function useCreateFixture() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['fixtures'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
       toast({
         title: "Success",
         description: "Fixture created successfully",
@@ -91,6 +93,8 @@ export function useUpdateFixture() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['fixtures'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
       toast({
         title: "Success",
         description: "Fixture updated successfully",
@@ -121,6 +125,8 @@ export function useDeleteFixture() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['fixtures'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
       toast({
         title: "Success",
         description: "Fixture deleted successfully",
