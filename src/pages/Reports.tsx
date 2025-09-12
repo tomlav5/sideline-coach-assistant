@@ -5,7 +5,10 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Trophy, Calendar, Target, Clock } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Trophy, Calendar, Target, Clock, MoreVertical, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { ResponsiveWrapper } from '@/components/ui/responsive-wrapper';
@@ -343,6 +346,51 @@ export default function Reports() {
     return { result: 'D', color: 'bg-yellow-500' };
   };
 
+  const deleteMatch = async (matchId: string) => {
+    try {
+      // Delete all related data in the correct order (due to foreign key constraints)
+      
+      // Delete player time logs
+      const { error: timeLogsError } = await supabase
+        .from('player_time_logs')
+        .delete()
+        .eq('fixture_id', matchId);
+
+      if (timeLogsError) throw timeLogsError;
+
+      // Delete match events (goals, assists, etc.)
+      const { error: eventsError } = await supabase
+        .from('match_events')
+        .delete()
+        .eq('fixture_id', matchId);
+
+      if (eventsError) throw eventsError;
+
+      // Finally delete the fixture
+      const { error: fixtureError } = await supabase
+        .from('fixtures')
+        .delete()
+        .eq('id', matchId);
+
+      if (fixtureError) throw fixtureError;
+
+      toast({
+        title: "Match deleted",
+        description: "The match and all associated data have been removed",
+      });
+
+      // Refresh the data
+      fetchReportsData();
+    } catch (error) {
+      console.error('Error deleting match:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete match",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (loading) {
     return (
       <ResponsiveWrapper>
@@ -449,15 +497,55 @@ export default function Reports() {
                   {completedMatches.map((match) => {
                     const { result, color } = getMatchResult(match.our_score, match.opponent_score);
                     return (
-                      <Card key={match.id} className="sm:hidden cursor-pointer hover:bg-muted/50" onClick={() => window.open(`/match-report/${match.id}`, '_blank')}>
+                      <Card key={match.id} className="sm:hidden">
                         <CardContent className="p-4">
                           <div className="flex items-center justify-between mb-3">
                             <div className="text-sm text-muted-foreground">
                               {format(new Date(match.scheduled_date), 'dd/MM/yyyy')}
                             </div>
-                            <Badge className={`${color} text-white text-xs`}>
-                              {result}
-                            </Badge>
+                            <div className="flex items-center space-x-2">
+                              <Badge className={`${color} text-white text-xs`}>
+                                {result}
+                              </Badge>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => window.open(`/match-report/${match.id}`, '_blank')}>
+                                    View Report
+                                  </DropdownMenuItem>
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                                        <Trash2 className="h-4 w-4 mr-2" />
+                                        Delete Match
+                                      </DropdownMenuItem>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>Delete Match Record</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          Are you sure you want to delete this match? This action cannot be undone and will permanently remove:
+                                          <br />• Match details and score
+                                          <br />• All goals and assists
+                                          <br />• Player playing time records
+                                          <br />• All other match events
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction onClick={() => deleteMatch(match.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                          Delete Match
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
                           </div>
                           <div className="space-y-2">
                             <div className="flex items-center justify-between">
@@ -484,42 +572,83 @@ export default function Reports() {
                   {/* Desktop Table - Hidden on mobile */}
                   <div className="hidden sm:block overflow-x-auto">
                     <table className="w-full border-collapse">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="text-left p-3 text-sm font-medium">Date</th>
-                          <th className="text-left p-3 text-sm font-medium">Team</th>
-                          <th className="text-left p-3 text-sm font-medium">Opponent</th>
-                          <th className="text-center p-3 text-sm font-medium">Score</th>
-                          <th className="text-center p-3 text-sm font-medium">Result</th>
-                          <th className="text-left p-3 text-sm font-medium">Location</th>
-                        </tr>
-                      </thead>
+                       <thead>
+                         <tr className="border-b">
+                           <th className="text-left p-3 text-sm font-medium">Date</th>
+                           <th className="text-left p-3 text-sm font-medium">Team</th>
+                           <th className="text-left p-3 text-sm font-medium">Opponent</th>
+                           <th className="text-center p-3 text-sm font-medium">Score</th>
+                           <th className="text-center p-3 text-sm font-medium">Result</th>
+                           <th className="text-left p-3 text-sm font-medium">Location</th>
+                           <th className="text-center p-3 text-sm font-medium">Actions</th>
+                         </tr>
+                       </thead>
                       <tbody>
-                        {completedMatches.map((match) => {
-                          const { result, color } = getMatchResult(match.our_score, match.opponent_score);
-                          return (
-                            <tr key={match.id} className="border-b hover:bg-muted/50 cursor-pointer" onClick={() => window.open(`/match-report/${match.id}`, '_blank')}>
-                              <td className="p-3 text-sm">
-                                {format(new Date(match.scheduled_date), 'dd/MM/yyyy')}
-                              </td>
-                              <td className="p-3 font-medium text-sm">
-                                {match.team_name}
-                              </td>
-                              <td className="p-3 text-sm">{match.opponent_name}</td>
-                              <td className="p-3 text-center font-mono text-lg">
-                                {match.our_score} - {match.opponent_score}
-                              </td>
-                              <td className="p-3 text-center">
-                                <Badge className={`${color} text-white text-xs`}>
-                                  {result}
-                                </Badge>
-                              </td>
-                              <td className="p-3 text-muted-foreground text-sm">
-                                {match.location}
-                              </td>
-                            </tr>
-                          );
-                        })}
+                         {completedMatches.map((match) => {
+                           const { result, color } = getMatchResult(match.our_score, match.opponent_score);
+                           return (
+                             <tr key={match.id} className="border-b hover:bg-muted/50">
+                               <td className="p-3 text-sm cursor-pointer" onClick={() => window.open(`/match-report/${match.id}`, '_blank')}>
+                                 {format(new Date(match.scheduled_date), 'dd/MM/yyyy')}
+                               </td>
+                               <td className="p-3 font-medium text-sm cursor-pointer" onClick={() => window.open(`/match-report/${match.id}`, '_blank')}>
+                                 {match.team_name}
+                               </td>
+                               <td className="p-3 text-sm cursor-pointer" onClick={() => window.open(`/match-report/${match.id}`, '_blank')}>{match.opponent_name}</td>
+                               <td className="p-3 text-center font-mono text-lg cursor-pointer" onClick={() => window.open(`/match-report/${match.id}`, '_blank')}>
+                                 {match.our_score} - {match.opponent_score}
+                               </td>
+                               <td className="p-3 text-center cursor-pointer" onClick={() => window.open(`/match-report/${match.id}`, '_blank')}>
+                                 <Badge className={`${color} text-white text-xs`}>
+                                   {result}
+                                 </Badge>
+                               </td>
+                               <td className="p-3 text-muted-foreground text-sm cursor-pointer" onClick={() => window.open(`/match-report/${match.id}`, '_blank')}>
+                                 {match.location}
+                               </td>
+                               <td className="p-3 text-center">
+                                 <DropdownMenu>
+                                   <DropdownMenuTrigger asChild>
+                                     <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                       <MoreVertical className="h-4 w-4" />
+                                     </Button>
+                                   </DropdownMenuTrigger>
+                                   <DropdownMenuContent align="end">
+                                     <DropdownMenuItem onClick={() => window.open(`/match-report/${match.id}`, '_blank')}>
+                                       View Report
+                                     </DropdownMenuItem>
+                                     <AlertDialog>
+                                       <AlertDialogTrigger asChild>
+                                         <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                                           <Trash2 className="h-4 w-4 mr-2" />
+                                           Delete Match
+                                         </DropdownMenuItem>
+                                       </AlertDialogTrigger>
+                                       <AlertDialogContent>
+                                         <AlertDialogHeader>
+                                           <AlertDialogTitle>Delete Match Record</AlertDialogTitle>
+                                           <AlertDialogDescription>
+                                             Are you sure you want to delete this match? This action cannot be undone and will permanently remove:
+                                             <br />• Match details and score
+                                             <br />• All goals and assists
+                                             <br />• Player playing time records
+                                             <br />• All other match events
+                                           </AlertDialogDescription>
+                                         </AlertDialogHeader>
+                                         <AlertDialogFooter>
+                                           <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                           <AlertDialogAction onClick={() => deleteMatch(match.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                             Delete Match
+                                           </AlertDialogAction>
+                                         </AlertDialogFooter>
+                                       </AlertDialogContent>
+                                     </AlertDialog>
+                                   </DropdownMenuContent>
+                                 </DropdownMenu>
+                               </td>
+                             </tr>
+                           );
+                         })}
                       </tbody>
                     </table>
                   </div>
