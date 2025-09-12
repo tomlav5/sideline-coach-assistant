@@ -6,10 +6,11 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/hooks/useTheme";
 import { Layout } from "@/components/layout/Layout";
+import { OptimizedLazyLoader } from "@/components/ui/optimized-lazy-loader";
 import { LazyLoader } from "@/components/ui/lazy-loader";
 
 // Lazy load pages for better performance
-const Index = lazy(() => import("./pages/Index"));
+const Index = lazy(() => import("./pages/OptimizedIndex"));
 const Teams = lazy(() => import("./pages/Teams"));
 const Players = lazy(() => import("./pages/Players"));
 const Fixtures = lazy(() => import("./pages/Fixtures"));
@@ -38,9 +39,9 @@ const App = () => (
             } />
             <Route path="/" element={
               <Layout>
-                <LazyLoader>
+                <OptimizedLazyLoader skeletonType="dashboard">
                   <Index />
-                </LazyLoader>
+                </OptimizedLazyLoader>
               </Layout>
             } />
             <Route path="/teams" element={

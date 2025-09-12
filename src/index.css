@@ -101,8 +101,14 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground font-sans;
-    /* Prevent zoom on mobile */
+    /* Mobile optimizations */
     touch-action: manipulation;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Hardware acceleration for smoother animations */
+    transform: translateZ(0);
+    /* Prevent bounce scrolling on iOS */
+    overscroll-behavior: none;
   }
 
   /* Mobile-first responsive typography */
@@ -165,5 +171,47 @@ All colors MUST be HSL.
     background: hsl(var(--background)) !important;
     border: 1px solid hsl(var(--border)) !important;
     box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1) !important;
+  }
+
+  /* Performance optimizations */
+  .smooth-transform {
+    will-change: transform;
+    transform: translateZ(0);
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.3s ease-out forwards;
+  }
+
+  .animate-scale-in {
+    animation: scale-in 0.2s ease-out forwards;
+  }
+
+  /* Improved button hover effects */
+  .hover-lift {
+    transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
+  }
+
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px -2px hsl(var(--primary) / 0.3);
+  }
+
+  /* Mobile-optimized tap targets */
+  @media (max-width: 768px) {
+    .touch-optimized {
+      min-height: 48px;
+      min-width: 48px;
+      padding: 12px;
+    }
+
+    /* Reduce motion for better mobile performance */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
   }
 }

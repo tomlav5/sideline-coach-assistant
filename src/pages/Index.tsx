@@ -252,7 +252,7 @@ const Index = () => {
             const IconComponent = action.icon;
             return (
               <Card 
-                key={action.path}
+                key={action.title}
                 className="group hover:shadow-lg transition-all duration-300 cursor-pointer border-2 hover:border-primary/20"
                 onClick={() => navigate(action.path)}
               >
