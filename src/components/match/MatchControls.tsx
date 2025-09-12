@@ -145,10 +145,18 @@ export function MatchControls({
             )}
 
             {matchPhase === 'half-time' && (
-              <Button onClick={onStartSecondHalf} size="lg">
-                <Play className="h-5 w-5 mr-2" />
-                Start Second Half
-              </Button>
+              <div className="flex flex-col items-center gap-3">
+                <Button onClick={onStartSecondHalf} size="lg">
+                  <Play className="h-5 w-5 mr-2" />
+                  Start Second Half
+                </Button>
+                <div className="grid grid-cols-1 gap-3 w-full max-w-sm">
+                  <Button onClick={onMakeSubstitution} variant="outline">
+                    <ArrowUpDown className="h-4 w-4 mr-2" />
+                    Substitution
+                  </Button>
+                </div>
+              </div>
             )}
           </div>
 

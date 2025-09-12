@@ -57,6 +57,9 @@ interface PlayerTimeLog {
   time_off: number | null;
   half: 'first' | 'second';
   total_minutes: number;
+  // Halftime management
+  pending_second_half?: boolean; // will start second half
+  bench_second_half?: boolean;   // will not start second half
 }
 
 export default function MatchTracker() {
@@ -464,16 +467,36 @@ export default function MatchTracker() {
     const currentMinute = getCurrentMinute();
     
     setPlayerTimes(prev => prev.map(pt => {
-      if (pt.player_id === playerOut && pt.time_off === null) {
-        // Player coming off
+      // Halftime substitutions: schedule changes for second half without affecting first-half minutes
+      if (timerState.matchPhase === 'half-time') {
+        if (pt.player_id === playerOut) {
+          return {
+            ...pt,
+            bench_second_half: true,
+          };
+        }
+        if (pt.player_id === playerIn) {
+          return {
+            ...pt,
+            pending_second_half: true,
+            half: 'second',
+            time_on: null,
+            time_off: null,
+          };
+        }
+        return pt;
+      }
+
+      // In-half substitutions: finalize outgoing segment and start incoming
+      if (pt.player_id === playerOut && pt.time_off === null && pt.time_on !== null) {
+        const segment = Math.max(0, currentMinute - (pt.time_on || 0));
         return {
           ...pt,
           time_off: currentMinute,
-          total_minutes: getActiveMinutes(pt, currentMinute),
+          total_minutes: (pt.total_minutes || 0) + segment,
         };
       }
       if (pt.player_id === playerIn && (pt.time_on === null || pt.time_off !== null)) {
-        // Player coming on - either for first time or returning after being substituted
         return {
           ...pt,
           time_on: currentMinute,
@@ -512,16 +535,20 @@ export default function MatchTracker() {
 
   const updatePlayerTimesForHalfEnd = (half: 'first' | 'second') => {
     const halfLength = fixture?.half_length || 25;
+    const endMinute = Math.min(
+      half === 'first' ? Math.floor(timerState.firstHalfTime / 60) : Math.floor(timerState.secondHalfTime / 60),
+      halfLength
+    );
     
     setPlayerTimes(prev => prev.map(pt => {
       if (pt.half === half && pt.time_on !== null && pt.time_off === null) {
-        // Player was active when the half ended - calculate correct minutes for this half
+        // Player was active when the half ended - calculate minutes for this half based on actual elapsed time
         const startMinute = pt.time_on || 0;
-        const minutesThisHalf = Math.max(0, halfLength - startMinute);
+        const minutesThisHalf = Math.max(0, endMinute - startMinute);
         return {
           ...pt,
           total_minutes: pt.total_minutes + minutesThisHalf,
-          time_off: halfLength, // Mark as substituted at end of half
+          time_off: endMinute, // Mark as off at exact end of half
         };
       }
       return pt;
@@ -529,13 +556,29 @@ export default function MatchTracker() {
   };
 
   const resetPlayerTimesForSecondHalf = () => {
+    const halfLength = fixture?.half_length || 25;
     setPlayerTimes(prev => prev.map(pt => {
-      if (pt.time_on !== null && pt.time_off === null) {
-        // Active players continue into second half - reset their time_on for the new half
+      // Players explicitly benched at halftime should not auto-start second half
+      if (pt.bench_second_half) {
+        return { ...pt, bench_second_half: false };
+      }
+      // Players queued to start the second half
+      if (pt.pending_second_half) {
+        return {
+          ...pt,
+          pending_second_half: false,
+          half: 'second',
+          time_on: 0,
+          time_off: null,
+        };
+      }
+      // Players who finished the first half on the pitch resume by default
+      if (pt.half === 'first' && pt.time_off === halfLength) {
         return {
           ...pt,
           half: 'second',
-          time_on: 0, // Start from minute 0 of second half
+          time_on: 0,
+          time_off: null,
         };
       }
       return pt;
@@ -827,9 +870,8 @@ export default function MatchTracker() {
                 <div className="space-y-2">
                   {playerTimes.map((playerTime) => {
                     const player = matchState?.squad.find(p => p.id === playerTime.player_id);
-                    const currentMinutes = playerTime.time_on !== null 
-                      ? getActiveMinutes(playerTime, getCurrentMinute()) + playerTime.total_minutes
-                      : playerTime.total_minutes;
+                    const isActiveNow = (playerTime.time_on !== null && playerTime.time_off === null) && (timerState.matchPhase === 'first-half' || timerState.matchPhase === 'second-half');
+                    const currentMinutes = playerTime.total_minutes + (isActiveNow ? getActiveMinutes(playerTime, getCurrentMinute()) : 0);
 
                     return (
                       <div key={playerTime.player_id} className="flex items-center justify-between p-2 bg-muted rounded min-w-0">
