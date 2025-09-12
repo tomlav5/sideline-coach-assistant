@@ -727,6 +727,35 @@ export default function MatchTracker() {
         <h1 className="text-2xl sm:text-3xl font-bold">Match Tracker</h1>
         {fixture && (
           <div className="space-y-2">
+            {/* Halftime Lineup Ready Banner */}
+            {timerState.matchPhase === 'half-time' && (() => {
+              const hasHalftimeChanges = playerTimes.some(pt => pt.pending_second_half || pt.bench_second_half);
+              const activePlayersForSecondHalf = playerTimes.filter(pt => 
+                pt.pending_second_half || 
+                (pt.half === 'first' && pt.time_off !== null && !pt.bench_second_half)
+              ).length;
+              
+              if (hasHalftimeChanges || activePlayersForSecondHalf > 0) {
+                return (
+                  <Card className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
+                    <CardContent className="p-3">
+                      <div className="flex items-center space-x-2">
+                        <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
+                        <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                          Second half lineup ready
+                        </span>
+                        {hasHalftimeChanges && (
+                          <span className="text-xs text-blue-600 dark:text-blue-300">
+                            • Changes scheduled
+                          </span>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              }
+              return null;
+            })()}
             <p className="text-muted-foreground text-sm sm:text-base truncate">
               {fixture.team.name} vs {fixture.opponent_name}
             </p>
@@ -923,6 +952,7 @@ export default function MatchTracker() {
         activePlayers={getActivePlayers()}
         substitutePlayers={getSubstitutePlayers()}
         onConfirm={handleSubstitutionConfirm}
+        isHalftime={timerState.matchPhase === 'half-time'}
       />
     </div>
   );

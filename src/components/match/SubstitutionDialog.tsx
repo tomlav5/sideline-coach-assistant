@@ -20,6 +20,7 @@ interface SubstitutionDialogProps {
   activePlayers: Player[];
   substitutePlayers: Player[];
   onConfirm: () => void;
+  isHalftime?: boolean;
 }
 
 export function SubstitutionDialog({
@@ -30,7 +31,8 @@ export function SubstitutionDialog({
   onPlayersChange,
   activePlayers,
   substitutePlayers,
-  onConfirm
+  onConfirm,
+  isHalftime = false
 }: SubstitutionDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -38,10 +40,13 @@ export function SubstitutionDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ArrowUpDown className="h-5 w-5" />
-            Make Substitution
+            {isHalftime ? 'Halftime Substitution' : 'Make Substitution'}
           </DialogTitle>
           <DialogDescription>
-            Replace a player currently on the field
+            {isHalftime 
+              ? 'Set up changes for the second half. Players will be swapped when the second half begins.'
+              : 'Replace a player currently on the field'
+            }
           </DialogDescription>
         </DialogHeader>
         
