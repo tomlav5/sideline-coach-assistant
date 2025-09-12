@@ -33,7 +33,7 @@ export function useFixtures() {
         .from('fixtures')
         .select(`
           *,
-          team:teams(
+          team:teams!fk_fixtures_team_id(
             id,
             name,
             club:clubs(id, name)
@@ -42,7 +42,7 @@ export function useFixtures() {
         .order('scheduled_date', { ascending: false });
 
       if (error) throw error;
-      return data as Fixture[];
+      return (data || []) as unknown as Fixture[];
     }
   });
 }

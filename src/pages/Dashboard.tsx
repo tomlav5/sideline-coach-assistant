@@ -123,7 +123,7 @@ export default function Dashboard() {
           location,
           fixture_type,
           match_status,
-           team:teams!fixtures_team_id_fkey(
+           team:teams!fk_fixtures_team_id(
              name,
              club_id
            )
@@ -136,7 +136,7 @@ export default function Dashboard() {
       if (error) throw error;
 
       if (inProgressMatches && inProgressMatches.length > 0) {
-        setActiveMatch(inProgressMatches[0]);
+        setActiveMatch(inProgressMatches[0] as unknown as ActiveMatch);
         return;
       }
 
@@ -178,7 +178,7 @@ export default function Dashboard() {
                     location,
                     fixture_type,
                     match_status,
-                     team:teams!fixtures_team_id_fkey(
+                     team:teams!fk_fixtures_team_id(
                        name,
                        club_id
                      )
@@ -194,7 +194,7 @@ export default function Dashboard() {
                   continue;
                 }
 
-                setActiveMatch(fixtureData);
+                setActiveMatch(fixtureData as unknown as ActiveMatch);
                 return;
               } else if (matchData.gameState?.matchPhase === 'completed' || timeSinceLastSave >= 12 * 60 * 60 * 1000) {
                 // Clean up old or completed matches

@@ -54,18 +54,18 @@ export function useReportsData(competitionFilter: string = 'all') {
           location,
           competition_type,
           competition_name,
-          teams (name),
+          teams!fk_fixtures_team_id (name),
           match_events (
             id,
             event_type,
             is_our_team,
             player_id,
-            players (first_name, last_name)
+            players!fk_match_events_player_id (first_name, last_name)
           ),
           player_time_logs (
             player_id,
             total_minutes,
-            players (first_name, last_name)
+            players!fk_player_time_logs_player_id (first_name, last_name)
           )
         `)
         .eq('status', 'completed')

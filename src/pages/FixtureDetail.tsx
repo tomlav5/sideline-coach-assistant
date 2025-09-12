@@ -49,7 +49,7 @@ export default function FixtureDetail() {
         .from('fixtures')
         .select(`
           *,
-          team:teams(
+          team:teams!fk_fixtures_team_id(
             id,
             name,
             club:clubs(id, name)
@@ -59,7 +59,7 @@ export default function FixtureDetail() {
         .single();
 
       if (error) throw error;
-      setFixture(data);
+      setFixture(data as unknown as Fixture);
     } catch (error) {
       console.error('Error fetching fixture:', error);
       toast({

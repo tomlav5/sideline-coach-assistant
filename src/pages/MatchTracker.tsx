@@ -280,7 +280,7 @@ export default function MatchTracker() {
       .from('fixtures')
       .select(`
         *,
-        team:teams(
+        team:teams!fk_fixtures_team_id(
           id,
           name,
           team_type

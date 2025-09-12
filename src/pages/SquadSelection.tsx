@@ -67,7 +67,7 @@ export default function SquadSelection() {
         .from('fixtures')
         .select(`
           *,
-          team:teams(
+          team:teams!fk_fixtures_team_id(
             id,
             name,
             team_type,
@@ -79,8 +79,8 @@ export default function SquadSelection() {
 
       if (fixtureError) throw fixtureError;
       
-      setFixture(fixtureData);
-      setTeam(fixtureData.team);
+      setFixture(fixtureData as unknown as Fixture);
+      setTeam(fixtureData.team as unknown as Team);
 
       // Fetch team players
       const { data: teamPlayersData, error: playersError } = await supabase

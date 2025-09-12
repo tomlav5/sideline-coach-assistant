@@ -86,13 +86,13 @@ export default function MatchReport() {
           competition_name,
           fixture_type,
           half_length,
-          teams (name)
+          teams!fk_fixtures_team_id (name)
         `)
         .eq('id', fixtureId)
         .single();
 
       if (fixtureError) throw fixtureError;
-      setFixture(fixtureData);
+      setFixture(fixtureData as unknown as FixtureDetails);
 
       // Fetch match events
       const { data: eventsData, error: eventsError } = await supabase
@@ -105,7 +105,7 @@ export default function MatchReport() {
           is_our_team,
           is_penalty,
           player_id,
-          players (
+          players!fk_match_events_player_id (
             first_name,
             last_name,
             jersey_number
@@ -115,7 +115,7 @@ export default function MatchReport() {
         .order('minute', { ascending: true });
 
       if (eventsError) throw eventsError;
-      setEvents(eventsData || []);
+      setEvents((eventsData || []) as unknown as MatchEvent[]);
 
       // Fetch player times and calculate totals correctly
       const { data: playerTimesData, error: playerTimesError } = await supabase
@@ -127,7 +127,7 @@ export default function MatchReport() {
           total_minutes,
           is_starter,
           half,
-          players (
+          players!fk_player_time_logs_player_id (
             first_name,
             last_name,
             jersey_number
@@ -166,7 +166,7 @@ export default function MatchReport() {
       }));
 
       if (playerTimesError) throw playerTimesError;
-      setPlayerTimes(playerTimesData || []);
+      setPlayerTimes((playerTimesData || []) as unknown as PlayerTime[]);
 
     } catch (error) {
       console.error('Error fetching match report:', error);

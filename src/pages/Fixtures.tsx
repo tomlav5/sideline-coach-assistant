@@ -139,7 +139,7 @@ export default function Fixtures() {
         .from('fixtures')
         .select(`
           *,
-          team:teams(
+          team:teams!fk_fixtures_team_id(
             id,
             name,
             club:clubs(id, name)
@@ -148,7 +148,7 @@ export default function Fixtures() {
         .order('scheduled_date', { ascending: false }); // Show most recent first
 
       if (error) throw error;
-      setFixtures(data || []);
+      setFixtures((data || []) as unknown as Fixture[]);
     } catch (error) {
       console.error('Error fetching fixtures:', error);
     } finally {

@@ -92,7 +92,7 @@ export default function Reports() {
           location,
           competition_type,
           competition_name,
-          teams (name)
+          teams!fk_fixtures_team_id (name)
         `)
         .eq('status', 'completed')
         .match(competitionCondition)
@@ -139,13 +139,13 @@ export default function Reports() {
         .select(`
           player_id,
           event_type,
-          fixtures!inner (
+          fixtures!fk_match_events_fixture_id (
             status,
             competition_type,
             competition_name,
-            teams (name)
+            teams!fk_fixtures_team_id (name)
           ),
-          players (
+          players!fk_match_events_player_id (
             first_name,
             last_name
           )
@@ -211,13 +211,13 @@ export default function Reports() {
           player_id,
           fixture_id,
           total_minutes,
-          fixtures!inner (
+          fixtures!fk_player_time_logs_fixture_id (
             status,
             competition_type,
             competition_name,
-            teams (name)
+            teams!fk_fixtures_team_id (name)
           ),
-          players (
+          players!fk_player_time_logs_player_id (
             first_name,
             last_name
           )

@@ -96,7 +96,7 @@ export function useDashboardData() {
             location,
             fixture_type,
             match_status,
-            team:teams!fixtures_team_id_fkey(
+            team:teams!fk_fixtures_team_id(
               name,
               club_id
             )
@@ -107,7 +107,7 @@ export function useDashboardData() {
           .limit(1);
 
         if (inProgressMatches && inProgressMatches.length > 0) {
-          activeMatch = inProgressMatches[0];
+          activeMatch = inProgressMatches[0] as unknown as ActiveMatch;
         } else {
           // Check localStorage for resumable matches
           const localStorageKeys = Object.keys(localStorage).filter(key => key.startsWith('match_'));
@@ -144,17 +144,17 @@ export function useDashboardData() {
                       location,
                       fixture_type,
                       match_status,
-                        team:teams!fixtures_team_id_fkey(
-                          name,
-                          club_id
-                        )
+                      team:teams!fk_fixtures_team_id(
+                        name,
+                        club_id
+                      )
                     `)
                     .eq('id', fixtureId)
                     .in('teams.club_id', clubIds)
                     .single();
 
                   if (fixtureData) {
-                    activeMatch = fixtureData;
+                    activeMatch = fixtureData as unknown as ActiveMatch;
                     break;
                   } else {
                     // User doesn't have access to this fixture
