@@ -130,13 +130,26 @@ export function EnhancedEventDialog({
           </div>
 
           {/* Team Selection */}
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="our-team"
-              checked={isOurTeam}
-              onCheckedChange={(checked) => setIsOurTeam(checked === true)}
-            />
-            <Label htmlFor="our-team">Our Team</Label>
+          <div className="space-y-2">
+            <Label>Team</Label>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant={isOurTeam ? "default" : "outline"}
+                onClick={() => setIsOurTeam(true)}
+                className={`flex-1 ${isOurTeam ? 'bg-green-600 hover:bg-green-700 text-white' : 'hover:bg-green-50 hover:text-green-700 hover:border-green-300'}`}
+              >
+                Our Team
+              </Button>
+              <Button
+                type="button"
+                variant={!isOurTeam ? "default" : "outline"}
+                onClick={() => setIsOurTeam(false)}
+                className={`flex-1 ${!isOurTeam ? 'bg-red-600 hover:bg-red-700 text-white' : 'hover:bg-red-50 hover:text-red-700 hover:border-red-300'}`}
+              >
+                Opponent
+              </Button>
+            </div>
           </div>
 
           {/* Player Selection (only for our team) */}

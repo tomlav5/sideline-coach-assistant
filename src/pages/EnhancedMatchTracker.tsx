@@ -88,16 +88,16 @@ export default function EnhancedMatchTracker() {
             ...(squadData.substitute_players || [])
           ];
         }
-      } else if (fixtureData.teams) {
-        // Handle team players relationship properly
+      } else {
+        // Fallback: load all team players if no squad selected
         const { data: teamPlayersData } = await supabase
           .from('team_players')
           .select(`
-            players!team_players_player_id_fkey (*)
+            players (*)
           `)
           .eq('team_id', fixtureData.team_id);
         
-        squadPlayers = teamPlayersData?.map((tp: any) => tp.players) || [];
+        squadPlayers = teamPlayersData?.map((tp: any) => tp.players).filter(Boolean) || [];
       }
 
       setPlayers(squadPlayers);
