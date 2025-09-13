@@ -31,6 +31,9 @@ interface ExportData {
   fixtures: any[];
   goalScorers: any[];
   assisters: any[];
+  goalDetails: any[];
+  playerTimesSummary: any[];
+  playerTimesDetailed: any[];
 }
 
 export function ExportDialog({ competitionFilter = 'all' }: ExportDialogProps) {
@@ -84,6 +87,20 @@ export function ExportDialog({ competitionFilter = 'all' }: ExportDialogProps) {
 
     if (fixturesError) throw fixturesError;
 
+    // Fetch player time logs separately for all fixtures in date range
+    const fixtureIds = (fixtures || []).map(f => f.id);
+    const { data: playerTimeLogs, error: timeLogsError } = await supabase
+      .from('player_time_logs')
+      .select(`
+        fixture_id,
+        player_id,
+        total_minutes,
+        players!fk_player_time_logs_player_id (first_name, last_name)
+      `)
+      .in('fixture_id', fixtureIds);
+
+    if (timeLogsError) throw timeLogsError;
+
     // Process fixtures data
     const processedFixtures = (fixtures || []).map(fixture => {
       const ourGoals = fixture.match_events?.filter(e => 
@@ -111,12 +128,15 @@ export function ExportDialog({ competitionFilter = 'all' }: ExportDialogProps) {
       };
     });
 
-    // Process goal scorers
+    // Process goal scorers, assisters, and goal details
     const goalScorersMap = new Map<string, any>();
     const assistersMap = new Map<string, any>();
+    const goalDetails: any[] = [];
+    const playerTimesMap = new Map<string, any>();
 
     (fixtures || []).forEach(fixture => {
       const teamName = fixture.teams?.name || 'Unknown';
+      const fixtureDate = format(new Date(fixture.scheduled_date), 'dd/MM/yyyy');
       
       fixture.match_events?.forEach(event => {
         if (!event.player_id || !event.players || !event.is_our_team) return;
@@ -125,6 +145,18 @@ export function ExportDialog({ competitionFilter = 'all' }: ExportDialogProps) {
         const playerName = `${event.players.first_name} ${event.players.last_name}`;
         
         if (event.event_type === 'goal') {
+          // Add to goal details with timestamps
+          goalDetails.push({
+            Date: fixtureDate,
+            Player: playerName,
+            Team: teamName,
+            Opponent: fixture.opponent_name,
+            Minute: event.minute,
+            Half: event.half === 'first' ? '1st Half' : '2nd Half',
+            'Penalty Goal': event.is_penalty ? 'Yes' : 'No',
+            Competition: fixture.competition_name || fixture.competition_type || 'N/A'
+          });
+
           if (!goalScorersMap.has(playerId)) {
             goalScorersMap.set(playerId, {
               Player: playerName,
@@ -149,6 +181,45 @@ export function ExportDialog({ competitionFilter = 'all' }: ExportDialogProps) {
           assistersMap.get(playerId)!.Assists++;
         }
       });
+
+    });
+
+    // Process player times using the fetched time logs
+    (playerTimeLogs || []).forEach(timeLog => {
+      if (!timeLog.player_id || !timeLog.players) return;
+      
+      const playerId = timeLog.player_id;
+      const playerName = `${timeLog.players.first_name} ${timeLog.players.last_name}`;
+      const minutes = timeLog.total_minutes || 0;
+      
+      // Find the fixture for this time log
+      const fixture = fixtures?.find(f => f.id === timeLog.fixture_id);
+      if (!fixture) return;
+      
+      const teamName = fixture.teams?.name || 'Unknown';
+      const fixtureDate = format(new Date(fixture.scheduled_date), 'dd/MM/yyyy');
+
+      // Initialize player in map if not exists
+      if (!playerTimesMap.has(playerId)) {
+        playerTimesMap.set(playerId, {
+          Player: playerName,
+          Team: teamName,
+          'Total Minutes': 0,
+          'Games Played': 0,
+          'Average Minutes': 0,
+          gameDetails: []
+        });
+      }
+
+      const playerData = playerTimesMap.get(playerId)!;
+      playerData['Total Minutes'] += minutes;
+      playerData['Games Played']++;
+      playerData.gameDetails.push({
+        Date: fixtureDate,
+        Opponent: fixture.opponent_name,
+        'Minutes Played': minutes,
+        Competition: fixture.competition_name || fixture.competition_type || 'N/A'
+      });
     });
 
     const goalScorers = Array.from(goalScorersMap.values())
@@ -157,10 +228,56 @@ export function ExportDialog({ competitionFilter = 'all' }: ExportDialogProps) {
     const assisters = Array.from(assistersMap.values())
       .sort((a, b) => b.Assists - a.Assists);
 
+    // Calculate averages for player times and create detailed breakdown
+    const playerTimesSummary: any[] = [];
+    const playerTimesDetailed: any[] = [];
+    
+    playerTimesMap.forEach((playerData) => {
+      playerData['Average Minutes'] = playerData['Games Played'] > 0 ? 
+        Math.round(playerData['Total Minutes'] / playerData['Games Played']) : 0;
+      
+      // Add to summary (one row per player)
+      playerTimesSummary.push({
+        Player: playerData.Player,
+        Team: playerData.Team,
+        'Total Minutes': playerData['Total Minutes'],
+        'Games Played': playerData['Games Played'],
+        'Average Minutes': playerData['Average Minutes']
+      });
+      
+      // Add detailed breakdown (one row per game per player)
+      playerData.gameDetails.forEach((game: any) => {
+        playerTimesDetailed.push({
+          Player: playerData.Player,
+          Team: playerData.Team,
+          Date: game.Date,
+          Opponent: game.Opponent,
+          Competition: game.Competition,
+          'Minutes Played': game['Minutes Played']
+        });
+      });
+    });
+
+    const sortedGoalDetails = goalDetails.sort((a, b) => {
+      // Sort by date first, then by minute
+      const dateCompare = new Date(a.Date.split('/').reverse().join('-')).getTime() - 
+                         new Date(b.Date.split('/').reverse().join('-')).getTime();
+      if (dateCompare !== 0) return dateCompare;
+      return a.Minute - b.Minute;
+    });
+
     return {
       fixtures: processedFixtures,
       goalScorers,
-      assisters
+      assisters,
+      goalDetails: sortedGoalDetails,
+      playerTimesSummary: playerTimesSummary.sort((a, b) => b['Total Minutes'] - a['Total Minutes']),
+      playerTimesDetailed: playerTimesDetailed.sort((a, b) => {
+        const dateCompare = new Date(a.Date.split('/').reverse().join('-')).getTime() - 
+                           new Date(b.Date.split('/').reverse().join('-')).getTime();
+        if (dateCompare !== 0) return dateCompare;
+        return a.Player.localeCompare(b.Player);
+      })
     };
   };
 
@@ -202,6 +319,18 @@ export function ExportDialog({ competitionFilter = 'all' }: ExportDialogProps) {
       // Add Assists sheet
       const assistsSheet = XLSX.utils.json_to_sheet(data.assisters);
       XLSX.utils.book_append_sheet(workbook, assistsSheet, 'Assists');
+
+      // Add Goal Details sheet with timestamps
+      const goalDetailsSheet = XLSX.utils.json_to_sheet(data.goalDetails);
+      XLSX.utils.book_append_sheet(workbook, goalDetailsSheet, 'Goal Details');
+
+      // Add Player Times Summary sheet
+      const playerTimesSummarySheet = XLSX.utils.json_to_sheet(data.playerTimesSummary);
+      XLSX.utils.book_append_sheet(workbook, playerTimesSummarySheet, 'Player Times Summary');
+
+      // Add Player Times Detailed sheet
+      const playerTimesDetailedSheet = XLSX.utils.json_to_sheet(data.playerTimesDetailed);
+      XLSX.utils.book_append_sheet(workbook, playerTimesDetailedSheet, 'Player Times Detailed');
 
       // Generate filename
       const startDateStr = format(startDate, 'yyyy-MM-dd');
@@ -246,7 +375,7 @@ export function ExportDialog({ competitionFilter = 'all' }: ExportDialogProps) {
             Export Match Data
           </DialogTitle>
           <DialogDescription>
-            Select a date range to export fixtures, results, goal scorers, and assists data to Excel.
+            Select a date range to export fixtures, results, goal scorers, assists, goal timestamps, and player timers to Excel.
           </DialogDescription>
         </DialogHeader>
         
@@ -315,6 +444,9 @@ export function ExportDialog({ competitionFilter = 'all' }: ExportDialogProps) {
               <li>• Fixtures and Results (with scores, dates, opponents)</li>
               <li>• Goal Scorers Tally (including penalty goals)</li>
               <li>• Assists Table</li>
+              <li>• Goal Details (with timestamps and match context)</li>
+              <li>• Player Times Summary (total and average minutes)</li>
+              <li>• Player Times Detailed (game-by-game breakdown)</li>
               <li>• Competition and match details</li>
             </ul>
           </div>
