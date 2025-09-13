@@ -148,7 +148,7 @@ export default function EnhancedMatchTracker() {
     setCurrentPeriodNumber(periodNumber);
   };
 
-  const currentPeriod = periods.find(p => p.period_number === currentPeriodNumber);
+  const currentPeriod = periods.find(p => p.is_active) || (periods.length > 0 ? periods[periods.length - 1] : null);
 
   const ourGoals = events.filter(e => e.event_type === 'goal' && e.is_our_team).length;
   const opponentGoals = events.filter(e => e.event_type === 'goal' && !e.is_our_team).length;
@@ -226,7 +226,7 @@ export default function EnhancedMatchTracker() {
           className="flex items-center gap-2"
         >
           <History className="h-4 w-4" />
-          Log Past Data
+          Record Event Manually
         </Button>
 
         <Button

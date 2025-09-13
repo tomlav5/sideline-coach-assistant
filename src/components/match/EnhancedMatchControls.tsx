@@ -14,8 +14,6 @@ interface EnhancedMatchControlsProps {
 }
 
 export function EnhancedMatchControls({ fixtureId, onTimerUpdate }: EnhancedMatchControlsProps) {
-  const [newPeriodDuration, setNewPeriodDuration] = useState(25);
-  const [showNewPeriodDialog, setShowNewPeriodDialog] = useState(false);
 
   const {
     timerState,
@@ -36,9 +34,7 @@ export function EnhancedMatchControls({ fixtureId, onTimerUpdate }: EnhancedMatc
   });
 
   const handleStartNewPeriod = async () => {
-    await startNewPeriod(newPeriodDuration);
-    setShowNewPeriodDialog(false);
-    setNewPeriodDuration(25);
+    await startNewPeriod();
   };
 
   const canStartNewPeriod = !timerState.isRunning && timerState.matchStatus !== 'completed';
@@ -86,7 +82,7 @@ export function EnhancedMatchControls({ fixtureId, onTimerUpdate }: EnhancedMatc
                   variant={period.id === timerState.currentPeriod?.id ? 'default' : 'outline'}
                   className="text-xs"
                 >
-                  P{period.period_number} ({period.planned_duration_minutes}min)
+                  P{period.period_number}
                   {period.actual_end_time && ' ✓'}
                 </Badge>
               ))}
@@ -97,44 +93,15 @@ export function EnhancedMatchControls({ fixtureId, onTimerUpdate }: EnhancedMatc
         {/* Control Buttons */}
         <div className="grid grid-cols-2 gap-2">
           {/* Start New Period */}
-          <Dialog open={showNewPeriodDialog} onOpenChange={setShowNewPeriodDialog}>
-            <DialogTrigger asChild>
-              <Button
-                variant="outline"
-                disabled={!canStartNewPeriod}
-                className="flex items-center gap-2"
-              >
-                <Plus className="h-4 w-4" />
-                New Period
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Start New Period</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="duration">Duration (minutes)</Label>
-                  <Input
-                    id="duration"
-                    type="number"
-                    value={newPeriodDuration}
-                    onChange={(e) => setNewPeriodDuration(Number(e.target.value))}
-                    min={1}
-                    max={90}
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <Button onClick={handleStartNewPeriod} className="flex-1">
-                    Start Period {timerState.periods.length + 1}
-                  </Button>
-                  <Button variant="outline" onClick={() => setShowNewPeriodDialog(false)}>
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <Button
+            onClick={handleStartNewPeriod}
+            variant="outline"
+            disabled={!canStartNewPeriod}
+            className="flex items-center gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            New Period
+          </Button>
 
           {/* Pause/Resume */}
           {canPause && (

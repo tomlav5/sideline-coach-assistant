@@ -153,7 +153,7 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
     }
   };
 
-  const startNewPeriod = async (plannedDurationMinutes: number = 25) => {
+  const startNewPeriod = async (plannedDurationMinutes: number = 30) => {
     try {
       const nextPeriodNumber = timerState.periods.length + 1;
       
