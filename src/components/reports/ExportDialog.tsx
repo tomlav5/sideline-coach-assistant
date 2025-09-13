@@ -66,7 +66,7 @@ export function ExportDialog({ competitionFilter = 'all' }: ExportDialogProps) {
         competition_name,
         status,
         teams!fk_fixtures_team_id (name),
-        match_events (
+        match_events!fk_match_events_fixture_id (
           id,
           event_type,
           minute,
