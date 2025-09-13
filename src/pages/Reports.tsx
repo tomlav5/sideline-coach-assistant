@@ -211,7 +211,7 @@ export default function Reports() {
         .select(`
           player_id,
           fixture_id,
-          total_minutes,
+          total_period_minutes,
           fixtures!fk_player_time_logs_fixture_id (
             status,
             competition_type,
@@ -270,7 +270,7 @@ export default function Reports() {
         
         const playerMatches = playerMatchMap.get(playerId)!;
         const currentMatchMinutes = playerMatches.get(fixtureId) || 0;
-        playerMatches.set(fixtureId, currentMatchMinutes + (record.total_minutes || 0));
+        playerMatches.set(fixtureId, currentMatchMinutes + (record.total_period_minutes || 0));
       });
 
       // Calculate totals from aggregated match data

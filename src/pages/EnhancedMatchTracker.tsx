@@ -28,8 +28,8 @@ interface MatchEvent {
   is_our_team: boolean;
   is_penalty?: boolean;
   notes?: string;
-  players?: Player;
-  assist_players?: Player;
+  players?: Player & { id: string };
+  assist_players?: Player & { id: string };
 }
 
 interface MatchPeriod {
@@ -92,8 +92,16 @@ export default function EnhancedMatchTracker() {
             ...(squadData.substitute_players || [])
           ];
         }
-      } else if (fixtureData.teams?.team_players) {
-        squadPlayers = fixtureData.teams.team_players.map((tp: any) => tp.players);
+      } else if (fixtureData.teams) {
+        // Handle team players relationship properly
+        const { data: teamPlayersData } = await supabase
+          .from('team_players')
+          .select(`
+            players!team_players_player_id_fkey (*)
+          `)
+          .eq('team_id', fixtureData.team_id);
+        
+        squadPlayers = teamPlayersData?.map((tp: any) => tp.players) || [];
       }
 
       setPlayers(squadPlayers);
@@ -125,8 +133,8 @@ export default function EnhancedMatchTracker() {
         .from('match_events')
         .select(`
           *,
-          players!player_id(first_name, last_name, jersey_number),
-          assist_players:players!assist_player_id(first_name, last_name, jersey_number)
+          players!fk_match_events_player_id(id, first_name, last_name, jersey_number),
+          assist_players:players!fk_match_events_assist_player_id(id, first_name, last_name, jersey_number)
         `)
         .eq('fixture_id', fixtureId)
         .order('total_match_minute');

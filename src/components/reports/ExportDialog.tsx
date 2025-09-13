@@ -1,26 +1,13 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Calendar } from '@/components/ui/calendar';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { CalendarIcon, Download, FileSpreadsheet } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 import * as XLSX from 'xlsx';
 
 interface ExportDialogProps {
@@ -44,7 +31,6 @@ export function ExportDialog({ competitionFilter = 'all' }: ExportDialogProps) {
   const { toast } = useToast();
 
   const fetchExportData = async (start: Date, end: Date): Promise<ExportData> => {
-    // Build competition filter condition
     let competitionCondition = {};
     if (competitionFilter !== 'all') {
       if (competitionFilter.startsWith('type:')) {
@@ -56,7 +42,7 @@ export function ExportDialog({ competitionFilter = 'all' }: ExportDialogProps) {
       }
     }
 
-    // Fetch fixtures with all related data in date range
+    // Fetch fixtures
     const { data: fixtures, error: fixturesError } = await supabase
       .from('fixtures')
       .select(`
@@ -68,52 +54,47 @@ export function ExportDialog({ competitionFilter = 'all' }: ExportDialogProps) {
         competition_type,
         competition_name,
         status,
-        teams!fk_fixtures_team_id (name),
-        match_events!fk_match_events_fixture_id (
-          id,
-          event_type,
-          minute,
-          half,
-          is_our_team,
-          is_penalty,
-          player_id,
-          players!fk_match_events_player_id (first_name, last_name)
-        )
+        teams!fk_fixtures_team_id (name)
       `)
+      .eq('status', 'completed')
       .gte('scheduled_date', start.toISOString())
       .lte('scheduled_date', end.toISOString())
       .match(competitionCondition)
-      .order('scheduled_date', { ascending: true });
+      .order('scheduled_date', { ascending: false });
 
     if (fixturesError) throw fixturesError;
 
-    // Fetch player time logs separately for all fixtures in date range
+    // Fetch match events
     const fixtureIds = (fixtures || []).map(f => f.id);
-    const { data: playerTimeLogs, error: timeLogsError } = await supabase
+    const { data: events, error: eventsError } = await supabase
+      .from('match_events')
+      .select(`
+        *,
+        players!fk_match_events_player_id (first_name, last_name)
+      `)
+      .in('fixture_id', fixtureIds);
+
+    if (eventsError) throw eventsError;
+
+    // Fetch player time logs
+    const { data: playerTimes, error: playerTimesError } = await supabase
       .from('player_time_logs')
       .select(`
-        fixture_id,
-        player_id,
-        total_minutes,
+        *,
         players!fk_player_time_logs_player_id (first_name, last_name)
       `)
       .in('fixture_id', fixtureIds);
 
-    if (timeLogsError) throw timeLogsError;
+    if (playerTimesError) throw playerTimesError;
 
     // Process fixtures data
-    const processedFixtures = (fixtures || []).map(fixture => {
-      const ourGoals = fixture.match_events?.filter(e => 
-        e.event_type === 'goal' && e.is_our_team
-      ).length || 0;
-      
-      const opponentGoals = fixture.match_events?.filter(e => 
-        e.event_type === 'goal' && !e.is_our_team
-      ).length || 0;
+    const fixturesData = (fixtures || []).map(fixture => {
+      const fixtureEvents = (events || []).filter(e => e.fixture_id === fixture.id);
+      const ourGoals = fixtureEvents.filter(e => e.event_type === 'goal' && e.is_our_team).length;
+      const opponentGoals = fixtureEvents.filter(e => e.event_type === 'goal' && !e.is_our_team).length;
 
       return {
         Date: format(new Date(fixture.scheduled_date), 'dd/MM/yyyy'),
-        Time: format(new Date(fixture.scheduled_date), 'HH:mm'),
         Team: fixture.teams?.name || 'Unknown',
         Opponent: fixture.opponent_name,
         Location: fixture.location || 'TBC',
@@ -128,31 +109,30 @@ export function ExportDialog({ competitionFilter = 'all' }: ExportDialogProps) {
       };
     });
 
-    // Process goal scorers, assisters, and goal details
+    // Process goal scorers and assisters
     const goalScorersMap = new Map<string, any>();
     const assistersMap = new Map<string, any>();
     const goalDetails: any[] = [];
-    const playerTimesMap = new Map<string, any>();
 
     (fixtures || []).forEach(fixture => {
       const teamName = fixture.teams?.name || 'Unknown';
       const fixtureDate = format(new Date(fixture.scheduled_date), 'dd/MM/yyyy');
+      const fixtureEvents = (events || []).filter(e => e.fixture_id === fixture.id);
       
-      fixture.match_events?.forEach(event => {
+      fixtureEvents.forEach(event => {
         if (!event.player_id || !event.players || !event.is_our_team) return;
         
         const playerId = event.player_id;
         const playerName = `${event.players.first_name} ${event.players.last_name}`;
         
         if (event.event_type === 'goal') {
-          // Add to goal details with timestamps
           goalDetails.push({
             Date: fixtureDate,
             Player: playerName,
             Team: teamName,
             Opponent: fixture.opponent_name,
-            Minute: event.minute,
-            Half: event.half === 'first' ? '1st Half' : '2nd Half',
+            Minute: event.total_match_minute,
+            'Period ID': event.period_id,
             'Penalty Goal': event.is_penalty ? 'Yes' : 'No',
             Competition: fixture.competition_name || fixture.competition_type || 'N/A'
           });
@@ -181,110 +161,42 @@ export function ExportDialog({ competitionFilter = 'all' }: ExportDialogProps) {
           assistersMap.get(playerId)!.Assists++;
         }
       });
-
     });
 
-    // Process player times using the fetched time logs
-    (playerTimeLogs || []).forEach(timeLog => {
-      if (!timeLog.player_id || !timeLog.players) return;
-      
-      const playerId = timeLog.player_id;
-      const playerName = `${timeLog.players.first_name} ${timeLog.players.last_name}`;
-      const minutes = timeLog.total_minutes || 0;
-      
-      // Find the fixture for this time log
-      const fixture = fixtures?.find(f => f.id === timeLog.fixture_id);
-      if (!fixture) return;
-      
-      const teamName = fixture.teams?.name || 'Unknown';
-      const fixtureDate = format(new Date(fixture.scheduled_date), 'dd/MM/yyyy');
-
-      // Initialize player in map if not exists
-      if (!playerTimesMap.has(playerId)) {
-        playerTimesMap.set(playerId, {
-          Player: playerName,
-          Team: teamName,
-          'Total Minutes': 0,
-          'Games Played': 0,
-          'Average Minutes': 0,
-          gameDetails: []
-        });
-      }
-
-      const playerData = playerTimesMap.get(playerId)!;
-      playerData['Total Minutes'] += minutes;
-      playerData['Games Played']++;
-      playerData.gameDetails.push({
-        Date: fixtureDate,
-        Opponent: fixture.opponent_name,
-        'Minutes Played': minutes,
-        Competition: fixture.competition_name || fixture.competition_type || 'N/A'
-      });
-    });
-
-    const goalScorers = Array.from(goalScorersMap.values())
-      .sort((a, b) => b.Goals - a.Goals);
-
-    const assisters = Array.from(assistersMap.values())
-      .sort((a, b) => b.Assists - a.Assists);
-
-    // Calculate averages for player times and create detailed breakdown
-    const playerTimesSummary: any[] = [];
+    // Process player times
     const playerTimesDetailed: any[] = [];
-    
-    playerTimesMap.forEach((playerData) => {
-      playerData['Average Minutes'] = playerData['Games Played'] > 0 ? 
-        Math.round(playerData['Total Minutes'] / playerData['Games Played']) : 0;
+    (fixtures || []).forEach(fixture => {
+      const fixturePlayerTimes = (playerTimes || []).filter(pt => pt.fixture_id === fixture.id);
       
-      // Add to summary (one row per player)
-      playerTimesSummary.push({
-        Player: playerData.Player,
-        Team: playerData.Team,
-        'Total Minutes': playerData['Total Minutes'],
-        'Games Played': playerData['Games Played'],
-        'Average Minutes': playerData['Average Minutes']
-      });
-      
-      // Add detailed breakdown (one row per game per player)
-      playerData.gameDetails.forEach((game: any) => {
+      fixturePlayerTimes.forEach(log => {
+        if (!log.player_id || !log.players) return;
+        
+        const playerName = `${log.players.first_name} ${log.players.last_name}`;
+        
         playerTimesDetailed.push({
-          Player: playerData.Player,
-          Team: playerData.Team,
-          Date: game.Date,
-          Opponent: game.Opponent,
-          Competition: game.Competition,
-          'Minutes Played': game['Minutes Played']
+          'Match Date': format(new Date(fixture.scheduled_date), 'dd/MM/yyyy'),
+          'Opponent': fixture.opponent_name,
+          'Player Name': playerName,
+          'Minutes Played': log.total_period_minutes || 0,
+          'Is Starter': log.is_starter ? 'Yes' : 'No'
         });
       });
-    });
-
-    const sortedGoalDetails = goalDetails.sort((a, b) => {
-      // Sort by date first, then by minute
-      const dateCompare = new Date(a.Date.split('/').reverse().join('-')).getTime() - 
-                         new Date(b.Date.split('/').reverse().join('-')).getTime();
-      if (dateCompare !== 0) return dateCompare;
-      return a.Minute - b.Minute;
     });
 
     return {
-      fixtures: processedFixtures,
-      goalScorers,
-      assisters,
-      goalDetails: sortedGoalDetails,
-      playerTimesSummary: playerTimesSummary.sort((a, b) => b['Total Minutes'] - a['Total Minutes']),
-      playerTimesDetailed: playerTimesDetailed.sort((a, b) => {
-        const dateCompare = new Date(a.Date.split('/').reverse().join('-')).getTime() - 
-                           new Date(b.Date.split('/').reverse().join('-')).getTime();
-        if (dateCompare !== 0) return dateCompare;
-        return a.Player.localeCompare(b.Player);
-      })
+      fixtures: fixturesData,
+      goalScorers: Array.from(goalScorersMap.values()).sort((a, b) => b.Goals - a.Goals),
+      assisters: Array.from(assistersMap.values()).sort((a, b) => b.Assists - a.Assists),
+      goalDetails: goalDetails.sort((a, b) => new Date(a.Date).getTime() - new Date(b.Date).getTime()),
+      playerTimesSummary: [], // Can be calculated if needed
+      playerTimesDetailed
     };
   };
 
   const handleExport = async () => {
     if (!startDate || !endDate) {
       toast({
-        title: "Date Range Required",
+        title: "Error",
         description: "Please select both start and end dates",
         variant: "destructive",
       });
@@ -293,7 +205,7 @@ export function ExportDialog({ competitionFilter = 'all' }: ExportDialogProps) {
 
     if (startDate > endDate) {
       toast({
-        title: "Invalid Date Range",
+        title: "Error",
         description: "Start date must be before end date",
         variant: "destructive",
       });
@@ -306,44 +218,42 @@ export function ExportDialog({ competitionFilter = 'all' }: ExportDialogProps) {
       const data = await fetchExportData(startDate, endDate);
 
       // Create workbook
-      const workbook = XLSX.utils.book_new();
+      const wb = XLSX.utils.book_new();
 
-      // Add Fixtures sheet
-      const fixturesSheet = XLSX.utils.json_to_sheet(data.fixtures);
-      XLSX.utils.book_append_sheet(workbook, fixturesSheet, 'Fixtures & Results');
+      // Add sheets
+      if (data.fixtures.length > 0) {
+        const ws = XLSX.utils.json_to_sheet(data.fixtures);
+        XLSX.utils.book_append_sheet(wb, ws, "Fixtures");
+      }
 
-      // Add Goal Scorers sheet
-      const goalScorersSheet = XLSX.utils.json_to_sheet(data.goalScorers);
-      XLSX.utils.book_append_sheet(workbook, goalScorersSheet, 'Goal Scorers');
+      if (data.goalScorers.length > 0) {
+        const ws = XLSX.utils.json_to_sheet(data.goalScorers);
+        XLSX.utils.book_append_sheet(wb, ws, "Goal Scorers");
+      }
 
-      // Add Assists sheet
-      const assistsSheet = XLSX.utils.json_to_sheet(data.assisters);
-      XLSX.utils.book_append_sheet(workbook, assistsSheet, 'Assists');
+      if (data.assisters.length > 0) {
+        const ws = XLSX.utils.json_to_sheet(data.assisters);
+        XLSX.utils.book_append_sheet(wb, ws, "Assisters");
+      }
 
-      // Add Goal Details sheet with timestamps
-      const goalDetailsSheet = XLSX.utils.json_to_sheet(data.goalDetails);
-      XLSX.utils.book_append_sheet(workbook, goalDetailsSheet, 'Goal Details');
+      if (data.goalDetails.length > 0) {
+        const ws = XLSX.utils.json_to_sheet(data.goalDetails);
+        XLSX.utils.book_append_sheet(wb, ws, "Goal Details");
+      }
 
-      // Add Player Times Summary sheet
-      const playerTimesSummarySheet = XLSX.utils.json_to_sheet(data.playerTimesSummary);
-      XLSX.utils.book_append_sheet(workbook, playerTimesSummarySheet, 'Player Times Summary');
-
-      // Add Player Times Detailed sheet
-      const playerTimesDetailedSheet = XLSX.utils.json_to_sheet(data.playerTimesDetailed);
-      XLSX.utils.book_append_sheet(workbook, playerTimesDetailedSheet, 'Player Times Detailed');
+      if (data.playerTimesDetailed.length > 0) {
+        const ws = XLSX.utils.json_to_sheet(data.playerTimesDetailed);
+        XLSX.utils.book_append_sheet(wb, ws, "Player Times");
+      }
 
       // Generate filename
-      const startDateStr = format(startDate, 'yyyy-MM-dd');
-      const endDateStr = format(endDate, 'yyyy-MM-dd');
-      const competitionStr = competitionFilter === 'all' ? 'All' : 
-        competitionFilter.replace('type:', '').replace('name:', '').replace(/:/g, '-');
-      const filename = `Match_Report_${startDateStr}_to_${endDateStr}_${competitionStr}.xlsx`;
+      const filename = `match-data-${format(startDate, 'yyyy-MM-dd')}-to-${format(endDate, 'yyyy-MM-dd')}.xlsx`;
 
-      // Download file
-      XLSX.writeFile(workbook, filename);
+      // Write file
+      XLSX.writeFile(wb, filename);
 
       toast({
-        title: "Export Successful",
+        title: "Success",
         description: `Data exported to ${filename}`,
       });
 
@@ -351,8 +261,8 @@ export function ExportDialog({ competitionFilter = 'all' }: ExportDialogProps) {
     } catch (error) {
       console.error('Export error:', error);
       toast({
-        title: "Export Failed",
-        description: "There was an error exporting the data",
+        title: "Error",
+        description: "Failed to export data. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -363,9 +273,9 @@ export function ExportDialog({ competitionFilter = 'all' }: ExportDialogProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="gap-2">
-          <FileSpreadsheet className="h-4 w-4" />
-          Export Data
+        <Button variant="outline" size="sm">
+          <FileSpreadsheet className="h-4 w-4 mr-2" />
+          Export Excel
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[500px]">
@@ -375,18 +285,17 @@ export function ExportDialog({ competitionFilter = 'all' }: ExportDialogProps) {
             Export Match Data
           </DialogTitle>
           <DialogDescription>
-            Select a date range to export fixtures, results, goal scorers, assists, goal timestamps, and player timers to Excel.
+            Export detailed match statistics to an Excel file. Select the date range for the data you want to export.
           </DialogDescription>
         </DialogHeader>
-        
+
         <div className="grid gap-4 py-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="start-date">Start Date</Label>
+              <label className="text-sm font-medium">Start Date</label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
-                    id="start-date"
                     variant="outline"
                     className={cn(
                       "w-full justify-start text-left font-normal",
@@ -394,7 +303,7 @@ export function ExportDialog({ competitionFilter = 'all' }: ExportDialogProps) {
                     )}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {startDate ? format(startDate, "PPP") : "Pick start date"}
+                    {startDate ? format(startDate, "PPP") : "Pick a date"}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
@@ -403,18 +312,16 @@ export function ExportDialog({ competitionFilter = 'all' }: ExportDialogProps) {
                     selected={startDate}
                     onSelect={setStartDate}
                     initialFocus
-                    className="pointer-events-auto"
                   />
                 </PopoverContent>
               </Popover>
             </div>
-            
+
             <div className="space-y-2">
-              <Label htmlFor="end-date">End Date</Label>
+              <label className="text-sm font-medium">End Date</label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
-                    id="end-date"
                     variant="outline"
                     className={cn(
                       "w-full justify-start text-left font-normal",
@@ -422,7 +329,7 @@ export function ExportDialog({ competitionFilter = 'all' }: ExportDialogProps) {
                     )}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {endDate ? format(endDate, "PPP") : "Pick end date"}
+                    {endDate ? format(endDate, "PPP") : "Pick a date"}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
@@ -431,49 +338,36 @@ export function ExportDialog({ competitionFilter = 'all' }: ExportDialogProps) {
                     selected={endDate}
                     onSelect={setEndDate}
                     initialFocus
-                    className="pointer-events-auto"
                   />
                 </PopoverContent>
               </Popover>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Export Will Include:</Label>
-            <ul className="text-sm text-muted-foreground space-y-1">
-              <li>• Fixtures and Results (with scores, dates, opponents)</li>
-              <li>• Goal Scorers Tally (including penalty goals)</li>
-              <li>• Assists Table</li>
-              <li>• Goal Details (with timestamps and match context)</li>
-              <li>• Player Times Summary (total and average minutes)</li>
-              <li>• Player Times Detailed (game-by-game breakdown)</li>
-              <li>• Competition and match details</li>
-            </ul>
-          </div>
+          {startDate && endDate && (
+            <div className="text-sm text-muted-foreground bg-muted p-3 rounded">
+              <strong>Export will include:</strong>
+              <ul className="mt-1 space-y-1">
+                <li>• Match fixtures and results</li>
+                <li>• Goal scorers and assists</li>
+                <li>• Detailed goal information</li>
+                <li>• Player time tracking</li>
+              </ul>
+            </div>
+          )}
         </div>
 
-        <DialogFooter>
+        <div className="flex justify-end space-x-2">
           <Button variant="outline" onClick={() => setOpen(false)}>
             Cancel
           </Button>
           <Button 
             onClick={handleExport} 
-            disabled={isExporting || !startDate || !endDate}
-            className="gap-2"
+            disabled={!startDate || !endDate || isExporting}
           >
-            {isExporting ? (
-              <>
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent" />
-                Exporting...
-              </>
-            ) : (
-              <>
-                <Download className="h-4 w-4" />
-                Export Excel
-              </>
-            )}
+            {isExporting ? "Exporting..." : "Export Excel"}
           </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );

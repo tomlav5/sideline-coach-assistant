@@ -64,7 +64,7 @@ export function useReportsData(competitionFilter: string = 'all') {
           ),
           player_time_logs!fk_player_time_logs_fixture_id (
             player_id,
-            total_minutes,
+            total_period_minutes,
             players!fk_player_time_logs_player_id (first_name, last_name)
           )
         `)
@@ -152,7 +152,7 @@ export function useReportsData(competitionFilter: string = 'all') {
           
           const playerMatches = playerMatchMap.get(playerId)!;
           const currentMatchMinutes = playerMatches.get(fixtureId) || 0;
-          playerMatches.set(fixtureId, currentMatchMinutes + (record.total_minutes || 0));
+          playerMatches.set(fixtureId, currentMatchMinutes + (record.total_period_minutes || 0));
         });
       });
 

@@ -14,8 +14,8 @@ import { ResponsiveWrapper } from '@/components/ui/responsive-wrapper';
 interface MatchEvent {
   id: string;
   event_type: string;
-  minute: number;
-  half: string;
+  total_match_minute: number;
+  period_id: string;
   is_our_team: boolean;
   is_penalty?: boolean;
   player_id?: string;
@@ -100,8 +100,8 @@ export default function MatchReport() {
         .select(`
           id,
           event_type,
-          minute,
-          half,
+          total_match_minute,
+          period_id,
           is_our_team,
           is_penalty,
           player_id,
@@ -112,7 +112,7 @@ export default function MatchReport() {
           )
         `)
         .eq('fixture_id', fixtureId)
-        .order('minute', { ascending: true });
+        .order('total_match_minute', { ascending: true });
 
       if (eventsError) throw eventsError;
       setEvents((eventsData || []) as unknown as MatchEvent[]);
@@ -122,11 +122,11 @@ export default function MatchReport() {
         .from('player_time_logs')
         .select(`
           player_id,
-          time_on,
-          time_off,
-          total_minutes,
+          time_on_minute,
+          time_off_minute,
+          total_period_minutes,
           is_starter,
-          half,
+          period_id,
           players!fk_player_time_logs_player_id (
             first_name,
             last_name,
@@ -146,18 +146,18 @@ export default function MatchReport() {
         if (!playerTimeMap.has(playerId)) {
           playerTimeMap.set(playerId, {
             player_id: playerId,
-            time_on: pt.time_on,
-            time_off: pt.time_off,
+            time_on: pt.time_on_minute,
+            time_off: pt.time_off_minute,
             total_minutes: 0,
             is_starter: pt.is_starter,
-            half: pt.half,
+            half: 'first', // Legacy support
             players: pt.players
           });
         }
         
         // Accumulate total minutes across all entries for this player
         const existingPlayer = playerTimeMap.get(playerId)!;
-        existingPlayer.total_minutes += pt.total_minutes || 0;
+        existingPlayer.total_minutes += pt.total_period_minutes || 0;
       });
       
       setPlayerTimes(Array.from(playerTimeMap.values()).sort((a, b) => {
@@ -208,7 +208,13 @@ export default function MatchReport() {
   };
 
   const getEventsByHalf = (half: string) => {
-    return events.filter(e => e.half === half);
+    // For legacy support, we'll group events by first/second half
+    // Based on minute thresholds
+    if (half === 'first') {
+      return events.filter(e => e.total_match_minute <= (fixture?.half_length || 25));
+    } else {
+      return events.filter(e => e.total_match_minute > (fixture?.half_length || 25));
+    }
   };
 
   if (loading) {
@@ -317,7 +323,7 @@ export default function MatchReport() {
                         <div key={event.id} className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm">
                           <div className="flex items-center gap-2">
                             <span className="font-mono font-bold text-xs bg-primary text-primary-foreground px-2 py-1 rounded">
-                              {event.minute}'
+                              {event.total_match_minute}'
                             </span>
                             <Target className="h-3 w-3" />
                             <span className={event.is_our_team ? 'text-green-600' : 'text-red-600'}>
@@ -351,7 +357,7 @@ export default function MatchReport() {
                         <div key={event.id} className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm">
                           <div className="flex items-center gap-2">
                             <span className="font-mono font-bold text-xs bg-primary text-primary-foreground px-2 py-1 rounded">
-                              {event.minute}'
+                              {event.total_match_minute}'
                             </span>
                             <Target className="h-3 w-3" />
                             <span className={event.is_our_team ? 'text-green-600' : 'text-red-600'}>
