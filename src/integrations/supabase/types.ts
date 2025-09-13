@@ -80,10 +80,13 @@ export type Database = {
             | Database["public"]["Enums"]["competition_type"]
             | null
           created_at: string
+          current_period_id: string | null
           fixture_type: Database["public"]["Enums"]["fixture_type"]
           half_length: number
           id: string
+          is_retrospective: boolean
           location: string | null
+          match_state: Json | null
           match_status: string | null
           opponent_name: string
           scheduled_date: string
@@ -98,10 +101,13 @@ export type Database = {
             | Database["public"]["Enums"]["competition_type"]
             | null
           created_at?: string
+          current_period_id?: string | null
           fixture_type: Database["public"]["Enums"]["fixture_type"]
           half_length?: number
           id?: string
+          is_retrospective?: boolean
           location?: string | null
+          match_state?: Json | null
           match_status?: string | null
           opponent_name: string
           scheduled_date: string
@@ -116,10 +122,13 @@ export type Database = {
             | Database["public"]["Enums"]["competition_type"]
             | null
           created_at?: string
+          current_period_id?: string | null
           fixture_type?: Database["public"]["Enums"]["fixture_type"]
           half_length?: number
           id?: string
+          is_retrospective?: boolean
           location?: string | null
+          match_state?: Json | null
           match_status?: string | null
           opponent_name?: string
           scheduled_date?: string
@@ -129,6 +138,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "fixtures_current_period_id_fkey"
+            columns: ["current_period_id"]
+            isOneToOne: false
+            referencedRelation: "match_periods"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "fixtures_team_id_fkey"
             columns: ["team_id"]
@@ -147,65 +163,151 @@ export type Database = {
       }
       match_events: {
         Row: {
+          assist_player_id: string | null
           created_at: string
-          event_type: Database["public"]["Enums"]["event_type"]
+          event_type: string
           fixture_id: string
-          half: Database["public"]["Enums"]["match_half"]
           id: string
           is_our_team: boolean
           is_penalty: boolean | null
-          minute: number
+          is_retrospective: boolean
+          minute_in_period: number
+          notes: string | null
+          period_id: string
           player_id: string | null
+          recorded_at: string
+          total_match_minute: number
+          updated_at: string
         }
         Insert: {
+          assist_player_id?: string | null
           created_at?: string
-          event_type: Database["public"]["Enums"]["event_type"]
+          event_type: string
           fixture_id: string
-          half: Database["public"]["Enums"]["match_half"]
           id?: string
           is_our_team?: boolean
           is_penalty?: boolean | null
-          minute: number
+          is_retrospective?: boolean
+          minute_in_period: number
+          notes?: string | null
+          period_id: string
           player_id?: string | null
+          recorded_at?: string
+          total_match_minute: number
+          updated_at?: string
         }
         Update: {
+          assist_player_id?: string | null
           created_at?: string
-          event_type?: Database["public"]["Enums"]["event_type"]
+          event_type?: string
           fixture_id?: string
-          half?: Database["public"]["Enums"]["match_half"]
           id?: string
           is_our_team?: boolean
           is_penalty?: boolean | null
-          minute?: number
+          is_retrospective?: boolean
+          minute_in_period?: number
+          notes?: string | null
+          period_id?: string
           player_id?: string | null
+          recorded_at?: string
+          total_match_minute?: number
+          updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "fk_match_events_fixture_id"
-            columns: ["fixture_id"]
+            foreignKeyName: "match_events_period_id_fkey"
+            columns: ["period_id"]
             isOneToOne: false
-            referencedRelation: "fixtures"
+            referencedRelation: "match_periods"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      match_periods: {
+        Row: {
+          actual_end_time: string | null
+          actual_start_time: string | null
+          created_at: string
+          fixture_id: string
+          id: string
+          is_active: boolean
+          pause_time: string | null
+          period_number: number
+          period_type: Database["public"]["Enums"]["period_type"]
+          planned_duration_minutes: number
+          total_paused_seconds: number
+          updated_at: string
+        }
+        Insert: {
+          actual_end_time?: string | null
+          actual_start_time?: string | null
+          created_at?: string
+          fixture_id: string
+          id?: string
+          is_active?: boolean
+          pause_time?: string | null
+          period_number: number
+          period_type?: Database["public"]["Enums"]["period_type"]
+          planned_duration_minutes?: number
+          total_paused_seconds?: number
+          updated_at?: string
+        }
+        Update: {
+          actual_end_time?: string | null
+          actual_start_time?: string | null
+          created_at?: string
+          fixture_id?: string
+          id?: string
+          is_active?: boolean
+          pause_time?: string | null
+          period_number?: number
+          period_type?: Database["public"]["Enums"]["period_type"]
+          planned_duration_minutes?: number
+          total_paused_seconds?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      player_match_status: {
+        Row: {
+          created_at: string
+          fixture_id: string
+          id: string
+          is_on_field: boolean
+          last_action_minute: number | null
+          last_action_period_id: string | null
+          player_id: string
+          position: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          fixture_id: string
+          id?: string
+          is_on_field?: boolean
+          last_action_minute?: number | null
+          last_action_period_id?: string | null
+          player_id: string
+          position?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          fixture_id?: string
+          id?: string
+          is_on_field?: boolean
+          last_action_minute?: number | null
+          last_action_period_id?: string | null
+          player_id?: string
+          position?: string | null
+          updated_at?: string
+        }
+        Relationships: [
           {
-            foreignKeyName: "fk_match_events_player_id"
-            columns: ["player_id"]
+            foreignKeyName: "player_match_status_last_action_period_id_fkey"
+            columns: ["last_action_period_id"]
             isOneToOne: false
-            referencedRelation: "players"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "match_events_fixture_id_fkey"
-            columns: ["fixture_id"]
-            isOneToOne: false
-            referencedRelation: "fixtures"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "match_events_player_id_fkey"
-            columns: ["player_id"]
-            isOneToOne: false
-            referencedRelation: "players"
+            referencedRelation: "match_periods"
             referencedColumns: ["id"]
           },
         ]
@@ -214,63 +316,48 @@ export type Database = {
         Row: {
           created_at: string
           fixture_id: string
-          half: Database["public"]["Enums"]["match_half"]
           id: string
+          is_active: boolean
           is_starter: boolean
+          period_id: string
           player_id: string
-          time_off: number | null
-          time_on: number | null
-          total_minutes: number | null
+          time_off_minute: number | null
+          time_on_minute: number | null
+          total_period_minutes: number | null
+          updated_at: string
         }
         Insert: {
           created_at?: string
           fixture_id: string
-          half: Database["public"]["Enums"]["match_half"]
           id?: string
+          is_active?: boolean
           is_starter?: boolean
+          period_id: string
           player_id: string
-          time_off?: number | null
-          time_on?: number | null
-          total_minutes?: number | null
+          time_off_minute?: number | null
+          time_on_minute?: number | null
+          total_period_minutes?: number | null
+          updated_at?: string
         }
         Update: {
           created_at?: string
           fixture_id?: string
-          half?: Database["public"]["Enums"]["match_half"]
           id?: string
+          is_active?: boolean
           is_starter?: boolean
+          period_id?: string
           player_id?: string
-          time_off?: number | null
-          time_on?: number | null
-          total_minutes?: number | null
+          time_off_minute?: number | null
+          time_on_minute?: number | null
+          total_period_minutes?: number | null
+          updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "fk_player_time_logs_fixture_id"
-            columns: ["fixture_id"]
+            foreignKeyName: "player_time_logs_period_id_fkey"
+            columns: ["period_id"]
             isOneToOne: false
-            referencedRelation: "fixtures"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_player_time_logs_player_id"
-            columns: ["player_id"]
-            isOneToOne: false
-            referencedRelation: "players"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "player_time_logs_fixture_id_fkey"
-            columns: ["fixture_id"]
-            isOneToOne: false
-            referencedRelation: "fixtures"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "player_time_logs_player_id_fkey"
-            columns: ["player_id"]
-            isOneToOne: false
-            referencedRelation: "players"
+            referencedRelation: "match_periods"
             referencedColumns: ["id"]
           },
         ]
@@ -468,6 +555,7 @@ export type Database = {
       fixture_type: "home" | "away"
       match_half: "first" | "second"
       match_status: "scheduled" | "in_progress" | "completed" | "cancelled"
+      period_type: "period"
       team_type: "5-a-side" | "7-a-side" | "9-a-side" | "11-a-side"
       user_role: "admin" | "official" | "viewer"
     }
@@ -610,6 +698,7 @@ export const Constants = {
       fixture_type: ["home", "away"],
       match_half: ["first", "second"],
       match_status: ["scheduled", "in_progress", "completed", "cancelled"],
+      period_type: ["period"],
       team_type: ["5-a-side", "7-a-side", "9-a-side", "11-a-side"],
       user_role: ["admin", "official", "viewer"],
     },

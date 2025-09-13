@@ -1,0 +1,320 @@
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+
+interface MatchPeriod {
+  id: string;
+  fixture_id: string;
+  period_number: number;
+  period_type: 'period';
+  planned_duration_minutes: number;
+  actual_start_time?: string;
+  actual_end_time?: string;
+  is_active: boolean;
+  pause_time?: string;
+  total_paused_seconds: number;
+}
+
+interface TimerState {
+  currentPeriod?: MatchPeriod;
+  periods: MatchPeriod[];
+  isRunning: boolean;
+  currentTime: number; // seconds in current period
+  totalMatchTime: number; // total seconds across all periods
+  matchStatus: 'not_started' | 'in_progress' | 'paused' | 'completed';
+}
+
+interface UseEnhancedMatchTimerProps {
+  fixtureId: string;
+  onSaveState?: () => void;
+}
+
+export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMatchTimerProps) {
+  const [timerState, setTimerState] = useState<TimerState>({
+    periods: [],
+    isRunning: false,
+    currentTime: 0,
+    totalMatchTime: 0,
+    matchStatus: 'not_started',
+  });
+
+  const intervalRef = useRef<NodeJS.Timeout>();
+  const pauseStartRef = useRef<number>();
+
+  // Load existing periods and state
+  const loadMatchState = useCallback(async () => {
+    try {
+      const { data: periods, error } = await supabase
+        .from('match_periods')
+        .select('*')
+        .eq('fixture_id', fixtureId)
+        .order('period_number');
+
+      if (error) throw error;
+
+      const { data: fixture, error: fixtureError } = await supabase
+        .from('fixtures')
+        .select('match_state, current_period_id')
+        .eq('id', fixtureId)
+        .single();
+
+      if (fixtureError) throw fixtureError;
+
+      const currentPeriod = periods?.find(p => p.id === fixture?.current_period_id);
+      const matchState = (fixture?.match_state as any) || { status: 'not_started', total_time_seconds: 0 };
+
+      setTimerState({
+        periods: periods || [],
+        currentPeriod,
+        isRunning: currentPeriod?.is_active || false,
+        currentTime: calculateCurrentPeriodTime(currentPeriod),
+        totalMatchTime: (matchState as any)?.total_time_seconds || 0,
+        matchStatus: (matchState as any)?.status || 'not_started',
+      });
+    } catch (error) {
+      console.error('Error loading match state:', error);
+    }
+  }, [fixtureId]);
+
+  const calculateCurrentPeriodTime = (period?: MatchPeriod): number => {
+    if (!period?.actual_start_time) return 0;
+    
+    const startTime = new Date(period.actual_start_time).getTime();
+    const now = Date.now();
+    const pausedSeconds = period.total_paused_seconds || 0;
+    
+    if (period.pause_time && period.is_active) {
+      // Currently paused
+      const pauseStart = new Date(period.pause_time).getTime();
+      return Math.floor((pauseStart - startTime) / 1000) - pausedSeconds;
+    }
+    
+    if (period.actual_end_time) {
+      // Period ended
+      const endTime = new Date(period.actual_end_time).getTime();
+      return Math.floor((endTime - startTime) / 1000) - pausedSeconds;
+    }
+    
+    // Currently running
+    return Math.floor((now - startTime) / 1000) - pausedSeconds;
+  };
+
+  // Timer effect
+  useEffect(() => {
+    if (timerState.isRunning && timerState.currentPeriod) {
+      intervalRef.current = setInterval(() => {
+        setTimerState(prev => {
+          const newCurrentTime = prev.currentTime + 1;
+          const newTotalTime = prev.totalMatchTime + 1;
+          
+          return {
+            ...prev,
+            currentTime: newCurrentTime,
+            totalMatchTime: newTotalTime,
+          };
+        });
+      }, 1000);
+    } else {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    }
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [timerState.isRunning, timerState.currentPeriod?.id]);
+
+  // Save state when important changes occur
+  useEffect(() => {
+    if (timerState.periods.length > 0) {
+      saveMatchState();
+    }
+  }, [timerState.isRunning, timerState.matchStatus, timerState.totalMatchTime]);
+
+  const saveMatchState = async () => {
+    try {
+      const { error } = await supabase
+        .from('fixtures')
+        .update({
+          match_state: {
+            status: timerState.matchStatus,
+            total_time_seconds: timerState.totalMatchTime,
+          },
+          current_period_id: timerState.currentPeriod?.id || null,
+        })
+        .eq('id', fixtureId);
+
+      if (error) throw error;
+      onSaveState?.();
+    } catch (error) {
+      console.error('Error saving match state:', error);
+    }
+  };
+
+  const startNewPeriod = async (plannedDurationMinutes: number = 25) => {
+    try {
+      const nextPeriodNumber = timerState.periods.length + 1;
+      
+      const { data: newPeriod, error } = await supabase
+        .from('match_periods')
+        .insert({
+          fixture_id: fixtureId,
+          period_number: nextPeriodNumber,
+          planned_duration_minutes: plannedDurationMinutes,
+          actual_start_time: new Date().toISOString(),
+          is_active: true,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setTimerState(prev => ({
+        ...prev,
+        periods: [...prev.periods, newPeriod],
+        currentPeriod: newPeriod,
+        isRunning: true,
+        currentTime: 0,
+        matchStatus: 'in_progress',
+      }));
+    } catch (error) {
+      console.error('Error starting new period:', error);
+    }
+  };
+
+  const pauseTimer = async () => {
+    if (!timerState.currentPeriod) return;
+
+    try {
+      pauseStartRef.current = Date.now();
+      
+      const { error } = await supabase
+        .from('match_periods')
+        .update({
+          pause_time: new Date().toISOString(),
+          is_active: false,
+        })
+        .eq('id', timerState.currentPeriod.id);
+
+      if (error) throw error;
+
+      setTimerState(prev => ({
+        ...prev,
+        isRunning: false,
+        matchStatus: 'paused',
+        currentPeriod: prev.currentPeriod ? {
+          ...prev.currentPeriod,
+          is_active: false,
+          pause_time: new Date().toISOString(),
+        } : undefined,
+      }));
+    } catch (error) {
+      console.error('Error pausing timer:', error);
+    }
+  };
+
+  const resumeTimer = async () => {
+    if (!timerState.currentPeriod) return;
+
+    try {
+      const pauseDuration = pauseStartRef.current 
+        ? Math.floor((Date.now() - pauseStartRef.current) / 1000)
+        : 0;
+
+      const { error } = await supabase
+        .from('match_periods')
+        .update({
+          pause_time: null,
+          is_active: true,
+          total_paused_seconds: timerState.currentPeriod.total_paused_seconds + pauseDuration,
+        })
+        .eq('id', timerState.currentPeriod.id);
+
+      if (error) throw error;
+
+      setTimerState(prev => ({
+        ...prev,
+        isRunning: true,
+        matchStatus: 'in_progress',
+        currentPeriod: prev.currentPeriod ? {
+          ...prev.currentPeriod,
+          is_active: true,
+          pause_time: undefined,
+          total_paused_seconds: prev.currentPeriod.total_paused_seconds + pauseDuration,
+        } : undefined,
+      }));
+
+      pauseStartRef.current = undefined;
+    } catch (error) {
+      console.error('Error resuming timer:', error);
+    }
+  };
+
+  const endCurrentPeriod = async () => {
+    if (!timerState.currentPeriod) return;
+
+    try {
+      const { error } = await supabase
+        .from('match_periods')
+        .update({
+          actual_end_time: new Date().toISOString(),
+          is_active: false,
+          pause_time: null,
+        })
+        .eq('id', timerState.currentPeriod.id);
+
+      if (error) throw error;
+
+      setTimerState(prev => ({
+        ...prev,
+        isRunning: false,
+        currentPeriod: undefined,
+        currentTime: 0,
+        matchStatus: 'paused',
+      }));
+    } catch (error) {
+      console.error('Error ending period:', error);
+    }
+  };
+
+  const endMatch = async () => {
+    if (timerState.currentPeriod) {
+      await endCurrentPeriod();
+    }
+
+    setTimerState(prev => ({
+      ...prev,
+      matchStatus: 'completed',
+      isRunning: false,
+    }));
+  };
+
+  const getCurrentMinute = () => Math.floor(timerState.currentTime / 60);
+  const getTotalMatchMinute = () => Math.floor(timerState.totalMatchTime / 60);
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Load state on mount
+  useEffect(() => {
+    loadMatchState();
+  }, [loadMatchState]);
+
+  return {
+    timerState,
+    startNewPeriod,
+    pauseTimer,
+    resumeTimer,
+    endCurrentPeriod,
+    endMatch,
+    getCurrentMinute,
+    getTotalMatchMinute,
+    formatTime,
+    loadMatchState,
+  };
+}

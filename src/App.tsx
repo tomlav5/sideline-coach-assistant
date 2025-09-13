@@ -19,6 +19,7 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const ClubManagement = lazy(() => import("./pages/ClubManagement"));
 const SquadSelection = lazy(() => import("./pages/SquadSelection"));
 const MatchTracker = lazy(() => import("./pages/MatchTracker"));
+const EnhancedMatchTracker = lazy(() => import("./pages/EnhancedMatchTracker"));
 const Reports = lazy(() => import("./pages/Reports"));
 const Settings = lazy(() => import("./pages/Settings"));
 const FixtureDetail = lazy(() => import("./pages/FixtureDetail"));
@@ -82,7 +83,7 @@ const App = () => (
             <Route path="/match-day/:fixtureId" element={
               <Layout>
                 <LazyLoader>
-                  <MatchTracker />
+                  <EnhancedMatchTracker />
                 </LazyLoader>
               </Layout>
             } />
