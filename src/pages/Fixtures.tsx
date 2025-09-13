@@ -19,6 +19,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CreateFixtureDialog } from '@/components/fixtures/CreateFixtureDialog';
 import { EditFixtureDialog } from '@/components/fixtures/EditFixtureDialog';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface Team {
   id: string;
@@ -66,6 +67,7 @@ const STATUS_COLORS = {
 export default function Fixtures() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [fixtures, setFixtures] = useState<Fixture[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
@@ -199,6 +201,9 @@ export default function Fixtures() {
       setCreateDialogOpen(false);
       resetForm();
       fetchFixtures();
+      
+      // Invalidate dashboard cache to trigger auto-refresh
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     } catch (error) {
       console.error('Error creating fixture:', error);
     } finally {
@@ -255,6 +260,9 @@ export default function Fixtures() {
       setEditingFixture(null);
       resetForm();
       fetchFixtures();
+      
+      // Invalidate dashboard cache to trigger auto-refresh
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     } catch (error) {
       console.error('Error updating fixture:', error);
     } finally {
@@ -271,6 +279,9 @@ export default function Fixtures() {
 
       if (error) throw error;
       fetchFixtures();
+      
+      // Invalidate dashboard cache to trigger auto-refresh
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     } catch (error) {
       console.error('Error cancelling fixture:', error);
     }
@@ -285,6 +296,9 @@ export default function Fixtures() {
 
       if (error) throw error;
       fetchFixtures();
+      
+      // Invalidate dashboard cache to trigger auto-refresh
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     } catch (error) {
       console.error('Error deleting fixture:', error);
     }
