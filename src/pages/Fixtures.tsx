@@ -88,7 +88,6 @@ export default function Fixtures() {
     opponent_name: string;
     location: string;
     fixture_type: 'home' | 'away';
-    half_length: number;
     competition_type: 'league' | 'tournament' | 'friendly';
     competition_name: string;
   }>({
@@ -96,7 +95,6 @@ export default function Fixtures() {
     opponent_name: '',
     location: '',
     fixture_type: 'home',
-    half_length: 25,
     competition_type: 'friendly',
     competition_name: '',
   });
@@ -183,7 +181,7 @@ export default function Fixtures() {
           opponent_name: newFixture.opponent_name.trim(),
           location: newFixture.location.trim() || null,
           fixture_type: newFixture.fixture_type,
-          half_length: newFixture.half_length,
+          half_length: 25, // Default value for backwards compatibility
           scheduled_date: scheduledDateTime.toISOString(),
           status: 'scheduled',
           competition_type: newFixture.competition_type,
@@ -218,7 +216,6 @@ export default function Fixtures() {
       opponent_name: fixture.opponent_name,
       location: fixture.location || '',
       fixture_type: fixture.fixture_type,
-      half_length: fixture.half_length,
       competition_type: fixture.competition_type,
       competition_name: fixture.competition_name || '',
     });
@@ -247,7 +244,7 @@ export default function Fixtures() {
           opponent_name: newFixture.opponent_name.trim(),
           location: newFixture.location.trim() || null,
           fixture_type: newFixture.fixture_type,
-          half_length: newFixture.half_length,
+          half_length: 25, // Default value for backwards compatibility
           scheduled_date: scheduledDateTime.toISOString(),
           competition_type: newFixture.competition_type,
           competition_name: newFixture.competition_name.trim() || null,
@@ -310,7 +307,6 @@ export default function Fixtures() {
       opponent_name: '',
       location: '',
       fixture_type: 'home',
-      half_length: 25,
       competition_type: (lastCompetition?.type || 'friendly') as 'league' | 'tournament' | 'friendly',
       competition_name: lastCompetition?.name || '',
     });
@@ -868,17 +864,6 @@ export default function Fixtures() {
                   </div>
                 )}
 
-                <div>
-                  <Label htmlFor="half_length">Half Length (minutes)</Label>
-                  <Input
-                    id="half_length"
-                    type="number"
-                    value={newFixture.half_length}
-                    onChange={(e) => setNewFixture({ ...newFixture, half_length: parseInt(e.target.value) || 25 })}
-                    min="1"
-                    max="60"
-                  />
-                </div>
                 
                 <div className="flex gap-2 pt-4">
                   <Button onClick={createFixture} disabled={creating} className="flex-1">
@@ -1033,17 +1018,6 @@ export default function Fixtures() {
                   </div>
                 )}
 
-                <div>
-                  <Label htmlFor="edit-half_length">Half Length (minutes)</Label>
-                  <Input
-                    id="edit-half_length"
-                    type="number"
-                    value={newFixture.half_length}
-                    onChange={(e) => setNewFixture({ ...newFixture, half_length: parseInt(e.target.value) || 25 })}
-                    min="1"
-                    max="60"
-                  />
-                </div>
                 
                 <div className="flex gap-2 pt-4">
                   <Button onClick={updateFixture} disabled={updating} className="flex-1">

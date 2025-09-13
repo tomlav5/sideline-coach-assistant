@@ -23,7 +23,6 @@ interface FixtureFormData {
   opponent_name: string;
   location: string;
   fixture_type: 'home' | 'away';
-  half_length: number;
   competition_type: 'league' | 'tournament' | 'friendly';
   competition_name: string;
 }
@@ -210,17 +209,6 @@ export function EditFixtureDialog({
             </div>
           )}
 
-          <div>
-            <Label htmlFor="edit-half_length">Half Length (minutes)</Label>
-            <Input
-              id="edit-half_length"
-              type="number"
-              value={fixtureData.half_length}
-              onChange={(e) => updateFixtureData({ half_length: parseInt(e.target.value) || 25 })}
-              min="1"
-              max="60"
-            />
-          </div>
           
           <div className="flex gap-2 pt-4">
             <Button onClick={onConfirm} disabled={isUpdating} className="flex-1">

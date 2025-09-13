@@ -69,11 +69,7 @@ export default function EnhancedMatchTracker() {
         .from('fixtures')
         .select(`
           *,
-          teams(*, 
-            team_players(
-              players(*)
-            )
-          )
+          teams!fk_fixtures_team_id(*)
         `)
         .eq('id', fixtureId)
         .single();
