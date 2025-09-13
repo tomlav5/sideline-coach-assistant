@@ -163,12 +163,15 @@ export function EnhancedEventDialog({
           {eventType === 'goal' && isOurTeam && (
             <div>
               <Label>Assist Player (optional)</Label>
-              <Select value={assistPlayer} onValueChange={setAssistPlayer}>
+              <Select
+                value={assistPlayer === '' ? 'none' : assistPlayer}
+                onValueChange={(v) => setAssistPlayer(v === 'none' ? '' : v)}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select assist player" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No assist</SelectItem>
+                  <SelectItem value="none">No assist</SelectItem>
                   {players
                     .filter(p => p.id !== selectedPlayer)
                     .map((player) => (

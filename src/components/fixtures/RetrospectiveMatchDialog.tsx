@@ -289,12 +289,15 @@ export function RetrospectiveMatchDialog({
                       {event.event_type === 'goal' && (
                         <div>
                           <Label>Assist (optional)</Label>
-                          <Select value={event.assist_player_id || ''} onValueChange={(value) => updateEvent(event.id, { assist_player_id: value || undefined })}>
+                          <Select
+                            value={(event.assist_player_id ?? '') === '' ? 'none' : (event.assist_player_id as string)}
+                            onValueChange={(value) => updateEvent(event.id, { assist_player_id: value === 'none' ? undefined : value })}
+                          >
                             <SelectTrigger>
                               <SelectValue placeholder="Select assist player" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="">No assist</SelectItem>
+                              <SelectItem value="none">No assist</SelectItem>
                               {players.map((player) => (
                                 <SelectItem key={player.id} value={player.id}>
                                   {player.first_name} {player.last_name}
