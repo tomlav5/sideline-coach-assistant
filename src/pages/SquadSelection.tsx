@@ -248,9 +248,9 @@ export default function SquadSelection() {
       if (error) throw error;
 
       toast({
-        title: "Squad Committed to Memory ✓",
-        description: "Squad selection has been permanently saved for this fixture and can be recalled anytime",
-        duration: 4000,
+        title: "✅ Squad Saved Successfully",
+        description: `Squad selection confirmed with ${selectedPlayers.length} players (${startingPlayers.size} starters)`,
+        duration: 3000,
       });
     } catch (error) {
       console.error('Error saving squad:', error);
@@ -446,62 +446,62 @@ export default function SquadSelection() {
                   const isStarter = startingPlayers.has(player.id);
                   
                   return (
-                    <div 
-                      key={player.id}
-                      className={`
-                        p-3 border rounded-lg cursor-pointer transition-all
-                        ${isSelected 
-                          ? isStarter 
-                            ? 'border-green-500 bg-green-50 dark:bg-green-950' 
-                            : 'border-blue-500 bg-blue-50 dark:bg-blue-950'
-                          : 'border-muted hover:border-primary'
-                        }
-                      `}
-                      onClick={() => togglePlayerSelection(player)}
-                    >
-                      <div className="flex flex-col space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium text-sm">
-                            {player.first_name} {player.last_name}
-                          </span>
-                          {player.jersey_number && (
-                            <Badge variant="outline" className="text-xs">
-                              #{player.jersey_number}
-                            </Badge>
-                          )}
-                        </div>
-                        
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-1">
-                            {isSelected ? (
-                              <UserCheck className="h-4 w-4 text-green-600" />
-                            ) : (
-                              <UserX className="h-4 w-4 text-muted-foreground" />
-                            )}
-                            <span className="text-xs text-muted-foreground">
-                              {isSelected ? 'Selected' : 'Available'}
-                            </span>
-                          </div>
-                          
-                          {isSelected && (
-                            <Button
-                              variant={isStarter ? 'default' : 'outline'}
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleStartingPlayer(player.id);
-                              }}
-                              className="h-6 px-1.5 text-xs"
-                            >
-                              <Star className="h-3 w-3" />
-                              <span className="ml-0.5">
-                                {isStarter ? 'Start' : 'Sub'}
-                              </span>
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+                     <div 
+                       key={player.id}
+                       className={`
+                         p-3 border rounded-lg cursor-pointer transition-all min-h-[80px] flex flex-col justify-between
+                         ${isSelected 
+                           ? isStarter 
+                             ? 'border-green-500 bg-green-50 dark:bg-green-950' 
+                             : 'border-blue-500 bg-blue-50 dark:bg-blue-950'
+                           : 'border-muted hover:border-primary'
+                         }
+                       `}
+                       onClick={() => togglePlayerSelection(player)}
+                     >
+                       <div className="flex flex-col space-y-2">
+                         <div className="flex items-center justify-between">
+                           <span className="font-medium text-sm">
+                             {player.first_name} {player.last_name}
+                           </span>
+                           {player.jersey_number && (
+                             <Badge variant="outline" className="text-xs">
+                               #{player.jersey_number}
+                             </Badge>
+                           )}
+                         </div>
+                         
+                         <div className="flex items-center justify-between">
+                           <div className="flex items-center space-x-1">
+                             {isSelected ? (
+                               <UserCheck className="h-4 w-4 text-green-600" />
+                             ) : (
+                               <UserX className="h-4 w-4 text-muted-foreground" />
+                             )}
+                             <span className="text-xs text-muted-foreground">
+                               {isSelected ? 'Selected' : 'Available'}
+                             </span>
+                           </div>
+                           
+                           {isSelected && (
+                             <Button
+                               variant={isStarter ? 'default' : 'outline'}
+                               size="sm"
+                               onClick={(e) => {
+                                 e.stopPropagation();
+                                 toggleStartingPlayer(player.id);
+                               }}
+                               className="h-6 px-1.5 text-xs"
+                             >
+                               <Star className="h-3 w-3" />
+                               <span className="ml-0.5">
+                                 {isStarter ? 'Start' : 'Sub'}
+                               </span>
+                             </Button>
+                           )}
+                         </div>
+                       </div>
+                     </div>
                   );
                 })}
               </div>
