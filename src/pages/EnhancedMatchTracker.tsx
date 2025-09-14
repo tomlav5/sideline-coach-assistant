@@ -182,19 +182,27 @@ export default function EnhancedMatchTracker() {
     try {
       const { data, error } = await supabase
         .from('player_match_status')
-        .select('is_on_field, players:players(*)')
+        .select('player_id, is_on_field')
         .eq('fixture_id', fixtureId);
 
       if (error) throw error;
 
-      const all = (data || []).map((row: any) => row.players).filter(Boolean) as Player[];
-      const actives = (data || []).filter((r: any) => r.is_on_field).map((r: any) => r.players).filter(Boolean) as Player[];
-      const subs = all.filter(p => !actives.find(a => a.id === p.id));
+      const rows = data || [];
+      const allIds = rows.map((r: any) => r.player_id);
+      const activeIds = rows.filter((r: any) => r.is_on_field).map((r: any) => r.player_id);
 
-      setActivePlayersList(actives);
-      setSubstitutePlayersList(subs);
+      // Use the squad players already loaded for this fixture
+      const allFromState = players.filter(p => allIds.includes(p.id));
+      const activesFromState = players.filter(p => activeIds.includes(p.id));
+      const subsFromState = allFromState.filter(p => !activeIds.includes(p.id));
+
+      setActivePlayersList(activesFromState);
+      setSubstitutePlayersList(subsFromState);
     } catch (e) {
       console.error('Error loading player statuses:', e);
+      // Fallback: no actives, all available are subs
+      setActivePlayersList([]);
+      setSubstitutePlayersList(players);
     }
   };
 

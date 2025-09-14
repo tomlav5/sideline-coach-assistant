@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
@@ -81,22 +81,8 @@ export function EnhancedEventDialog({
           setResolvedPeriod(currentPeriod);
         }
 
-        // Load active players for this fixture - fallback to all players if no status exists
-        const { data: statusRows, error } = await supabase
-          .from('player_match_status')
-          .select('is_on_field, players:players(*)')
-          .eq('fixture_id', fixtureId)
-          .eq('is_on_field', true);
-        
-        if (error) {
-          console.error('Error loading player status:', error);
-          setActivePlayers(players);
-          return;
-        }
-        
-        const actives = (statusRows || []).map((r: any) => r.players).filter(Boolean) as Player[];
-        // Always fallback to all players if no active players found
-        setActivePlayers(actives.length > 0 ? actives : players);
+        // Use players passed from parent (active players) or fallback to all available players
+        setActivePlayers(players);
       } catch (e) {
         console.error('Failed loading event context:', e);
         setResolvedPeriod(currentPeriod);
@@ -169,6 +155,7 @@ export function EnhancedEventDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Record Match Event</DialogTitle>
+          <DialogDescription>Choose team, player, and details, then record the event.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
