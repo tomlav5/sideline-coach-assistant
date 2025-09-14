@@ -85,17 +85,35 @@ export default function EnhancedMatchTracker() {
 
       setFixture(fixtureData);
 
-      // Extract players from selected squad or all team players
+      // Extract players from selected squad or all team players (support multiple schema versions)
       let squadPlayers: Player[] = [];
+      let starterIds: string[] = [];
       if (fixtureData.selected_squad_data) {
-        const squadData = fixtureData.selected_squad_data as any;
-        if (squadData.starting_players || squadData.substitute_players) {
-          squadPlayers = [
-            ...(squadData.starting_players || []),
-            ...(squadData.substitute_players || [])
-          ];
+        const sd = fixtureData.selected_squad_data as any;
+
+        const startingObjs = sd.starting_players || sd.startingLineup || sd.selectedPlayers || [];
+        const substituteObjs = sd.substitute_players || sd.substitutes || [];
+        const combinedObjs = [...(startingObjs || []), ...(substituteObjs || [])];
+
+        const selectedIds: string[] = sd.selectedPlayerIds || [];
+        const startingIdsFromObjs: string[] = (Array.isArray(sd.starting_players) ? sd.starting_players.map((p: any) => p.id) : [])
+          .concat(Array.isArray(sd.startingLineup) ? sd.startingLineup.map((p: any) => p.id) : []);
+        starterIds = sd.startingPlayerIds || startingIdsFromObjs;
+
+        if (combinedObjs.length > 0) {
+          // Players provided as objects
+          squadPlayers = combinedObjs;
+        } else if (selectedIds.length > 0) {
+          // Players provided as ids only – fetch from players table
+          const { data: playersByIds } = await supabase
+            .from('players')
+            .select('*')
+            .in('id', selectedIds);
+          squadPlayers = (playersByIds as Player[]) || [];
         }
-      } else {
+      }
+
+      if (squadPlayers.length === 0) {
         // Fallback: load all team players if no squad selected
         const { data: teamPlayersData } = await supabase
           .from('team_players')
@@ -103,11 +121,16 @@ export default function EnhancedMatchTracker() {
             players (*)
           `)
           .eq('team_id', fixtureData.team_id);
-        
         squadPlayers = teamPlayersData?.map((tp: any) => tp.players).filter(Boolean) || [];
       }
 
-      setPlayers(squadPlayers);
+      // Remove duplicates by id
+      const deduped = Array.from(new Map(squadPlayers.map(p => [p.id, p])).values());
+      setPlayers(deduped);
+      // Store starters in localStorage for debugging/consistency across tabs (optional)
+      if (starterIds.length > 0) {
+        try { localStorage.setItem(`fixture:${fixtureId}:starterIds`, JSON.stringify(starterIds)); } catch {}
+      }
 
       // Load periods
       const { data: periodsData, error: periodsError } = await supabase
@@ -161,7 +184,10 @@ export default function EnhancedMatchTracker() {
 
       if (!statusRows || statusRows.length === 0) {
         // Initialize statuses based on selected squad (starters on field)
-        const starters: string[] = (fixtureData.selected_squad_data as any)?.starting_players?.map((p: any) => p.id) || [];
+        const sd = (fixtureData.selected_squad_data as any) || {};
+        const starters: string[] = sd.startingPlayerIds ||
+          (Array.isArray(sd.starting_players) ? sd.starting_players.map((p: any) => p.id) : [])
+            .concat(Array.isArray(sd.startingLineup) ? sd.startingLineup.map((p: any) => p.id) : []);
         const rows = squadPlayers.map((p) => ({
           fixture_id: fixtureId!,
           player_id: p.id,
@@ -195,6 +221,13 @@ export default function EnhancedMatchTracker() {
       const allFromState = players.filter(p => allIds.includes(p.id));
       const activesFromState = players.filter(p => activeIds.includes(p.id));
       const subsFromState = allFromState.filter(p => !activeIds.includes(p.id));
+
+      console.log('[MatchTracker] refreshPlayerStatusLists', {
+        totalPlayers: players.length,
+        statusRows: rows.length,
+        activeCount: activesFromState.length,
+        subsCount: subsFromState.length,
+      });
 
       setActivePlayersList(activesFromState);
       setSubstitutePlayersList(subsFromState);
@@ -396,7 +429,7 @@ export default function EnhancedMatchTracker() {
         currentPeriod={currentPeriod}
         currentMinute={currentMinute}
         totalMatchMinute={totalMatchMinute}
-        players={activePlayersList}
+        players={activePlayersList.length > 0 ? activePlayersList : players}
         onEventRecorded={async () => {
           await loadEvents();
           await refreshPlayerStatusLists();
