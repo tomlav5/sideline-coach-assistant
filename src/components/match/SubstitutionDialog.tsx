@@ -8,7 +8,7 @@ interface Player {
   id: string;
   first_name: string;
   last_name: string;
-  jersey_number: number | null;
+  jersey_number?: number | null;
 }
 
 interface SubstitutionDialogProps {
