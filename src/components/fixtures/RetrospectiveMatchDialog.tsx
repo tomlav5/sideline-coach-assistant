@@ -175,7 +175,29 @@ export function RetrospectiveMatchDialog({
 
         <div className="space-y-4">
           {/* Tab Navigation */}
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              variant={currentTab === 'periods' ? 'default' : 'outline'}
+              onClick={() => setCurrentTab('periods')}
+              size="sm"
+            >
+              Periods
+            </Button>
+            <Button
+              variant={currentTab === 'events' ? 'default' : 'outline'}
+              onClick={() => setCurrentTab('events')}
+              size="sm"
+            >
+              Events
+            </Button>
+            <Button
+              variant={currentTab === 'players' ? 'default' : 'outline'}
+              onClick={() => setCurrentTab('players')}
+              size="sm"
+            >
+              Playing Time
+            </Button>
+          </div>
             <Button
               variant={currentTab === 'periods' ? 'default' : 'outline'}
               onClick={() => setCurrentTab('periods')}
@@ -203,7 +225,7 @@ export function RetrospectiveMatchDialog({
           {currentTab === 'periods' && (
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center justify-between">
+                <CardTitle className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                   <span>Match Periods</span>
                   <Button onClick={addPeriod} size="sm">
                     <Plus className="h-4 w-4 mr-1" />
@@ -245,7 +267,7 @@ export function RetrospectiveMatchDialog({
           {currentTab === 'events' && (
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center justify-between">
+                <CardTitle className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                   <span>Match Events</span>
                   <Button onClick={addEvent} size="sm">
                     <Plus className="h-4 w-4 mr-1" />
@@ -320,7 +342,7 @@ export function RetrospectiveMatchDialog({
                             <SelectContent>
                               {periods.map((period) => (
                                 <SelectItem key={period.period_number} value={period.period_number.toString()}>
-                                  Period {period.period_number}
+                                  P{period.period_number}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -379,7 +401,7 @@ export function RetrospectiveMatchDialog({
           {currentTab === 'players' && (
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center justify-between">
+                <CardTitle className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                   <span>Player Playing Time</span>
                   <Button onClick={addPlayerTime} size="sm">
                     <Plus className="h-4 w-4 mr-1" />
@@ -415,9 +437,9 @@ export function RetrospectiveMatchDialog({
                           </SelectTrigger>
                           <SelectContent>
                             {periods.map((period) => (
-                              <SelectItem key={period.period_number} value={period.period_number.toString()}>
-                                Period {period.period_number}
-                              </SelectItem>
+                                <SelectItem key={period.period_number} value={period.period_number.toString()}>
+                                  P{period.period_number}
+                                </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -482,7 +504,7 @@ export function RetrospectiveMatchDialog({
               Cancel
             </Button>
             <Button onClick={handleSave} disabled={isLoading}>
-              {isLoading ? 'Saving...' : 'Save Retrospective Data'}
+              {isLoading ? 'Saving...' : 'Save'}
             </Button>
           </div>
         </div>

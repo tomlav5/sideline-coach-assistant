@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -51,6 +51,56 @@ export function EnhancedEventDialog({
   const [customMinute, setCustomMinute] = useState('');
   const [notes, setNotes] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [resolvedPeriod, setResolvedPeriod] = useState<MatchPeriod | undefined>(currentPeriod);
+  const [activePlayers, setActivePlayers] = useState<Player[]>(players);
+
+  useEffect(() => {
+    // On open, resolve current period if not provided and load active players
+    const loadContext = async () => {
+      try {
+        // Resolve current period
+        if (!currentPeriod) {
+          const { data: fx, error: fxErr } = await supabase
+            .from('fixtures')
+            .select('current_period_id')
+            .eq('id', fixtureId)
+            .single();
+          if (fxErr) throw fxErr;
+          if (fx?.current_period_id) {
+            const { data: period, error: pErr } = await supabase
+              .from('match_periods')
+              .select('id, period_number, planned_duration_minutes')
+              .eq('id', fx.current_period_id)
+              .single();
+            if (pErr) throw pErr;
+            setResolvedPeriod(period as any);
+          } else {
+            setResolvedPeriod(undefined);
+          }
+        } else {
+          setResolvedPeriod(currentPeriod);
+        }
+
+        // Load active players for this fixture
+        const { data: statusRows, error } = await supabase
+          .from('player_match_status')
+          .select('is_on_field, players:players(*)')
+          .eq('fixture_id', fixtureId)
+          .eq('is_on_field', true);
+        if (error) throw error;
+        const actives = (statusRows || []).map((r: any) => r.players).filter(Boolean) as Player[];
+        setActivePlayers(actives.length > 0 ? actives : players);
+      } catch (e) {
+        console.error('Failed loading event context:', e);
+        setResolvedPeriod(currentPeriod);
+        setActivePlayers(players);
+      }
+    };
+
+    if (open) {
+      loadContext();
+    }
+  }, [open, fixtureId, currentPeriod, players]);
 
   const handleSubmit = async () => {
     if (!currentPeriod) {
@@ -70,12 +120,12 @@ export function EnhancedEventDialog({
       
       const eventData = {
         fixture_id: fixtureId,
-        period_id: currentPeriod.id,
+        period_id: (resolvedPeriod || currentPeriod)!.id,
         event_type: eventType,
         player_id: selectedPlayer || null,
         assist_player_id: assistPlayer || null,
         minute_in_period: minuteToUse,
-        total_match_minute: totalMatchMinute + (parseInt(customMinute || '0') - currentMinute),
+        total_match_minute: customMinute ? totalMatchMinute + (parseInt(customMinute) - currentMinute) : totalMatchMinute,
         is_our_team: isOurTeam,
         is_penalty: eventType === 'goal' ? isPenalty : false,
         notes: notes || null,
@@ -135,17 +185,17 @@ export function EnhancedEventDialog({
             <div className="flex gap-2">
               <Button
                 type="button"
-                variant={isOurTeam ? "default" : "outline"}
+                variant={isOurTeam ? 'default' : 'outline'}
                 onClick={() => setIsOurTeam(true)}
-                className={`flex-1 ${isOurTeam ? 'bg-green-600 hover:bg-green-700 text-white' : 'hover:bg-green-50 hover:text-green-700 hover:border-green-300'}`}
+                className="flex-1"
               >
                 Our Team
               </Button>
               <Button
                 type="button"
-                variant={!isOurTeam ? "default" : "outline"}
+                variant={!isOurTeam ? 'destructive' : 'outline'}
                 onClick={() => setIsOurTeam(false)}
-                className={`flex-1 ${!isOurTeam ? 'bg-red-600 hover:bg-red-700 text-white' : 'hover:bg-red-50 hover:text-red-700 hover:border-red-300'}`}
+                className="flex-1"
               >
                 Opponent
               </Button>
@@ -161,7 +211,7 @@ export function EnhancedEventDialog({
                   <SelectValue placeholder="Select player" />
                 </SelectTrigger>
                 <SelectContent>
-                  {players.map((player) => (
+                  {activePlayers.map((player) => (
                     <SelectItem key={player.id} value={player.id}>
                       {player.first_name} {player.last_name}
                       {player.jersey_number && ` (#${player.jersey_number})`}
@@ -185,7 +235,7 @@ export function EnhancedEventDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">No assist</SelectItem>
-                  {players
+                  {activePlayers
                     .filter(p => p.id !== selectedPlayer)
                     .map((player) => (
                     <SelectItem key={player.id} value={player.id}>
@@ -234,9 +284,9 @@ export function EnhancedEventDialog({
           </div>
 
           {/* Current Context */}
-          {currentPeriod && (
+          {resolvedPeriod && (
             <div className="text-sm text-muted-foreground p-2 bg-muted rounded">
-              Period {currentPeriod.period_number} • Minute {currentMinute} • Total Match Minute {totalMatchMinute}
+              P{resolvedPeriod.period_number} • Minute {currentMinute} • Total {totalMatchMinute}
             </div>
           )}
 
@@ -244,7 +294,7 @@ export function EnhancedEventDialog({
           <div className="flex gap-2">
             <Button
               onClick={handleSubmit}
-              disabled={isLoading || !currentPeriod}
+              disabled={isLoading || !resolvedPeriod}
               className="flex-1"
             >
               {isLoading ? 'Recording...' : `Record ${eventType.charAt(0).toUpperCase() + eventType.slice(1)}`}

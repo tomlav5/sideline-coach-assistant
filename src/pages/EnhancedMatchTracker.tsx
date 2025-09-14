@@ -4,11 +4,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { EnhancedMatchControls } from '@/components/match/EnhancedMatchControls';
 import { EnhancedEventDialog } from '@/components/match/EnhancedEventDialog';
 import { RetrospectiveMatchDialog } from '@/components/fixtures/RetrospectiveMatchDialog';
+import { SubstitutionDialog } from '@/components/match/SubstitutionDialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Clock, Users, Target, History } from 'lucide-react';
+import { Clock, Users, Target, History, ArrowUpDown } from 'lucide-react';
 
 interface Player {
   id: string;
@@ -54,6 +55,12 @@ export default function EnhancedMatchTracker() {
   const [currentPeriodNumber, setCurrentPeriodNumber] = useState(0);
   const [loading, setLoading] = useState(true);
 
+  // Substitution state
+  const [subDialogOpen, setSubDialogOpen] = useState(false);
+  const [playerOut, setPlayerOut] = useState('');
+  const [playerIn, setPlayerIn] = useState('');
+  const [activePlayersList, setActivePlayersList] = useState<Player[]>([]);
+  const [substitutePlayersList, setSubstitutePlayersList] = useState<Player[]>([]);
   useEffect(() => {
     if (fixtureId) {
       loadMatchData();
@@ -142,13 +149,66 @@ export default function EnhancedMatchTracker() {
     }
   };
 
+  // Ensure player status exists and refresh active/sub lists
+  const ensurePlayerStatuses = async (fixtureData: any, squadPlayers: Player[]) => {
+    try {
+      const { data: statusRows, error } = await supabase
+        .from('player_match_status')
+        .select('id')
+        .eq('fixture_id', fixtureId);
+
+      if (error) throw error;
+
+      if (!statusRows || statusRows.length === 0) {
+        // Initialize statuses based on selected squad (starters on field)
+        const starters: string[] = (fixtureData.selected_squad_data as any)?.starting_players?.map((p: any) => p.id) || [];
+        const rows = squadPlayers.map((p) => ({
+          fixture_id: fixtureId!,
+          player_id: p.id,
+          is_on_field: starters.includes(p.id),
+        }));
+        const { error: insertErr } = await supabase.from('player_match_status').insert(rows);
+        if (insertErr) throw insertErr;
+      }
+
+      await refreshPlayerStatusLists();
+    } catch (e) {
+      console.error('Error ensuring player statuses:', e);
+      toast.error('Failed to prepare player statuses');
+    }
+  };
+
+  const refreshPlayerStatusLists = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('player_match_status')
+        .select('is_on_field, players:players(*)')
+        .eq('fixture_id', fixtureId);
+
+      if (error) throw error;
+
+      const all = (data || []).map((row: any) => row.players).filter(Boolean) as Player[];
+      const actives = (data || []).filter((r: any) => r.is_on_field).map((r: any) => r.players).filter(Boolean) as Player[];
+      const subs = all.filter(p => !actives.find(a => a.id === p.id));
+
+      setActivePlayersList(actives);
+      setSubstitutePlayersList(subs);
+    } catch (e) {
+      console.error('Error loading player statuses:', e);
+    }
+  };
+
   const handleTimerUpdate = (minute: number, totalMinute: number, periodNumber: number) => {
     setCurrentMinute(minute);
     setTotalMatchMinute(totalMinute);
     setCurrentPeriodNumber(periodNumber);
   };
-
   const currentPeriod = periods.find(p => p.is_active) || (periods.length > 0 ? periods[periods.length - 1] : null);
+
+  // Keep player status lists fresh when periods change (e.g., after starting a new one)
+  useEffect(() => {
+    refreshPlayerStatusLists();
+  }, [periods.length]);
 
   const ourGoals = events.filter(e => e.event_type === 'goal' && e.is_our_team).length;
   const opponentGoals = events.filter(e => e.event_type === 'goal' && !e.is_our_team).length;
@@ -174,7 +234,7 @@ export default function EnhancedMatchTracker() {
       {/* Match Header */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center justify-between">
+          <CardTitle className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-4">
             <div>
               {fixture.teams?.name} vs {fixture.opponent_name}
             </div>
@@ -210,11 +270,10 @@ export default function EnhancedMatchTracker() {
       />
 
       {/* Action Buttons */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         <Button
           onClick={() => setShowEventDialog(true)}
-          disabled={!currentPeriod}
-          className="flex items-center gap-2"
+          className="flex items-center gap-2 w-full"
         >
           <Target className="h-4 w-4" />
           Record Event
@@ -223,15 +282,25 @@ export default function EnhancedMatchTracker() {
         <Button
           onClick={() => setShowRetrospectiveDialog(true)}
           variant="outline"
-          className="flex items-center gap-2"
+          className="flex items-center gap-2 w-full"
         >
           <History className="h-4 w-4" />
           Record Event Manually
         </Button>
 
         <Button
+          onClick={() => setSubDialogOpen(true)}
+          variant="secondary"
+          className="flex items-center gap-2 w-full"
+        >
+          <ArrowUpDown className="h-4 w-4" />
+          Substitution
+        </Button>
+
+        <Button
           onClick={() => navigate(`/match-report/${fixtureId}`)}
           variant="outline"
+          className="w-full"
         >
           View Report
         </Button>
@@ -282,8 +351,56 @@ export default function EnhancedMatchTracker() {
         currentPeriod={currentPeriod}
         currentMinute={currentMinute}
         totalMatchMinute={totalMatchMinute}
-        players={players}
-        onEventRecorded={loadEvents}
+        players={activePlayersList}
+        onEventRecorded={async () => {
+          await loadEvents();
+          await refreshPlayerStatusLists();
+        }}
+      />
+
+      {/* Substitution Dialog */}
+      <SubstitutionDialog
+        open={subDialogOpen}
+        onOpenChange={setSubDialogOpen}
+        playerOut={playerOut}
+        playerIn={playerIn}
+        onPlayersChange={(outId, inId) => {
+          setPlayerOut(outId);
+          setPlayerIn(inId);
+        }}
+        activePlayers={activePlayersList}
+        substitutePlayers={substitutePlayersList}
+        onConfirm={async () => {
+          try {
+            if (!playerOut || !playerIn) {
+              toast.error('Select both players to make a substitution');
+              return;
+            }
+            // Update statuses
+            const { error: outErr } = await supabase
+              .from('player_match_status')
+              .update({ is_on_field: false })
+              .eq('fixture_id', fixtureId)
+              .eq('player_id', playerOut);
+            if (outErr) throw outErr;
+
+            const { error: inErr } = await supabase
+              .from('player_match_status')
+              .update({ is_on_field: true })
+              .eq('fixture_id', fixtureId)
+              .eq('player_id', playerIn);
+            if (inErr) throw inErr;
+
+            toast.success('Substitution made');
+            setSubDialogOpen(false);
+            setPlayerOut('');
+            setPlayerIn('');
+            await refreshPlayerStatusLists();
+          } catch (e) {
+            console.error('Error making substitution:', e);
+            toast.error('Failed to make substitution');
+          }
+        }}
       />
 
       {/* Retrospective Dialog */}
