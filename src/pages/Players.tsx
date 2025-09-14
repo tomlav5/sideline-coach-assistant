@@ -188,9 +188,21 @@ export default function Players() {
           <Skeleton className="h-8 w-32" />
           <Skeleton className="h-10 w-32" />
         </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="bg-card border border-border rounded-lg overflow-hidden">
           {[...Array(6)].map((_, i) => (
-            <Skeleton key={i} className="h-40" />
+            <div key={i} className="border-b border-border py-3 px-4">
+              <div className="flex items-center gap-3">
+                <Skeleton className="h-4 w-4 rounded" />
+                <div className="flex-1">
+                  <Skeleton className="h-4 w-48 mb-2" />
+                  <Skeleton className="h-3 w-32" />
+                </div>
+                <div className="flex gap-1">
+                  <Skeleton className="h-8 w-8 rounded" />
+                  <Skeleton className="h-8 w-8 rounded" />
+                </div>
+              </div>
+            </div>
           ))}
         </div>
       </div>
@@ -273,8 +285,8 @@ export default function Players() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
-          {filteredPlayers.map((player) => (
+        <div className="bg-card border border-border rounded-lg overflow-hidden">
+          {filteredPlayers.map((player, index) => (
             <PlayerCard
               key={player.id}
               player={player}

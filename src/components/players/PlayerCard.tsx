@@ -76,31 +76,31 @@ export function PlayerCard({
 
   return (
     <>
-      <Card className={`hover:shadow-md transition-shadow ${isSelected ? 'ring-2 ring-primary' : ''}`}>
-        <CardContent className="p-4">
-          <div className="flex items-center gap-3">
-            {onSelectionChange && (
-              <input
-                type="checkbox"
-                checked={isSelected}
-                onChange={(e) => onSelectionChange(player, e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300"
-              />
-            )}
-            
-            <div className="flex-1 min-w-0">
+      <div className={`border-b border-border py-3 px-4 hover:bg-muted/50 transition-colors ${isSelected ? 'bg-accent/50' : ''}`}>
+        <div className="flex items-center gap-3">
+          {onSelectionChange && (
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={(e) => onSelectionChange(player, e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 flex-shrink-0"
+            />
+          )}
+          
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
               <div className="flex items-center gap-2">
-                <h3 className="font-medium text-sm truncate">
+                <h3 className="font-medium text-sm">
                   {player.first_name} {player.last_name}
                 </h3>
                 {player.jersey_number && (
-                  <Badge variant="outline" className="text-xs px-1 py-0">
+                  <Badge variant="outline" className="text-xs px-1.5 py-0 flex-shrink-0">
                     #{player.jersey_number}
                   </Badge>
                 )}
               </div>
               
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
                 <p className="text-xs text-muted-foreground">{player.club.name}</p>
                 {player.teams && player.teams.length > 0 && (
                   <div className="flex flex-wrap gap-1">
@@ -108,7 +108,7 @@ export function PlayerCard({
                       <Badge 
                         key={team.id} 
                         variant="secondary" 
-                        className="text-xs px-1 py-0 flex items-center gap-1 group hover:bg-destructive hover:text-destructive-foreground"
+                        className="text-xs px-1.5 py-0 flex items-center gap-1 group hover:bg-destructive hover:text-destructive-foreground"
                       >
                         <span>{team.name}</span>
                         <button
@@ -126,28 +126,28 @@ export function PlayerCard({
                 )}
               </div>
             </div>
-
-            <div className="flex gap-1">
-              <Button 
-                size="sm" 
-                variant="ghost"
-                onClick={() => onTeamAssignment(player)}
-                className="h-8 w-8 p-0"
-              >
-                <Users className="h-3 w-3" />
-              </Button>
-              <Button 
-                size="sm" 
-                variant="ghost"
-                onClick={() => setSettingsOpen(true)}
-                className="h-8 w-8 p-0"
-              >
-                <Settings className="h-3 w-3" />
-              </Button>
-            </div>
           </div>
-        </CardContent>
-      </Card>
+
+          <div className="flex gap-1 flex-shrink-0">
+            <Button 
+              size="sm" 
+              variant="ghost"
+              onClick={() => onTeamAssignment(player)}
+              className="h-8 w-8 p-0"
+            >
+              <Users className="h-3 w-3" />
+            </Button>
+            <Button 
+              size="sm" 
+              variant="ghost"
+              onClick={() => setSettingsOpen(true)}
+              className="h-8 w-8 p-0"
+            >
+              <Settings className="h-3 w-3" />
+            </Button>
+          </div>
+        </div>
+      </div>
 
       <PlayerSettings
         player={player}
