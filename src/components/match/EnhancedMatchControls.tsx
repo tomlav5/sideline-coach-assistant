@@ -37,11 +37,12 @@ export function EnhancedMatchControls({ fixtureId, onTimerUpdate }: EnhancedMatc
     await startNewPeriod();
   };
 
-  const canStartNewPeriod = !timerState.isRunning && timerState.matchStatus !== 'completed';
-  const canPause = timerState.isRunning;
-  const canResume = timerState.matchStatus === 'paused' && timerState.currentPeriod;
-  const canEndPeriod = timerState.currentPeriod && !timerState.isRunning;
-  const canEndMatch = timerState.periods.length > 0;
+  // Simplified button logic
+  const canStartPeriod = !timerState.currentPeriod && timerState.matchStatus !== 'completed';
+  const canPausePeriod = timerState.isRunning && timerState.currentPeriod;
+  const canResumePeriod = timerState.matchStatus === 'paused' && timerState.currentPeriod;
+  const canEndPeriod = timerState.currentPeriod;
+  const canEndMatch = timerState.periods.length > 0 && timerState.matchStatus !== 'completed';
 
   return (
     <Card>
@@ -54,14 +55,28 @@ export function EnhancedMatchControls({ fixtureId, onTimerUpdate }: EnhancedMatc
       <CardContent className="space-y-4">
         {/* Timer Display */}
         <div className="text-center space-y-2">
-          <div className="text-3xl font-mono font-bold">
-            {formatTime(timerState.currentTime)}
-          </div>
-          {timerState.currentPeriod && (
-            <div className="text-sm text-muted-foreground">
-              Period {timerState.currentPeriod.period_number} • Total: {formatTime(timerState.totalMatchTime)}
+          <div className="grid grid-cols-2 gap-4 text-center">
+            <div>
+              <div className="text-sm text-muted-foreground">Period Time</div>
+              <div className="text-2xl font-mono font-bold">
+                {formatTime(timerState.currentTime)}
+              </div>
+              {timerState.currentPeriod && (
+                <div className="text-xs text-muted-foreground">
+                  P{timerState.currentPeriod.period_number}
+                </div>
+              )}
             </div>
-          )}
+            <div>
+              <div className="text-sm text-muted-foreground">Total Time</div>
+              <div className="text-2xl font-mono font-bold">
+                {formatTime(timerState.totalMatchTime)}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Match
+              </div>
+            </div>
+          </div>
           <Badge variant={
             timerState.matchStatus === 'in_progress' ? 'default' :
             timerState.matchStatus === 'paused' ? 'secondary' :
@@ -91,58 +106,70 @@ export function EnhancedMatchControls({ fixtureId, onTimerUpdate }: EnhancedMatc
         )}
 
         {/* Control Buttons */}
-        <div className="grid grid-cols-2 gap-2">
-          {/* Start New Period */}
-          <Button
-            onClick={handleStartNewPeriod}
-            variant="outline"
-            disabled={!canStartNewPeriod}
-            className="flex items-center gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            New Period
-          </Button>
-
-          {/* Pause/Resume */}
-          {canPause && (
-            <Button onClick={pauseTimer} variant="secondary" className="flex items-center gap-2">
-              <Pause className="h-4 w-4" />
-              Pause
-            </Button>
-          )}
-
-          {canResume && (
-            <Button onClick={resumeTimer} className="flex items-center gap-2">
+        <div className="space-y-2">
+          {/* Start Period / Pause Period Button */}
+          {canStartPeriod && (
+            <Button
+              onClick={handleStartNewPeriod}
+              className="w-full flex items-center justify-center gap-2"
+              size="lg"
+            >
               <Play className="h-4 w-4" />
-              Resume
+              Start Period
             </Button>
           )}
 
-          {/* End Period */}
+          {canPausePeriod && (
+            <Button
+              onClick={pauseTimer}
+              variant="secondary"
+              className="w-full flex items-center justify-center gap-2"
+              size="lg"
+            >
+              <Pause className="h-4 w-4" />
+              Pause Period
+            </Button>
+          )}
+
+          {canResumePeriod && (
+            <Button
+              onClick={resumeTimer}
+              className="w-full flex items-center justify-center gap-2"
+              size="lg"
+            >
+              <Play className="h-4 w-4" />
+              Resume Period
+            </Button>
+          )}
+
+          {/* End Period Button */}
           {canEndPeriod && (
-            <Button onClick={endCurrentPeriod} variant="outline" className="flex items-center gap-2">
+            <Button
+              onClick={endCurrentPeriod}
+              variant="outline"
+              className="w-full flex items-center justify-center gap-2"
+            >
               <Square className="h-4 w-4" />
               End Period
             </Button>
           )}
 
-          {/* End Match */}
-          {canEndMatch && (
-            <Button
-              onClick={endMatch}
-              variant="destructive"
-              className="col-span-2 flex items-center gap-2"
-            >
-              <Square className="h-4 w-4" />
-              End Match
-            </Button>
-          )}
+          {/* End Match Button */}
+          <Button
+            onClick={endMatch}
+            variant="destructive"
+            disabled={!canEndMatch}
+            className="w-full flex items-center justify-center gap-2"
+          >
+            <Square className="h-4 w-4" />
+            End Match
+          </Button>
         </div>
 
         {/* Instructions */}
         {timerState.matchStatus === 'not_started' && (
           <div className="text-sm text-muted-foreground text-center p-4 bg-muted rounded-lg">
-            Click "New Period" to start the first period of the match
+            Click "Start Period" to begin the first period of the match
           </div>
         )}
       </CardContent>

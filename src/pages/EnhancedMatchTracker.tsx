@@ -198,10 +198,41 @@ export default function EnhancedMatchTracker() {
     }
   };
 
-  const handleTimerUpdate = (minute: number, totalMinute: number, periodNumber: number) => {
+  const handleTimerUpdate = async (minute: number, totalMinute: number, periodNumber: number) => {
     setCurrentMinute(minute);
     setTotalMatchMinute(totalMinute);
     setCurrentPeriodNumber(periodNumber);
+    
+    // Update player times when timer updates - ensure sync
+    if (activePlayersList.length > 0 && periodNumber > 0) {
+      try {
+        const { data: currentPeriod } = await supabase
+          .from('match_periods')
+          .select('id')
+          .eq('fixture_id', fixtureId)
+          .eq('period_number', periodNumber)
+          .single();
+
+        if (currentPeriod) {
+          // Update active player time logs to stay synchronized
+          for (const player of activePlayersList) {
+            await supabase
+              .from('player_time_logs')
+              .upsert({
+                fixture_id: fixtureId,
+                player_id: player.id,
+                period_id: currentPeriod.id,
+                total_period_minutes: minute,
+                is_active: true,
+              }, {
+                onConflict: 'fixture_id,player_id,period_id'
+              });
+          }
+        }
+      } catch (error) {
+        console.error('Error synchronizing player times:', error);
+      }
+    }
   };
   const currentPeriod = periods.find(p => p.is_active) || (periods.length > 0 ? periods[periods.length - 1] : null);
 

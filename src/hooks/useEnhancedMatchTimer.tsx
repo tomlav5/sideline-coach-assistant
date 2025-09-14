@@ -61,13 +61,27 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
 
       const currentPeriod = periods?.find(p => p.id === fixture?.current_period_id);
       const matchState = (fixture?.match_state as any) || { status: 'not_started', total_time_seconds: 0 };
+      
+      // Calculate total match time from all completed periods plus current period
+      let totalTime = 0;
+      periods?.forEach(p => {
+        if (p.actual_end_time) {
+          // Completed period
+          const start = new Date(p.actual_start_time!).getTime();
+          const end = new Date(p.actual_end_time).getTime();
+          totalTime += Math.floor((end - start) / 1000) - (p.total_paused_seconds || 0);
+        } else if (p.id === currentPeriod?.id && p.actual_start_time) {
+          // Current active period
+          totalTime += calculateCurrentPeriodTime(p);
+        }
+      });
 
       setTimerState({
         periods: periods || [],
         currentPeriod,
         isRunning: currentPeriod?.is_active || false,
         currentTime: calculateCurrentPeriodTime(currentPeriod),
-        totalMatchTime: (matchState as any)?.total_time_seconds || 0,
+        totalMatchTime: totalTime,
         matchStatus: (matchState as any)?.status || 'not_started',
       });
     } catch (error) {
@@ -79,10 +93,9 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
     if (!period?.actual_start_time) return 0;
     
     const startTime = new Date(period.actual_start_time).getTime();
-    const now = Date.now();
     const pausedSeconds = period.total_paused_seconds || 0;
     
-    if (period.pause_time && period.is_active) {
+    if (period.pause_time && !period.is_active) {
       // Currently paused
       const pauseStart = new Date(period.pause_time).getTime();
       return Math.floor((pauseStart - startTime) / 1000) - pausedSeconds;
@@ -95,23 +108,19 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
     }
     
     // Currently running
+    const now = Date.now();
     return Math.floor((now - startTime) / 1000) - pausedSeconds;
   };
 
-  // Timer effect
+  // Timer effect - synchronized timers
   useEffect(() => {
     if (timerState.isRunning && timerState.currentPeriod) {
       intervalRef.current = setInterval(() => {
-        setTimerState(prev => {
-          const newCurrentTime = prev.currentTime + 1;
-          const newTotalTime = prev.totalMatchTime + 1;
-          
-          return {
-            ...prev,
-            currentTime: newCurrentTime,
-            totalMatchTime: newTotalTime,
-          };
-        });
+        setTimerState(prev => ({
+          ...prev,
+          currentTime: prev.currentTime + 1,
+          totalMatchTime: prev.totalMatchTime + 1,
+        }));
       }, 1000);
     } else {
       if (intervalRef.current) {
