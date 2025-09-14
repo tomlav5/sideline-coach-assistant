@@ -198,28 +198,6 @@ export function RetrospectiveMatchDialog({
               Playing Time
             </Button>
           </div>
-            <Button
-              variant={currentTab === 'periods' ? 'default' : 'outline'}
-              onClick={() => setCurrentTab('periods')}
-              size="sm"
-            >
-              Periods
-            </Button>
-            <Button
-              variant={currentTab === 'events' ? 'default' : 'outline'}
-              onClick={() => setCurrentTab('events')}
-              size="sm"
-            >
-              Events
-            </Button>
-            <Button
-              variant={currentTab === 'players' ? 'default' : 'outline'}
-              onClick={() => setCurrentTab('players')}
-              size="sm"
-            >
-              Playing Time
-            </Button>
-          </div>
 
           {/* Periods Tab */}
           {currentTab === 'periods' && (
