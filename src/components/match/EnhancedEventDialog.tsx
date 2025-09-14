@@ -81,14 +81,21 @@ export function EnhancedEventDialog({
           setResolvedPeriod(currentPeriod);
         }
 
-        // Load active players for this fixture
+        // Load active players for this fixture - fallback to all players if no status exists
         const { data: statusRows, error } = await supabase
           .from('player_match_status')
           .select('is_on_field, players:players(*)')
           .eq('fixture_id', fixtureId)
           .eq('is_on_field', true);
-        if (error) throw error;
+        
+        if (error) {
+          console.error('Error loading player status:', error);
+          setActivePlayers(players);
+          return;
+        }
+        
         const actives = (statusRows || []).map((r: any) => r.players).filter(Boolean) as Player[];
+        // Always fallback to all players if no active players found
         setActivePlayers(actives.length > 0 ? actives : players);
       } catch (e) {
         console.error('Failed loading event context:', e);

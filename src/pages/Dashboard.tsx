@@ -8,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { cleanupOrphanedMatchData } from '@/utils/matchStorageCleanup';
+import { useLiveMatchDetection } from '@/hooks/useLiveMatchDetection';
 
 interface Club {
   id: string;
@@ -38,6 +39,7 @@ interface ActiveMatch {
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { data: liveMatchData } = useLiveMatchDetection();
   const [clubs, setClubs] = useState<Club[]>([]);
   const [stats, setStats] = useState<DashboardStats>({
     clubs: 0,
@@ -71,9 +73,6 @@ export default function Dashboard() {
 
         // Clean up any orphaned match data first
         await cleanupOrphanedMatchData();
-
-        // Check for active match
-        await checkActiveMatch(clubsData?.map(club => club.id) || []);
 
         // Fetch aggregate stats
         const clubIds = clubsData?.map(club => club.id) || [];
@@ -215,13 +214,13 @@ export default function Dashboard() {
   };
 
   const resumeMatch = () => {
-    if (activeMatch) {
-      navigate(`/match-day/${activeMatch.id}`);
+    if (liveMatchData?.liveMatchId) {
+      navigate(`/match-day/${liveMatchData.liveMatchId}`);
     }
   };
 
   const ActiveMatchCard = () => {
-    if (!activeMatch) return null;
+    if (!liveMatchData?.hasLiveMatch) return null;
 
     return (
       <Card className="mb-6 border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950">
@@ -229,10 +228,10 @@ export default function Dashboard() {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <div className="h-3 w-3 bg-orange-500 rounded-full animate-pulse"></div>
-              <CardTitle className="text-orange-800 dark:text-orange-200">Active Match</CardTitle>
+              <CardTitle className="text-orange-800 dark:text-orange-200">Live Match Available</CardTitle>
             </div>
             <Badge variant="secondary" className="bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
-              {activeMatch.match_status === 'in_progress' ? 'In Progress' : 'Resumable'}
+              {liveMatchData?.matchType === 'database' ? 'In Progress' : 'Resumable'}
             </Badge>
           </div>
         </CardHeader>
@@ -240,20 +239,13 @@ export default function Dashboard() {
           <div className="space-y-3">
             <div>
               <h3 className="text-lg font-semibold text-orange-900 dark:text-orange-100">
-                {activeMatch.team.name} vs {activeMatch.opponent_name}
+                Match tracking session detected
               </h3>
-            </div>
-            <div className="flex items-center space-x-4 text-sm text-orange-700 dark:text-orange-300">
-              <div className="flex items-center space-x-1">
-                <Calendar className="h-4 w-4" />
-                <span>{format(new Date(activeMatch.scheduled_date), 'MMM d, h:mm a')}</span>
-              </div>
-              {activeMatch.location && (
-                <div className="flex items-center space-x-1">
-                  <MapPin className="h-4 w-4" />
-                  <span>{activeMatch.location}</span>
-                </div>
-              )}
+              <p className="text-sm text-orange-700 dark:text-orange-300">
+                {liveMatchData?.matchType === 'database' 
+                  ? 'An active match is currently in progress in the database.'
+                  : 'A recent match session was found and can be resumed.'}
+              </p>
             </div>
             <div className="flex gap-2">
               <Button onClick={resumeMatch} className="bg-orange-600 hover:bg-orange-700 text-white">
@@ -262,7 +254,7 @@ export default function Dashboard() {
               </Button>
               <Button 
                 variant="outline" 
-                onClick={() => navigate(`/fixtures/${activeMatch.id}`)}
+                onClick={() => navigate(`/fixtures/${liveMatchData?.liveMatchId}`)}
                 className="border-orange-300 text-orange-700 hover:bg-orange-100"
               >
                 View Details

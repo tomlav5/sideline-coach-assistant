@@ -1,7 +1,8 @@
 import { memo, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { useOptimizedDashboardStats, useLiveMatchCheck } from '@/hooks/useOptimizedDashboard';
+import { useOptimizedDashboardStats } from '@/hooks/useOptimizedDashboard';
+import { useLiveMatchDetection } from '@/hooks/useLiveMatchDetection';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Calendar, Users, Play, BarChart3, Settings2 } from 'lucide-react';
@@ -13,7 +14,7 @@ const OptimizedIndex = memo(() => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { data: stats, isLoading: statsLoading } = useOptimizedDashboardStats();
-  const { data: liveMatchData } = useLiveMatchCheck();
+  const { data: liveMatchData } = useLiveMatchDetection();
   
   // Extract first name from user profile or metadata
   const firstName = useMemo(() => 

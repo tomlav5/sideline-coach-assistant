@@ -20,6 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CreateFixtureDialog } from '@/components/fixtures/CreateFixtureDialog';
 import { EditFixtureDialog } from '@/components/fixtures/EditFixtureDialog';
 import { useQueryClient } from '@tanstack/react-query';
+import { useLiveMatchDetection } from '@/hooks/useLiveMatchDetection';
 
 interface Team {
   id: string;
@@ -37,6 +38,7 @@ interface Fixture {
   location: string | null;
   fixture_type: 'home' | 'away';
   status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
+  match_status?: string;
   half_length: number;
   team_id: string;
   team: Team;
@@ -68,6 +70,7 @@ export default function Fixtures() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { data: liveMatchData } = useLiveMatchDetection();
   const [fixtures, setFixtures] = useState<Fixture[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
@@ -549,7 +552,7 @@ export default function Fixtures() {
                               }
                             }}>
                               <Play className="h-4 w-4 mr-2" />
-                              Start Match
+                              {fixture.match_status === 'in_progress' ? 'Resume Match' : 'Start Match'}
                             </DropdownMenuItem>
                           </>
                         )}
@@ -610,6 +613,33 @@ export default function Fixtures() {
 
   return (
     <div className="container mx-auto p-3 sm:p-4 space-y-4 sm:space-y-6 max-w-full overflow-hidden">
+      {/* Live Match Banner */}
+      {liveMatchData?.hasLiveMatch && liveMatchData.liveMatchId && (
+        <Card className="border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="h-3 w-3 bg-orange-500 rounded-full animate-pulse"></div>
+                <div>
+                  <h3 className="font-semibold text-orange-800 dark:text-orange-200">Live Match Available</h3>
+                  <p className="text-sm text-orange-700 dark:text-orange-300">
+                    {liveMatchData?.matchType === 'database' ? 'Match in progress' : 'Resumable match found'}
+                  </p>
+                </div>
+              </div>
+              <Button 
+                onClick={() => navigate(`/match-day/${liveMatchData.liveMatchId}`)}
+                className="bg-orange-600 hover:bg-orange-700 text-white"
+                size="sm"
+              >
+                <Play className="h-4 w-4 mr-2" />
+                Resume Match
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Fixtures</h1>

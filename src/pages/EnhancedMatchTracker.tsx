@@ -238,6 +238,12 @@ export default function EnhancedMatchTracker() {
 
   // Keep player status lists fresh when periods change (e.g., after starting a new one)
   useEffect(() => {
+    if (players.length > 0 && fixtureId) {
+      ensurePlayerStatuses(fixture, players);
+    }
+  }, [players.length, fixture]);
+
+  useEffect(() => {
     refreshPlayerStatusLists();
   }, [periods.length]);
 
