@@ -494,33 +494,38 @@ export default function EnhancedMatchTracker() {
       {/* Events List */}
       {events.length > 0 && (
         <Card>
-          <CardHeader>
-            <CardTitle>Match Events</CardTitle>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">Match Events</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
+          <CardContent className="pt-0">
+            <div className="space-y-1.5">
               {events.map((event) => (
-                <div key={event.id} className="flex items-center justify-between p-2 border rounded">
-                  <div className="flex items-center gap-2">
-                    <Badge>{event.total_match_minute}'</Badge>
-                    <span className="font-medium">
+                <div key={event.id} className="flex flex-col sm:flex-row sm:items-center gap-2 p-3 border rounded-lg bg-card/50">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Badge variant="secondary" className="text-xs font-mono shrink-0">
+                      {event.total_match_minute}'
+                    </Badge>
+                    <span className="text-sm font-medium truncate">
                       {event.event_type.charAt(0).toUpperCase() + event.event_type.slice(1)}
                     </span>
-                    {event.is_penalty && <Badge variant="secondary">Penalty</Badge>}
-                    {!event.is_our_team && <Badge variant="outline">Opposition</Badge>}
+                    <div className="flex gap-1">
+                      {event.is_penalty && <Badge variant="outline" className="text-xs">Penalty</Badge>}
+                      {!event.is_our_team && <Badge variant="destructive" className="text-xs">Opposition</Badge>}
+                    </div>
                   </div>
-                  <div>
-                    {event.players && (
-                      <span>
+                  
+                  {event.players && (
+                    <div className="text-sm text-muted-foreground sm:ml-auto sm:text-right">
+                      <span className="font-medium text-foreground">
                         {event.players.first_name} {event.players.last_name}
-                        {event.assist_players && (
-                          <span className="text-muted-foreground">
-                            {' '}(assist: {event.assist_players.first_name} {event.assist_players.last_name})
-                          </span>
-                        )}
                       </span>
-                    )}
-                  </div>
+                      {event.assist_players && (
+                        <div className="text-xs">
+                          Assist: {event.assist_players.first_name} {event.assist_players.last_name}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
