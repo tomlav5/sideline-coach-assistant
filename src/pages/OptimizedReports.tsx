@@ -7,13 +7,17 @@ import { Label } from '@/components/ui/label';
 import { Trophy, Calendar, Target, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import { ResponsiveWrapper } from '@/components/ui/responsive-wrapper';
-import { useReportsData, useCompetitions } from '@/hooks/useReports';
+import { useEnhancedReportsData } from '@/hooks/useEnhancedReports';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function OptimizedReports() {
   const [competitionFilter, setCompetitionFilter] = useState<string>('all');
-  const { data: competitions, isLoading: competitionsLoading } = useCompetitions();
-  const { data: reportsData, isLoading: reportsLoading } = useReportsData(competitionFilter);
+  const { data: reportsData, isLoading: reportsLoading } = useEnhancedReportsData(competitionFilter === 'all' ? undefined : competitionFilter);
+  
+  // Extract competitions from reports data for filter
+  const competitions = reportsData?.completedMatches ? 
+    Array.from(new Set(reportsData.completedMatches.map(m => m.competition_type)))
+      .map(type => ({ type })) : [];
 
   const formatMinutes = (minutes: number) => {
     const hours = Math.floor(minutes / 60);
@@ -30,7 +34,7 @@ export default function OptimizedReports() {
     return { result: 'D', color: 'bg-yellow-500' };
   };
 
-  if (reportsLoading || competitionsLoading) {
+  if (reportsLoading) {
     return (
       <ResponsiveWrapper>
         <div className="space-y-6">
@@ -75,16 +79,9 @@ export default function OptimizedReports() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Competitions</SelectItem>
-                <SelectItem value="type:league">League Matches Only</SelectItem>
-                <SelectItem value="type:tournament">Tournament Matches Only</SelectItem>
-                <SelectItem value="type:friendly">Friendly Matches Only</SelectItem>
-                {competitions?.map((comp, index) => (
-                  comp.name && (
-                    <SelectItem key={index} value={`name:${comp.name}`}>
-                      {comp.name}
-                    </SelectItem>
-                  )
-                ))}
+                <SelectItem value="league">League Matches Only</SelectItem>
+                <SelectItem value="tournament">Tournament Matches Only</SelectItem>
+                <SelectItem value="friendly">Friendly Matches Only</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -207,7 +204,7 @@ export default function OptimizedReports() {
                         </div>
                         <div>
                           <div className="font-medium">{scorer.player_name}</div>
-                          <div className="text-sm text-muted-foreground">{scorer.team_name}</div>
+                          <div className="text-sm text-muted-foreground">Team</div>
                         </div>
                       </div>
                       <div className="flex space-x-4 text-sm">
@@ -248,7 +245,7 @@ export default function OptimizedReports() {
                         </div>
                         <div>
                           <div className="font-medium">{player.player_name}</div>
-                          <div className="text-sm text-muted-foreground">{player.team_name}</div>
+                          <div className="text-sm text-muted-foreground">Team</div>
                         </div>
                       </div>
                       <div className="flex space-x-4 text-sm">
@@ -261,7 +258,7 @@ export default function OptimizedReports() {
                           <div className="text-muted-foreground">Matches</div>
                         </div>
                         <div className="text-center">
-                          <div className="font-bold text-lg">{formatMinutes(player.average_minutes)}</div>
+                          <div className="font-bold text-lg">{formatMinutes(Math.round(player.total_minutes / player.matches_played))}</div>
                           <div className="text-muted-foreground">Avg</div>
                         </div>
                       </div>
