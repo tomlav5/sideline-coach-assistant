@@ -127,6 +127,8 @@ export function useDeleteFixture() {
       queryClient.invalidateQueries({ queryKey: ['fixtures'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['live-match-detection'] });
+      queryClient.invalidateQueries({ queryKey: ['live-match-check'] });
       toast({
         title: "Success",
         description: "Fixture deleted successfully",

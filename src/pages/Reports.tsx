@@ -13,6 +13,7 @@ import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { ResponsiveWrapper } from '@/components/ui/responsive-wrapper';
 import { ExportDialog } from '@/components/reports/ExportDialog';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface CompletedMatch {
   id: string;
@@ -49,6 +50,7 @@ export default function Reports() {
   const [competitionFilter, setCompetitionFilter] = useState<string>('all');
   const [competitions, setCompetitions] = useState<{ type: string; name?: string }[]>([]);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     fetchCompetitions();
@@ -380,8 +382,14 @@ export default function Reports() {
         description: "The match and all associated data have been removed",
       });
 
-      // Refresh the data
+      // Refresh the data and invalidate all relevant caches
       fetchReportsData();
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['live-match-detection'] });
+      queryClient.invalidateQueries({ queryKey: ['live-match-check'] });
+      queryClient.invalidateQueries({ queryKey: ['fixtures'] });
+      queryClient.invalidateQueries({ queryKey: ['reports'] });
     } catch (error) {
       console.error('Error deleting match:', error);
       toast({

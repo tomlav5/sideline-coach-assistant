@@ -297,8 +297,12 @@ export default function Fixtures() {
       if (error) throw error;
       fetchFixtures();
       
-      // Invalidate dashboard cache to trigger auto-refresh
+      // Invalidate all relevant caches to trigger auto-refresh
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['live-match-detection'] });
+      queryClient.invalidateQueries({ queryKey: ['live-match-check'] });
+      queryClient.invalidateQueries({ queryKey: ['fixtures'] });
     } catch (error) {
       console.error('Error deleting fixture:', error);
     }
