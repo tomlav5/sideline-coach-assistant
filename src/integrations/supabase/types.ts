@@ -75,6 +75,7 @@ export type Database = {
       }
       fixtures: {
         Row: {
+          active_tracker_id: string | null
           competition_name: string | null
           competition_type:
             | Database["public"]["Enums"]["competition_type"]
@@ -85,6 +86,7 @@ export type Database = {
           half_length: number
           id: string
           is_retrospective: boolean
+          last_activity_at: string | null
           location: string | null
           match_state: Json | null
           match_status: string | null
@@ -93,9 +95,11 @@ export type Database = {
           selected_squad_data: Json | null
           status: Database["public"]["Enums"]["match_status"]
           team_id: string
+          tracking_started_at: string | null
           updated_at: string
         }
         Insert: {
+          active_tracker_id?: string | null
           competition_name?: string | null
           competition_type?:
             | Database["public"]["Enums"]["competition_type"]
@@ -106,6 +110,7 @@ export type Database = {
           half_length?: number
           id?: string
           is_retrospective?: boolean
+          last_activity_at?: string | null
           location?: string | null
           match_state?: Json | null
           match_status?: string | null
@@ -114,9 +119,11 @@ export type Database = {
           selected_squad_data?: Json | null
           status?: Database["public"]["Enums"]["match_status"]
           team_id: string
+          tracking_started_at?: string | null
           updated_at?: string
         }
         Update: {
+          active_tracker_id?: string | null
           competition_name?: string | null
           competition_type?:
             | Database["public"]["Enums"]["competition_type"]
@@ -127,6 +134,7 @@ export type Database = {
           half_length?: number
           id?: string
           is_retrospective?: boolean
+          last_activity_at?: string | null
           location?: string | null
           match_state?: Json | null
           match_status?: string | null
@@ -135,6 +143,7 @@ export type Database = {
           selected_squad_data?: Json | null
           status?: Database["public"]["Enums"]["match_status"]
           team_id?: string
+          tracking_started_at?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -563,8 +572,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_match_tracking: {
+        Args: { fixture_id_param: string }
+        Returns: Json
+      }
       club_has_no_members: {
         Args: { club_id_param: string }
+        Returns: boolean
+      }
+      release_match_tracking: {
+        Args: { fixture_id_param: string }
         Returns: boolean
       }
       test_auth_context: {
@@ -582,6 +599,10 @@ export type Database = {
           jwt_claims: Json
           session_exists: boolean
         }[]
+      }
+      update_tracking_activity: {
+        Args: { fixture_id_param: string }
+        Returns: boolean
       }
       user_has_club_access: {
         Args: {
