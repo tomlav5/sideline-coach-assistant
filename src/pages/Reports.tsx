@@ -103,36 +103,26 @@ export default function Reports() {
 
       if (fixturesError) throw fixturesError;
 
-      // For each completed match, calculate the score
-      const matchesWithScores = await Promise.all(
-        (fixtures || []).map(async (fixture) => {
-          // Get our goals
-          const { data: ourGoals } = await supabase
-            .from('match_events')
-            .select('id')
-            .eq('fixture_id', fixture.id)
-            .eq('event_type', 'goal')
-            .eq('is_our_team', true);
+      // Use optimized view to get fixtures with scores in single query
+      const { data: fixturesWithScores, error: scoresError } = await supabase
+        .from('fixtures_with_scores')
+        .select('*')
+        .eq('status', 'completed')
+        .match(competitionCondition)
+        .order('scheduled_date', { ascending: false });
 
-          // Get opponent goals
-          const { data: opponentGoals } = await supabase
-            .from('match_events')
-            .select('id')
-            .eq('fixture_id', fixture.id)
-            .eq('event_type', 'goal')
-            .eq('is_our_team', false);
+      if (scoresError) throw scoresError;
 
-          return {
-            id: fixture.id,
-            scheduled_date: fixture.scheduled_date,
-            opponent_name: fixture.opponent_name,
-            location: fixture.location || 'TBC',
-            our_score: ourGoals?.length || 0,
-            opponent_score: opponentGoals?.length || 0,
-            team_name: fixture.teams?.name || 'Unknown Team'
-          };
-        })
-      );
+      // Transform data to match expected format
+      const matchesWithScores = (fixturesWithScores || []).map(fixture => ({
+        id: fixture.id,
+        scheduled_date: fixture.scheduled_date,
+        opponent_name: fixture.opponent_name,
+        location: fixture.location || 'TBC',
+        our_score: fixture.our_goals || 0,
+        opponent_score: fixture.opponent_goals || 0,
+        team_name: fixture.team_name || 'Unknown Team'
+      }));
 
       setCompletedMatches(matchesWithScores);
 

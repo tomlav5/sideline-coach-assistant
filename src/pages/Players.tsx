@@ -99,35 +99,33 @@ export default function Players() {
   const fetchPlayers = async () => {
     try {
       setLoading(true);
+      // Use optimized view to get players with teams in single query
       const { data, error } = await supabase
-        .from('players')
-        .select(`
-          *,
-          club:clubs(id, name)
-        `)
+        .from('players_with_teams')
+        .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       
-      // Fetch team assignments for each player
-      const playersWithTeams = await Promise.all(
-        (data || []).map(async (player) => {
-          const { data: teamData } = await supabase
-            .from('team_players')
-            .select(`
-              team:teams(id, name, team_type, club_id)
-            `)
-            .eq('player_id', player.id);
-          
-          return {
-            ...player,
-            teams: teamData?.map(tp => tp.team).filter(Boolean) || []
-          };
-        })
-      );
+      // Transform data to match expected format
+      const transformedPlayers = (data || []).map(player => ({
+        id: player.id,
+        first_name: player.first_name,
+        last_name: player.last_name,
+        jersey_number: player.jersey_number,
+        club_id: player.club_id,
+        created_at: player.created_at,
+        club: { id: player.club_id, name: player.club_name || '' },
+        teams: Array.isArray(player.teams) ? player.teams.map((team: any) => ({
+          id: team.id,
+          name: team.name,
+          team_type: team.team_type,
+          club_id: team.club_id
+        })) : []
+      }));
       
-      setPlayers(playersWithTeams);
-      setFilteredPlayers(playersWithTeams);
+      setPlayers(transformedPlayers);
+      setFilteredPlayers(transformedPlayers);
     } catch (error) {
       console.error('Error fetching players:', error);
       toast({

@@ -65,34 +65,24 @@ export default function Teams() {
   const fetchTeams = async () => {
     try {
       setLoading(true);
+      // Use optimized view to get teams with player counts in single query
       const { data, error } = await supabase
-        .from('teams')
-        .select(`
-          *,
-          club:clubs(id, name)
-        `)
+        .from('teams_with_stats')
+        .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       
-      // Get player counts for each team
-      const teamsWithCount = await Promise.all(
-        (data || []).map(async (team) => {
-          const { count } = await supabase
-            .from('team_players')
-            .select('*', { count: 'exact', head: true })
-            .eq('team_id', team.id);
-          
-          return {
-            ...team,
-            _count: {
-              team_players: count || 0
-            }
-          };
-        })
-      );
+      // Transform data to match expected format
+      const transformedTeams = (data || []).map(team => ({
+        ...team,
+        club: { id: team.club_id, name: team.club_name },
+        _count: {
+          team_players: team.player_count || 0
+        }
+      }));
       
-      setTeams(teamsWithCount);
+      setTeams(transformedTeams);
     } catch (error) {
       console.error('Error fetching teams:', error);
       toast({

@@ -78,24 +78,18 @@ export default function Dashboard() {
         const clubIds = clubsData?.map(club => club.id) || [];
         
         if (clubIds.length > 0) {
-          const [teamsData, playersData, fixturesData] = await Promise.all([
-            supabase.from('teams').select('id').in('club_id', clubIds),
-            supabase.from('players').select('id').in('club_id', clubIds),
-            supabase
-              .from('fixtures')
-              .select('id')
-              .in('team_id', 
-                (await supabase.from('teams').select('id').in('club_id', clubIds)).data?.map(t => t.id) || []
-              )
-              .not('status', 'in', '(completed,cancelled)')
-              .gte('scheduled_date', new Date().toISOString())
-          ]);
+          // Use optimized dashboard_stats view for single query
+          const { data: dashboardData } = await supabase
+            .from('dashboard_stats')
+            .select('*')
+            .eq('user_id', user.id)
+            .single();
 
           setStats({
-            clubs: clubsData?.length || 0,
-            teams: teamsData.data?.length || 0,
-            players: playersData.data?.length || 0,
-            upcomingFixtures: fixturesData.data?.length || 0
+            clubs: dashboardData?.total_clubs || 0,
+            teams: dashboardData?.total_teams || 0,
+            players: dashboardData?.total_players || 0,
+            upcomingFixtures: dashboardData?.upcoming_fixtures || 0
           });
         }
       } catch (error) {

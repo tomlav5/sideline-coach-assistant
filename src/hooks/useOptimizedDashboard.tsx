@@ -20,25 +20,19 @@ export function useOptimizedDashboardStats() {
   return useQuery({
     queryKey: ['dashboard-stats', user?.id],
     queryFn: async (): Promise<DashboardStats> => {
-      // Use a single RPC call or optimized query
-      const [fixturesResponse, teamsResponse, playersResponse] = await Promise.all([
-        supabase
-          .from('fixtures')
-          .select('id', { count: 'exact', head: true })
-          .eq('status', 'scheduled')
-          .gte('scheduled_date', new Date().toISOString()),
-        supabase
-          .from('teams')
-          .select('id', { count: 'exact', head: true }),
-        supabase
-          .from('players')
-          .select('id', { count: 'exact', head: true })
-      ]);
+      // Use optimized dashboard_stats view for single query
+      const { data, error } = await supabase
+        .from('dashboard_stats')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error) throw error;
 
       return {
-        upcomingFixtures: fixturesResponse.count || 0,
-        totalTeams: teamsResponse.count || 0,
-        totalPlayers: playersResponse.count || 0,
+        upcomingFixtures: data.upcoming_fixtures || 0,
+        totalTeams: data.total_teams || 0,
+        totalPlayers: data.total_players || 0,
       };
     },
     enabled: !!user,

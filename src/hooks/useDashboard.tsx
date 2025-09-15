@@ -36,7 +36,7 @@ export function useDashboardData() {
     queryFn: async () => {
       if (!user) throw new Error('User not authenticated');
 
-      // Fetch clubs with optimized query
+      // Fetch clubs
       const { data: clubsData, error: clubsError } = await supabase
         .from('clubs')
         .select(`
@@ -44,11 +44,7 @@ export function useDashboardData() {
           name,
           logo_url,
           created_at,
-          club_members!inner(role),
-          teams(
-            id,
-            players(id)
-          )
+          club_members!inner(role)
         `)
         .eq('club_members.user_id', user.id);
 
@@ -63,23 +59,18 @@ export function useDashboardData() {
 
       const clubIds = clubs.map(club => club.id);
 
-      // Calculate stats from the already fetched data
-      const teams = clubsData?.flatMap(club => club.teams) || [];
-      const players = teams.flatMap(team => team.players || []);
-
-      // Fetch upcoming fixtures
-      const { data: fixturesData } = await supabase
-        .from('fixtures')
-        .select('id')
-        .in('team_id', teams.map(t => t.id))
-        .not('status', 'in', '(completed,cancelled)')
-        .gte('scheduled_date', new Date().toISOString());
+      // Use optimized dashboard_stats view for statistics
+      const { data: dashboardStats } = await supabase
+        .from('dashboard_stats')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
 
       const stats: DashboardStats = {
-        clubs: clubs.length,
-        teams: teams.length,
-        players: players.length,
-        upcomingFixtures: fixturesData?.length || 0
+        clubs: dashboardStats?.total_clubs || 0,
+        teams: dashboardStats?.total_teams || 0,
+        players: dashboardStats?.total_players || 0,
+        upcomingFixtures: dashboardStats?.upcoming_fixtures || 0
       };
 
       // Check for active matches
