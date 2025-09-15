@@ -286,7 +286,9 @@ export default function Players() {
         </Card>
       ) : (
         <div className="bg-card border border-border rounded-lg overflow-hidden">
-          {filteredPlayers.map((player, index) => (
+          {filteredPlayers
+            .sort((a, b) => a.last_name.localeCompare(b.last_name))
+            .map((player, index) => (
             <PlayerCard
               key={player.id}
               player={player}

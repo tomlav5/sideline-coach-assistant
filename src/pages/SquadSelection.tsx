@@ -441,7 +441,9 @@ export default function SquadSelection() {
               </p>
             ) : (
               <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {availablePlayers.map((player) => {
+                {availablePlayers
+                  .sort((a, b) => a.last_name.localeCompare(b.last_name))
+                  .map((player) => {
                   const isSelected = selectedPlayers.some(p => p.id === player.id);
                   const isStarter = startingPlayers.has(player.id);
                   
