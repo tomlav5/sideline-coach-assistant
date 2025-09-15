@@ -241,6 +241,20 @@ export type Database = {
             foreignKeyName: "fk_match_events_assist_player_id"
             columns: ["assist_player_id"]
             isOneToOne: false
+            referencedRelation: "mv_goal_scorers"
+            referencedColumns: ["player_id"]
+          },
+          {
+            foreignKeyName: "fk_match_events_assist_player_id"
+            columns: ["assist_player_id"]
+            isOneToOne: false
+            referencedRelation: "mv_player_playing_time"
+            referencedColumns: ["player_id"]
+          },
+          {
+            foreignKeyName: "fk_match_events_assist_player_id"
+            columns: ["assist_player_id"]
+            isOneToOne: false
             referencedRelation: "players"
             referencedColumns: ["id"]
           },
@@ -264,6 +278,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "fixtures_with_scores"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_match_events_fixture_id"
+            columns: ["fixture_id"]
+            isOneToOne: false
+            referencedRelation: "mv_completed_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_match_events_player_id"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "mv_goal_scorers"
+            referencedColumns: ["player_id"]
+          },
+          {
+            foreignKeyName: "fk_match_events_player_id"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "mv_player_playing_time"
+            referencedColumns: ["player_id"]
           },
           {
             foreignKeyName: "fk_match_events_player_id"
@@ -346,6 +381,13 @@ export type Database = {
             referencedRelation: "fixtures_with_scores"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "fk_match_periods_fixture_id"
+            columns: ["fixture_id"]
+            isOneToOne: false
+            referencedRelation: "mv_completed_matches"
+            referencedColumns: ["id"]
+          },
         ]
       }
       player_match_status: {
@@ -396,6 +438,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "fixtures_with_scores"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_player_match_status_fixture_id"
+            columns: ["fixture_id"]
+            isOneToOne: false
+            referencedRelation: "mv_completed_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_player_match_status_player_id"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "mv_goal_scorers"
+            referencedColumns: ["player_id"]
+          },
+          {
+            foreignKeyName: "fk_player_match_status_player_id"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "mv_player_playing_time"
+            referencedColumns: ["player_id"]
           },
           {
             foreignKeyName: "fk_player_match_status_player_id"
@@ -474,6 +537,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "fixtures_with_scores"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_player_time_logs_fixture_id"
+            columns: ["fixture_id"]
+            isOneToOne: false
+            referencedRelation: "mv_completed_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_player_time_logs_player_id"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "mv_goal_scorers"
+            referencedColumns: ["player_id"]
+          },
+          {
+            foreignKeyName: "fk_player_time_logs_player_id"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "mv_player_playing_time"
+            referencedColumns: ["player_id"]
           },
           {
             foreignKeyName: "fk_player_time_logs_player_id"
@@ -586,6 +670,20 @@ export type Database = {
           team_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "team_players_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "mv_goal_scorers"
+            referencedColumns: ["player_id"]
+          },
+          {
+            foreignKeyName: "team_players_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "mv_player_playing_time"
+            referencedColumns: ["player_id"]
+          },
           {
             foreignKeyName: "team_players_player_id_fkey"
             columns: ["player_id"]
@@ -730,6 +828,56 @@ export type Database = {
           },
         ]
       }
+      mv_competitions: {
+        Row: {
+          competition_name: string | null
+          competition_type: string | null
+          display_name: string | null
+          filter_value: string | null
+        }
+        Relationships: []
+      }
+      mv_completed_matches: {
+        Row: {
+          club_name: string | null
+          competition_name: string | null
+          competition_type: string | null
+          id: string | null
+          location: string | null
+          opponent_goals: number | null
+          opponent_name: string | null
+          our_goals: number | null
+          scheduled_date: string | null
+          team_name: string | null
+        }
+        Relationships: []
+      }
+      mv_goal_scorers: {
+        Row: {
+          assists: number | null
+          competition_name: string | null
+          competition_type: string | null
+          goals: number | null
+          player_id: string | null
+          player_name: string | null
+          team_name: string | null
+          total_contributions: number | null
+        }
+        Relationships: []
+      }
+      mv_player_playing_time: {
+        Row: {
+          average_minutes: number | null
+          competition_name: string | null
+          competition_type: string | null
+          matches_played: number | null
+          player_id: string | null
+          player_name: string | null
+          team_name: string | null
+          total_minutes: number | null
+        }
+        Relationships: []
+      }
       players_with_teams: {
         Row: {
           club_id: string | null
@@ -782,6 +930,10 @@ export type Database = {
       club_has_no_members: {
         Args: { club_id_param: string }
         Returns: boolean
+      }
+      refresh_report_views: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       release_match_tracking: {
         Args: { fixture_id_param: string }
