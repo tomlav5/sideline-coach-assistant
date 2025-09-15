@@ -399,7 +399,7 @@ export default function SquadSelection() {
              size="sm"
              className="w-full sm:w-auto"
            >
-             Load Recent Squad
+             Load Last Squad
            </Button>
            <Button 
              onClick={saveSquadSelection} 
