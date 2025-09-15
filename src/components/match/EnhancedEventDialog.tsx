@@ -83,6 +83,29 @@ export function EnhancedEventDialog({
 
         // Use players passed from parent (active players) or fallback to all available players
         setActivePlayers(players);
+
+        // Fallback: if empty, load team players from DB
+        if (!players || players.length === 0) {
+          try {
+            const { data: fx2 } = await supabase
+              .from('fixtures')
+              .select('team_id')
+              .eq('id', fixtureId)
+              .single();
+            if (fx2?.team_id) {
+              const { data: teamPlayers } = await supabase
+                .from('team_players')
+                .select('players(*)')
+                .eq('team_id', fx2.team_id);
+              const fallback = (teamPlayers || [])
+                .map((tp: any) => tp.players)
+                .filter(Boolean);
+              if (fallback.length > 0) setActivePlayers(fallback as any);
+            }
+          } catch (err) {
+            console.warn('Fallback player load failed:', err);
+          }
+        }
       } catch (e) {
         console.error('Failed loading event context:', e);
         setResolvedPeriod(currentPeriod);

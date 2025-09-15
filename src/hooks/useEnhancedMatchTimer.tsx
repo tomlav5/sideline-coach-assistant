@@ -147,11 +147,15 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
       const { error } = await supabase
         .from('fixtures')
         .update({
+          // Keep a JSON snapshot for quick client resume
           match_state: {
             status: timerState.matchStatus,
             total_time_seconds: timerState.totalMatchTime,
           },
           current_period_id: timerState.currentPeriod?.id || null,
+          // Ensure DB status reflects current state for other screens/hooks
+          status: timerState.matchStatus as any,
+          match_status: timerState.matchStatus,
         })
         .eq('id', fixtureId);
 
@@ -179,6 +183,24 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
         .single();
 
       if (error) throw error;
+
+      // Reflect in DB immediately so other screens show LIVE
+      try {
+        await supabase
+          .from('fixtures')
+          .update({
+            status: 'in_progress' as any,
+            match_status: 'in_progress',
+            current_period_id: (newPeriod as any).id,
+            match_state: {
+              status: 'in_progress',
+              total_time_seconds: timerState.totalMatchTime,
+            },
+          })
+          .eq('id', fixtureId);
+      } catch (e) {
+        console.error('Error updating fixture to in_progress:', e);
+      }
 
       setTimerState(prev => ({
         ...prev,

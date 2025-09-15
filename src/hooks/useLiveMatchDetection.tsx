@@ -19,33 +19,49 @@ export function useLiveMatchDetection() {
       }
 
       try {
-        // First check for in_progress matches in database
-        const { data: inProgressMatches, error } = await supabase
-          .from('fixtures')
-          .select(`
-            id,
-            teams!fk_fixtures_team_id(
-              club_id,
-              club_members!inner(user_id)
-            )
-          `)
-          .eq('match_status', 'in_progress')
-          .eq('teams.club_members.user_id', user.id)
-          .order('scheduled_date', { ascending: false })
-          .limit(1);
+        // Step 1: Find clubs the user belongs to
+        const { data: memberships, error: clubsErr } = await supabase
+          .from('club_members')
+          .select('club_id')
+          .eq('user_id', user.id);
+        if (clubsErr) throw clubsErr;
 
-        if (error) throw error;
+        const clubIds = memberships?.map((m: any) => m.club_id) || [];
 
-        if (inProgressMatches && inProgressMatches.length > 0) {
-          return {
-            hasLiveMatch: true,
-            liveMatchId: inProgressMatches[0].id,
-            matchType: 'database'
-          };
+        // Step 2: Find teams in those clubs
+        let teamIds: string[] = [];
+        if (clubIds.length > 0) {
+          const { data: teamsData, error: teamsErr } = await supabase
+            .from('teams')
+            .select('id, club_id')
+            .in('club_id', clubIds);
+          if (teamsErr) throw teamsErr;
+          teamIds = (teamsData || []).map((t: any) => t.id);
         }
 
-        // If no database matches, check localStorage for resumable matches
-        const matchKeys = [];
+        // Step 3: Look for in-progress fixtures for those teams (support status or match_status)
+        if (teamIds.length > 0) {
+          const { data: inProgressMatches, error } = await supabase
+            .from('fixtures')
+            .select('id, scheduled_date')
+            .in('team_id', teamIds)
+            .or('status.eq.in_progress,match_status.eq.in_progress')
+            .order('scheduled_date', { ascending: false })
+            .limit(1);
+
+          if (error) throw error;
+
+          if (inProgressMatches && inProgressMatches.length > 0) {
+            return {
+              hasLiveMatch: true,
+              liveMatchId: inProgressMatches[0].id,
+              matchType: 'database'
+            };
+          }
+        }
+
+        // Step 4: If no database matches, check localStorage for resumable matches
+        const matchKeys: string[] = [];
         const keyPattern = /^match_/;
         
         for (let i = 0; i < localStorage.length; i++) {
@@ -58,6 +74,15 @@ export function useLiveMatchDetection() {
         let latestResumableMatch: { id: string; timestamp: number } | null = null;
         const now = Date.now();
         const twelveHours = 12 * 60 * 60 * 1000;
+
+        // Ensure we have teamIds for access verification
+        if (teamIds.length === 0 && clubIds.length > 0) {
+          const { data: teamsData } = await supabase
+            .from('teams')
+            .select('id')
+            .in('club_id', clubIds);
+          teamIds = (teamsData || []).map((t: any) => t.id);
+        }
 
         for (const key of matchKeys) {
           try {
@@ -72,21 +97,14 @@ export function useLiveMatchDetection() {
             if (timestamp && isFresh && !isCompleted) {
               const fixtureId = key.replace('match_', '');
               
-              // Verify the fixture exists and user has access
+              // Verify the fixture exists and user has access via team -> club membership
               const { data: fixtureExists } = await supabase
                 .from('fixtures')
-                .select(`
-                  id,
-                  teams!fk_fixtures_team_id(
-                    club_id,
-                    club_members!inner(user_id)
-                  )
-                `)
+                .select('id, team_id')
                 .eq('id', fixtureId)
-                .eq('teams.club_members.user_id', user.id)
                 .single();
 
-              if (fixtureExists) {
+              if (fixtureExists && teamIds.includes(fixtureExists.team_id)) {
                 if (!latestResumableMatch || timestamp > latestResumableMatch.timestamp) {
                   latestResumableMatch = { id: fixtureId, timestamp };
                 }
@@ -109,7 +127,7 @@ export function useLiveMatchDetection() {
           liveMatchId: latestResumableMatch?.id || null,
           matchType: latestResumableMatch ? 'localStorage' : null
         };
-
+        
       } catch (error) {
         console.error('Error checking live matches:', error);
         return { hasLiveMatch: false, liveMatchId: null, matchType: null };
