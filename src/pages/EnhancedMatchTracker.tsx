@@ -5,11 +5,13 @@ import { EnhancedMatchControls } from '@/components/match/EnhancedMatchControls'
 import { EnhancedEventDialog } from '@/components/match/EnhancedEventDialog';
 import { RetrospectiveMatchDialog } from '@/components/fixtures/RetrospectiveMatchDialog';
 import { SubstitutionDialog } from '@/components/match/SubstitutionDialog';
+import { MatchLockingBanner } from '@/components/match/MatchLockingBanner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Clock, Users, Target, History, ArrowUpDown } from 'lucide-react';
+import { useRealtimeMatchSync } from '@/hooks/useRealtimeMatchSync';
 
 interface Player {
   id: string;
@@ -61,6 +63,14 @@ export default function EnhancedMatchTracker() {
   const [playerIn, setPlayerIn] = useState('');
   const [activePlayersList, setActivePlayersList] = useState<Player[]>([]);
   const [substitutePlayersList, setSubstitutePlayersList] = useState<Player[]>([]);
+  
+  // Real-time sync and match locking
+  const { 
+    matchTracker, 
+    claimMatchTracking, 
+    releaseMatchTracking, 
+    isClaimingMatch 
+  } = useRealtimeMatchSync(fixtureId);
   useEffect(() => {
     if (fixtureId) {
       loadMatchData();
@@ -288,6 +298,14 @@ export default function EnhancedMatchTracker() {
     refreshPlayerStatusLists();
   }, [periods.length]);
 
+  // Refresh data when real-time updates are received
+  useEffect(() => {
+    if (matchTracker) {
+      // Refresh data when match tracking status changes
+      loadMatchData();
+    }
+  }, [matchTracker?.isActiveTracker]);
+
   const ourGoals = events.filter(e => e.event_type === 'goal' && e.is_our_team).length;
   const opponentGoals = events.filter(e => e.event_type === 'goal' && !e.is_our_team).length;
 
@@ -341,6 +359,15 @@ export default function EnhancedMatchTracker() {
         </CardContent>
       </Card>
 
+      {/* Match Locking Banner */}
+      <MatchLockingBanner
+        matchTracker={matchTracker}
+        onClaimTracking={claimMatchTracking}
+        onReleaseTracking={releaseMatchTracking}
+        isClaimingMatch={isClaimingMatch}
+        matchStatus={fixture?.status || 'scheduled'}
+      />
+
       {/* Enhanced Timer Controls */}
       <EnhancedMatchControls
         fixtureId={fixtureId!}
@@ -352,6 +379,7 @@ export default function EnhancedMatchTracker() {
         <Button
           onClick={() => setShowEventDialog(true)}
           className="flex items-center gap-2 w-full"
+          disabled={!matchTracker?.isActiveTracker && (fixture?.status === 'in_progress' || fixture?.status === 'live')}
         >
           <Target className="h-4 w-4" />
           Record Event
@@ -361,6 +389,7 @@ export default function EnhancedMatchTracker() {
           onClick={() => setShowRetrospectiveDialog(true)}
           variant="outline"
           className="flex items-center gap-2 w-full"
+          disabled={!matchTracker?.isActiveTracker && (fixture?.status === 'in_progress' || fixture?.status === 'live')}
         >
           <History className="h-4 w-4" />
           Record Event Manually
@@ -370,6 +399,7 @@ export default function EnhancedMatchTracker() {
           onClick={() => setSubDialogOpen(true)}
           variant="secondary"
           className="flex items-center gap-2 w-full"
+          disabled={!matchTracker?.isActiveTracker && (fixture?.status === 'in_progress' || fixture?.status === 'live')}
         >
           <ArrowUpDown className="h-4 w-4" />
           Substitution

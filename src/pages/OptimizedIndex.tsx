@@ -154,12 +154,14 @@ const OptimizedIndex = memo(() => {
         </div>
 
         {/* Live Match Recovery Banner */}
-        {liveMatchData?.hasLiveMatch && liveMatchData.liveMatchId && (
-          <LiveMatchBanner
-            liveMatchId={liveMatchData.liveMatchId}
-            onResumeMatch={handleResumeMatch}
-          />
-        )}
+          {liveMatchData?.hasLiveMatch && liveMatchData.liveMatchId && (
+            <LiveMatchBanner 
+              liveMatchId={liveMatchData.liveMatchId} 
+              isActiveTracker={liveMatchData.isActiveTracker}
+              trackerInfo={liveMatchData.trackerInfo}
+              onResumeMatch={handleResumeMatch} 
+            />
+          )}
 
         {/* Main Quick Actions */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mb-8">

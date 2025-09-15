@@ -6,6 +6,11 @@ interface LiveMatchData {
   hasLiveMatch: boolean;
   liveMatchId: string | null;
   matchType: 'database' | 'localStorage' | null;
+  isActiveTracker?: boolean;
+  trackerInfo?: {
+    activeTrackerId: string | null;
+    trackingStartedAt: string | null;
+  };
 }
 
 export function useLiveMatchDetection() {
@@ -43,7 +48,7 @@ export function useLiveMatchDetection() {
         if (teamIds.length > 0) {
           const { data: inProgressMatches, error } = await supabase
             .from('fixtures')
-            .select('id, scheduled_date')
+            .select('id, scheduled_date, active_tracker_id, tracking_started_at, last_activity_at')
             .in('team_id', teamIds)
             .or('status.eq.in_progress,match_status.eq.in_progress')
             .order('scheduled_date', { ascending: false })
@@ -52,10 +57,18 @@ export function useLiveMatchDetection() {
           if (error) throw error;
 
           if (inProgressMatches && inProgressMatches.length > 0) {
+            const match = inProgressMatches[0];
+            const isActiveTracker = match.active_tracker_id === user.id;
+            
             return {
               hasLiveMatch: true,
-              liveMatchId: inProgressMatches[0].id,
-              matchType: 'database'
+              liveMatchId: match.id,
+              matchType: 'database',
+              isActiveTracker,
+              trackerInfo: {
+                activeTrackerId: match.active_tracker_id,
+                trackingStartedAt: match.tracking_started_at
+              }
             };
           }
         }
