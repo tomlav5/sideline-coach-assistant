@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuth';
-import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { useTeams } from '@/hooks/useTeams';
+import { useClubs } from '@/hooks/useClubs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, Users } from 'lucide-react';
@@ -29,78 +28,16 @@ interface Team {
 
 export default function Teams() {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [clubs, setClubs] = useState<Club[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: teams = [], isLoading } = useTeams();
+  const { data: clubs = [] } = useClubs();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-
-  useEffect(() => {
-    if (user) {
-      fetchTeams();
-      fetchClubs();
-    }
-  }, [user]);
-
-  const fetchClubs = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('clubs')
-        .select('id, name')
-        .order('name');
-
-      if (error) throw error;
-      setClubs(data || []);
-    } catch (error) {
-      console.error('Error fetching clubs:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load clubs",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const fetchTeams = async () => {
-    try {
-      setLoading(true);
-      // Use optimized view to get teams with player counts in single query
-      const { data, error } = await supabase
-        .from('teams_with_stats')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      
-      // Transform data to match expected format
-      const transformedTeams = (data || []).map(team => ({
-        ...team,
-        club: { id: team.club_id, name: team.club_name },
-        _count: {
-          team_players: team.player_count || 0
-        }
-      }));
-      
-      setTeams(transformedTeams);
-    } catch (error) {
-      console.error('Error fetching teams:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load teams",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handlePlayerManagement = (teamId: string) => {
     // Navigate to players page with team filter
     navigate(`/players?team=${teamId}`);
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="container mx-auto p-3 sm:p-4 space-y-4 sm:space-y-6">
         <div className="flex justify-between items-center">
@@ -153,7 +90,7 @@ export default function Teams() {
             <TeamCard
               key={team.id}
               team={team}
-              onTeamUpdate={fetchTeams}
+              onTeamUpdate={() => {}} // React Query handles updates automatically
               onPlayerManagement={handlePlayerManagement}
             />
           ))}
@@ -164,7 +101,7 @@ export default function Teams() {
         open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
         clubs={clubs}
-        onTeamCreated={fetchTeams}
+        onTeamCreated={() => {}} // React Query handles updates automatically
       />
     </div>
   );

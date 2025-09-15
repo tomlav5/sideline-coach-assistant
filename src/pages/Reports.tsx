@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { useState } from 'react';
+import { useCompletedMatches, useGoalScorers, usePlayerPlayingTime, useCompetitions } from '@/hooks/useReports';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -12,7 +12,6 @@ import { Trophy, Calendar, Target, Clock, MoreVertical, Trash2 } from 'lucide-re
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { ResponsiveWrapper } from '@/components/ui/responsive-wrapper';
-import { ExportDialog } from '@/components/reports/ExportDialog';
 import { useQueryClient } from '@tanstack/react-query';
 
 interface CompletedMatch {
@@ -43,12 +42,11 @@ interface PlayerPlayingTime {
 }
 
 export default function Reports() {
-  const [completedMatches, setCompletedMatches] = useState<CompletedMatch[]>([]);
-  const [goalScorers, setGoalScorers] = useState<GoalScorer[]>([]);
-  const [playingTime, setPlayingTime] = useState<PlayerPlayingTime[]>([]);
-  const [loading, setLoading] = useState(true);
   const [competitionFilter, setCompetitionFilter] = useState<string>('all');
-  const [competitions, setCompetitions] = useState<{ type: string; name?: string }[]>([]);
+  const { data: completedMatches = [], isLoading: matchesLoading } = useCompletedMatches(competitionFilter);
+  const { data: goalScorers = [], isLoading: scorersLoading } = useGoalScorers(competitionFilter);
+  const { data: playingTime = [], isLoading: timeLoading } = usePlayerPlayingTime(competitionFilter);
+  const { data: competitions = [] } = useCompetitions();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -373,7 +371,9 @@ export default function Reports() {
       });
 
       // Refresh the data and invalidate all relevant caches
-      fetchReportsData();
+      queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
+      queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
+      queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
       queryClient.invalidateQueries({ queryKey: ['live-match-detection'] });
@@ -390,7 +390,7 @@ export default function Reports() {
     }
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <ResponsiveWrapper>
         <div className="flex items-center justify-center h-64">

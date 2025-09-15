@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuth';
-import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { usePlayers } from '@/hooks/usePlayers';
+import { useTeams } from '@/hooks/useTeams';
+import { useClubs } from '@/hooks/useClubs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -38,13 +38,9 @@ interface Player {
 
 export default function Players() {
   const [searchParams] = useSearchParams();
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const [players, setPlayers] = useState<Player[]>([]);
-  const [filteredPlayers, setFilteredPlayers] = useState<Player[]>([]);
-  const [clubs, setClubs] = useState<Club[]>([]);
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: players = [], isLoading, error } = usePlayers();
+  const { data: teams = [] } = useTeams();
+  const { data: clubs = [] } = useClubs();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [bulkAssignDialogOpen, setBulkAssignDialogOpen] = useState(false);
@@ -52,13 +48,18 @@ export default function Players() {
   const [selectedPlayers, setSelectedPlayers] = useState<Player[]>([]);
   const [teamFilter, setTeamFilter] = useState<string>('all');
 
-  useEffect(() => {
-    if (user) {
-      fetchPlayers();
-      fetchClubs();
-      fetchTeams();
+  // Memoized filtered players for performance
+  const filteredPlayers = useMemo(() => {
+    if (teamFilter === 'all') {
+      return players;
+    } else if (teamFilter === 'unassigned') {
+      return players.filter(player => !player.teams || player.teams.length === 0);
+    } else {
+      return players.filter(player => 
+        player.teams?.some(team => team.id === teamFilter)
+      );
     }
-  }, [user]);
+  }, [players, teamFilter]);
 
   // Handle URL team filter parameter
   useEffect(() => {
@@ -66,77 +67,7 @@ export default function Players() {
     if (teamParam && teamParam !== teamFilter) {
       setTeamFilter(teamParam);
     }
-  }, [searchParams]);
-
-  const fetchClubs = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('clubs')
-        .select('id, name')
-        .order('name');
-
-      if (error) throw error;
-      setClubs(data || []);
-    } catch (error) {
-      console.error('Error fetching clubs:', error);
-    }
-  };
-
-  const fetchTeams = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('teams')
-        .select('id, name, team_type, club_id')
-        .order('name');
-
-      if (error) throw error;
-      setTeams(data || []);
-    } catch (error) {
-      console.error('Error fetching teams:', error);
-    }
-  };
-
-  const fetchPlayers = async () => {
-    try {
-      setLoading(true);
-      // Use optimized view to get players with teams in single query
-      const { data, error } = await supabase
-        .from('players_with_teams')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      
-      // Transform data to match expected format
-      const transformedPlayers = (data || []).map(player => ({
-        id: player.id,
-        first_name: player.first_name,
-        last_name: player.last_name,
-        jersey_number: player.jersey_number,
-        club_id: player.club_id,
-        created_at: player.created_at,
-        club: { id: player.club_id, name: player.club_name || '' },
-        teams: Array.isArray(player.teams) ? player.teams.map((team: any) => ({
-          id: team.id,
-          name: team.name,
-          team_type: team.team_type,
-          club_id: team.club_id
-        })) : []
-      }));
-      
-      setPlayers(transformedPlayers);
-      setFilteredPlayers(transformedPlayers);
-    } catch (error) {
-      console.error('Error fetching players:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load players",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [searchParams, teamFilter]);
 
   const handleTeamAssignment = (player: Player) => {
     setSelectedPlayer(player);
@@ -144,7 +75,7 @@ export default function Players() {
   };
 
   const handleAssignmentUpdate = () => {
-    fetchPlayers();
+    // React Query will automatically refetch and update the UI
     setSelectedPlayers([]);
   };
 
@@ -161,25 +92,11 @@ export default function Players() {
   };
 
   const filterPlayersByTeam = (teamId: string) => {
-    if (teamId === 'all') {
-      setFilteredPlayers(players);
-    } else if (teamId === 'unassigned') {
-      setFilteredPlayers(players.filter(player => !player.teams || player.teams.length === 0));
-    } else {
-      setFilteredPlayers(players.filter(player => 
-        player.teams?.some(team => team.id === teamId)
-      ));
-    }
     setTeamFilter(teamId);
     setSelectedPlayers([]);
   };
 
-  // Update filtered players when players change
-  useEffect(() => {
-    filterPlayersByTeam(teamFilter);
-  }, [players, teamFilter]);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="container mx-auto p-3 sm:p-4 space-y-4 sm:space-y-6">
         <div className="flex justify-between items-center">
@@ -294,7 +211,7 @@ export default function Players() {
             <PlayerCard
               key={player.id}
               player={player}
-              onPlayerUpdate={fetchPlayers}
+              onPlayerUpdate={() => {}} // React Query handles updates automatically
               onTeamAssignment={handleTeamAssignment}
               isSelected={selectedPlayers.some(p => p.id === player.id)}
               onSelectionChange={handlePlayerSelection}
@@ -307,7 +224,7 @@ export default function Players() {
         open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
         clubs={clubs}
-        onPlayerCreated={fetchPlayers}
+        onPlayerCreated={() => {}} // React Query handles updates automatically
       />
 
       <TeamAssignmentDialog
