@@ -207,14 +207,29 @@ export default function EnhancedMatchTracker() {
       if (!statusRows || statusRows.length === 0) {
         // Initialize statuses based on selected squad (starters on field)
         const sd = (fixtureData.selected_squad_data as any) || {};
-        const starters: string[] = sd.startingPlayerIds ||
-          (Array.isArray(sd.starting_players) ? sd.starting_players.map((p: any) => p.id) : [])
-            .concat(Array.isArray(sd.startingLineup) ? sd.startingLineup.map((p: any) => p.id) : []);
+        
+        // Try different possible field names for starters
+        let starters: string[] = [];
+        if (sd.startingPlayerIds && Array.isArray(sd.startingPlayerIds)) {
+          starters = sd.startingPlayerIds;
+        } else if (sd.startingLineup && Array.isArray(sd.startingLineup)) {
+          starters = sd.startingLineup.map((p: any) => p.id || p);
+        } else if (sd.starting_players && Array.isArray(sd.starting_players)) {
+          starters = sd.starting_players.map((p: any) => p.id || p);
+        }
+
+        console.log('[MatchTracker] Initializing player statuses', {
+          totalSquadPlayers: squadPlayers.length,
+          startersFound: starters.length,
+          squadData: sd
+        });
+        
         const rows = squadPlayers.map((p) => ({
           fixture_id: fixtureId!,
           player_id: p.id,
           is_on_field: starters.includes(p.id),
         }));
+        
         const { error: insertErr } = await supabase.from('player_match_status').insert(rows);
         if (insertErr) throw insertErr;
       }
