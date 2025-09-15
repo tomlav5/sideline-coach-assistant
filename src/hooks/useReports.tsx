@@ -9,6 +9,8 @@ interface CompletedMatch {
   our_score: number;
   opponent_score: number;
   team_name: string;
+  competition_type?: string;
+  competition_name?: string;
 }
 
 interface GoalScorer {
@@ -18,6 +20,8 @@ interface GoalScorer {
   goals: number;
   assists: number;
   total_contributions: number;
+  competition_type?: string;
+  competition_name?: string;
 }
 
 interface PlayerPlayingTime {
@@ -27,203 +31,176 @@ interface PlayerPlayingTime {
   total_minutes: number;
   matches_played: number;
   average_minutes: number;
+  competition_type?: string;
+  competition_name?: string;
 }
 
 interface Competition {
-  type: string;
-  name?: string;
+  filter_value: string;
+  display_name: string;
+  competition_type?: string;
+  competition_name?: string;
 }
 
-// Fetch completed matches with scores
-export function useCompletedMatches(competitionFilter = 'all', options?: { enabled?: boolean }) {
+// Fetch completed matches with scores using optimized materialized view
+export function useCompletedMatches(competitionFilter = 'all', options?: { enabled?: boolean, limit?: number, offset?: number }) {
   return useQuery({
-    queryKey: ['completed-matches', competitionFilter],
+    queryKey: ['completed-matches', competitionFilter, options?.limit, options?.offset],
     queryFn: async (): Promise<CompletedMatch[]> => {
       let query = supabase
-        .from('fixtures_with_scores')
+        .from('mv_completed_matches')
         .select('*')
-        .or('status.eq.completed,match_status.eq.completed')
         .order('scheduled_date', { ascending: false });
 
       // Apply competition filter
       if (competitionFilter !== 'all') {
         if (competitionFilter.startsWith('type:')) {
           const type = competitionFilter.replace('type:', '');
-          query = query.eq('competition_type', type as any);
+          query = query.eq('competition_type', type);
         } else {
           query = query.eq('competition_name', competitionFilter);
         }
       }
 
+      // Apply pagination
+      if (options?.limit) {
+        query = query.range(options.offset || 0, (options.offset || 0) + options.limit - 1);
+      }
+
       const { data, error } = await query;
       if (error) throw error;
 
-      return (data || []).map(fixture => ({
-        id: fixture.id,
-        scheduled_date: fixture.scheduled_date,
-        opponent_name: fixture.opponent_name,
-        location: fixture.location || 'TBC',
-        our_score: fixture.our_goals || 0,
-        opponent_score: fixture.opponent_goals || 0,
-        team_name: fixture.team_name || 'Unknown Team'
+      return (data || []).map(match => ({
+        id: match.id,
+        scheduled_date: match.scheduled_date,
+        opponent_name: match.opponent_name,
+        location: match.location || 'TBC',
+        our_score: match.our_goals || 0,
+        opponent_score: match.opponent_goals || 0,
+        team_name: match.team_name || 'Unknown Team',
+        competition_type: match.competition_type,
+        competition_name: match.competition_name
       }));
     },
-    staleTime: 2 * 60 * 1000, // Consider fresh for 2 minutes
-    gcTime: 10 * 60 * 1000,   // Keep in cache for 10 minutes
-    enabled: options?.enabled !== false, // default enabled unless explicitly false
+    staleTime: 10 * 60 * 1000, // Historical data stays fresh longer
+    gcTime: 30 * 60 * 1000,    // Keep in cache longer for historical data
+    enabled: options?.enabled !== false,
   });
 }
 
-// Fetch goal scorers with stats
-export function useGoalScorers(competitionFilter = 'all', options?: { enabled?: boolean }) {
+// Fetch goal scorers with stats using optimized materialized view
+export function useGoalScorers(competitionFilter = 'all', options?: { enabled?: boolean, limit?: number, offset?: number }) {
   return useQuery({
-    queryKey: ['goal-scorers', competitionFilter],
+    queryKey: ['goal-scorers', competitionFilter, options?.limit, options?.offset],
     queryFn: async (): Promise<GoalScorer[]> => {
-      // Build competition condition
-      let competitionCondition = {};
+      let query = supabase
+        .from('mv_goal_scorers')
+        .select('*')
+        .order('total_contributions', { ascending: false });
+
+      // Apply competition filter
       if (competitionFilter !== 'all') {
         if (competitionFilter.startsWith('type:')) {
           const type = competitionFilter.replace('type:', '');
-          competitionCondition = { competition_type: type };
+          query = query.eq('competition_type', type);
         } else {
-          competitionCondition = { competition_name: competitionFilter };
+          query = query.eq('competition_name', competitionFilter);
         }
       }
 
-      // Get completed fixtures matching filter
-      const { data: fixtures, error: fixturesError } = await supabase
-        .from('fixtures')
-        .select('id')
-        .or('status.eq.completed,match_status.eq.completed')
-        .match(competitionCondition);
+      // Apply pagination
+      if (options?.limit) {
+        query = query.range(options.offset || 0, (options.offset || 0) + options.limit - 1);
+      }
 
-      if (fixturesError) throw fixturesError;
-      
-      const fixtureIds = (fixtures || []).map(f => f.id);
-      if (fixtureIds.length === 0) return [];
+      const { data, error } = await query;
+      if (error) throw error;
 
-      // Get goal events
-      const { data: goalEvents, error: goalsError } = await supabase
-        .from('match_events')
-        .select(`
-          player_id,
-          event_type,
-          players!inner(first_name, last_name),
-          fixtures!inner(
-            team_id,
-            teams!fk_fixtures_team_id(name)
-          )
-        `)
-        .in('fixture_id', fixtureIds)
-        .in('event_type', ['goal', 'assist'])
-        .eq('is_our_team', true)
-        .not('player_id', 'is', null);
-
-      if (goalsError) throw goalsError;
-
-      // Process and aggregate the data
+      // Aggregate by player (in case player appears in multiple competitions)
       const playerStats: Record<string, GoalScorer> = {};
 
-      (goalEvents || []).forEach((event: any) => {
-        const playerId = event.player_id;
-        const playerName = `${event.players.first_name} ${event.players.last_name}`;
-        const teamName = event.fixtures?.teams?.name || 'Unknown Team';
-
+      (data || []).forEach((row: any) => {
+        const playerId = row.player_id;
+        
         if (!playerStats[playerId]) {
           playerStats[playerId] = {
             player_id: playerId,
-            player_name: playerName,
-            team_name: teamName,
+            player_name: row.player_name,
+            team_name: row.team_name,
             goals: 0,
             assists: 0,
-            total_contributions: 0
+            total_contributions: 0,
+            competition_type: row.competition_type,
+            competition_name: row.competition_name
           };
         }
 
-        if (event.event_type === 'goal') {
-          playerStats[playerId].goals++;
-        } else if (event.event_type === 'assist') {
-          playerStats[playerId].assists++;
-        }
-        
-        playerStats[playerId].total_contributions = 
-          playerStats[playerId].goals + playerStats[playerId].assists;
+        playerStats[playerId].goals += row.goals || 0;
+        playerStats[playerId].assists += row.assists || 0;
+        playerStats[playerId].total_contributions += row.total_contributions || 0;
       });
 
       return Object.values(playerStats)
         .sort((a, b) => b.total_contributions - a.total_contributions);
     },
-    staleTime: 2 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
+    staleTime: 10 * 60 * 1000, // Historical data stays fresh longer
+    gcTime: 30 * 60 * 1000,
     enabled: options?.enabled !== false,
   });
 }
 
-// Fetch player playing time stats
-export function usePlayerPlayingTime(competitionFilter = 'all', options?: { enabled?: boolean }) {
+// Fetch player playing time stats using optimized materialized view
+export function usePlayerPlayingTime(competitionFilter = 'all', options?: { enabled?: boolean, limit?: number, offset?: number }) {
   return useQuery({
-    queryKey: ['player-playing-time', competitionFilter],
+    queryKey: ['player-playing-time', competitionFilter, options?.limit, options?.offset],
     queryFn: async (): Promise<PlayerPlayingTime[]> => {
-      // Build competition condition
-      let competitionCondition = {};
+      let query = supabase
+        .from('mv_player_playing_time')
+        .select('*')
+        .order('total_minutes', { ascending: false });
+
+      // Apply competition filter
       if (competitionFilter !== 'all') {
         if (competitionFilter.startsWith('type:')) {
           const type = competitionFilter.replace('type:', '');
-          competitionCondition = { competition_type: type };
+          query = query.eq('competition_type', type);
         } else {
-          competitionCondition = { competition_name: competitionFilter };
+          query = query.eq('competition_name', competitionFilter);
         }
       }
 
-      // Get completed fixtures matching filter
-      const { data: fixtures, error: fixturesError } = await supabase
-        .from('fixtures')
-        .select('id, team_id, teams!fk_fixtures_team_id(name)')
-        .or('status.eq.completed,match_status.eq.completed')
-        .match(competitionCondition);
+      // Apply pagination
+      if (options?.limit) {
+        query = query.range(options.offset || 0, (options.offset || 0) + options.limit - 1);
+      }
 
-      if (fixturesError) throw fixturesError;
-      
-      const fixtureIds = (fixtures || []).map(f => f.id);
-      if (fixtureIds.length === 0) return [];
+      const { data, error } = await query;
+      if (error) throw error;
 
-      // Get playing time logs
-      const { data: timeLogs, error: timeError } = await supabase
-        .from('player_time_logs')
-        .select(`
-          player_id,
-          total_period_minutes,
-          players!inner(first_name, last_name)
-        `)
-        .in('fixture_id', fixtureIds)
-        .not('total_period_minutes', 'is', null);
-
-      if (timeError) throw timeError;
-
-      // Process and aggregate the data
+      // Aggregate by player (in case player appears in multiple competitions)
       const playerStats: Record<string, PlayerPlayingTime> = {};
 
-      (timeLogs || []).forEach((log: any) => {
-        const playerId = log.player_id;
-        const playerName = `${log.players.first_name} ${log.players.last_name}`;
-        const minutes = log.total_period_minutes || 0;
-
+      (data || []).forEach((row: any) => {
+        const playerId = row.player_id;
+        
         if (!playerStats[playerId]) {
           playerStats[playerId] = {
             player_id: playerId,
-            player_name: playerName,
-            team_name: 'Unknown Team', // Will be updated below
+            player_name: row.player_name,
+            team_name: row.team_name,
             total_minutes: 0,
             matches_played: 0,
-            average_minutes: 0
+            average_minutes: 0,
+            competition_type: row.competition_type,
+            competition_name: row.competition_name
           };
         }
 
-        playerStats[playerId].total_minutes += minutes;
-        playerStats[playerId].matches_played++;
+        playerStats[playerId].total_minutes += row.total_minutes || 0;
+        playerStats[playerId].matches_played += row.matches_played || 0;
       });
 
-      // Calculate averages and get team names
+      // Recalculate averages after aggregation
       const result = Object.values(playerStats).map(player => ({
         ...player,
         average_minutes: player.matches_played > 0 
@@ -233,51 +210,44 @@ export function usePlayerPlayingTime(competitionFilter = 'all', options?: { enab
 
       return result.sort((a, b) => b.total_minutes - a.total_minutes);
     },
-    staleTime: 2 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
+    staleTime: 10 * 60 * 1000, // Historical data stays fresh longer
+    gcTime: 30 * 60 * 1000,
     enabled: options?.enabled !== false,
   });
 }
 
-// Fetch available competitions
+// Fetch available competitions using optimized materialized view
 export function useCompetitions(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['competitions'],
     queryFn: async (): Promise<Competition[]> => {
       const { data, error } = await supabase
-        .from('fixtures')
-        .select('competition_type, competition_name')
-        .or('status.eq.completed,match_status.eq.completed');
+        .from('mv_competitions')
+        .select('*')
+        .order('display_name');
 
       if (error) throw error;
 
-      const competitions: Competition[] = [];
-      const seen = new Set<string>();
-
-      (data || []).forEach(fixture => {
-        // Add competition type
-        if (fixture.competition_type && !seen.has(`type:${fixture.competition_type}`)) {
-          seen.add(`type:${fixture.competition_type}`);
-          competitions.push({ 
-            type: `type:${fixture.competition_type}`,
-            name: fixture.competition_type.charAt(0).toUpperCase() + fixture.competition_type.slice(1)
-          });
-        }
-
-        // Add named competition
-        if (fixture.competition_name && !seen.has(fixture.competition_name)) {
-          seen.add(fixture.competition_name);
-          competitions.push({ 
-            type: fixture.competition_name,
-            name: fixture.competition_name
-          });
-        }
-      });
-
-      return competitions;
+      return (data || []).map(comp => ({
+        filter_value: comp.filter_value,
+        display_name: comp.display_name,
+        competition_type: comp.competition_type,
+        competition_name: comp.competition_name
+      }));
     },
-    staleTime: 10 * 60 * 1000, // Competitions don't change often
-    gcTime: 30 * 60 * 1000,
+    staleTime: 30 * 60 * 1000, // Competitions don't change often
+    gcTime: 60 * 60 * 1000,    // Keep in cache for 1 hour
     enabled: options?.enabled !== false,
   });
+}
+
+// Hook to refresh materialized views when data changes
+export function useRefreshReports() {
+  return async () => {
+    const { error } = await supabase.rpc('refresh_report_views');
+    if (error) {
+      console.error('Error refreshing report views:', error);
+      throw error;
+    }
+  };
 }

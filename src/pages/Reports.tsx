@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useCompletedMatches, useGoalScorers, usePlayerPlayingTime, useCompetitions } from '@/hooks/useReports';
+import { useReportRefresh } from '@/hooks/useReportRefresh';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -46,12 +47,26 @@ interface PlayerPlayingTime {
 export default function Reports() {
   const [competitionFilter, setCompetitionFilter] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<'matches' | 'scorers' | 'playing-time'>('matches');
-  const { data: completedMatches = [], isLoading: matchesLoading } = useCompletedMatches(competitionFilter, { enabled: activeTab === 'matches' });
-  const { data: goalScorers = [], isLoading: scorersLoading } = useGoalScorers(competitionFilter, { enabled: activeTab === 'scorers' });
-  const { data: playingTime = [], isLoading: timeLoading } = usePlayerPlayingTime(competitionFilter, { enabled: activeTab === 'playing-time' });
+  
+  // Use optimized hooks with pagination (show 50 items per page for better performance)
+  const { data: completedMatches = [], isLoading: matchesLoading } = useCompletedMatches(competitionFilter, { 
+    enabled: activeTab === 'matches',
+    limit: 50
+  });
+  const { data: goalScorers = [], isLoading: scorersLoading } = useGoalScorers(competitionFilter, { 
+    enabled: activeTab === 'scorers',
+    limit: 50
+  });
+  const { data: playingTime = [], isLoading: timeLoading } = usePlayerPlayingTime(competitionFilter, { 
+    enabled: activeTab === 'playing-time',
+    limit: 50
+  });
   const { data: competitions = [] } = useCompetitions();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Enable automatic report refresh when data changes
+  useReportRefresh();
 
   const formatMinutes = (minutes: number) => {
     const hours = Math.floor(minutes / 60);
@@ -125,7 +140,11 @@ export default function Reports() {
     return (
       <ResponsiveWrapper>
         <div className="flex items-center justify-center h-64">
-          <div className="text-lg">Loading reports...</div>
+          <div className="flex flex-col items-center space-y-2">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <div className="text-lg">Loading optimized reports...</div>
+            <div className="text-sm text-muted-foreground">Using high-performance data views</div>
+          </div>
         </div>
       </ResponsiveWrapper>
     );
@@ -156,9 +175,9 @@ export default function Reports() {
                 <SelectItem value="type:tournament">Tournament Matches Only</SelectItem>
                 <SelectItem value="type:friendly">Friendly Matches Only</SelectItem>
                 {competitions.map((comp, index) => (
-                  comp.name && (
-                    <SelectItem key={index} value={comp.type}>
-                      {comp.name}
+                  comp.display_name && (
+                    <SelectItem key={index} value={comp.filter_value}>
+                      {comp.display_name}
                     </SelectItem>
                   )
                 ))}
