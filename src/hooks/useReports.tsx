@@ -35,14 +35,14 @@ interface Competition {
 }
 
 // Fetch completed matches with scores
-export function useCompletedMatches(competitionFilter = 'all') {
+export function useCompletedMatches(competitionFilter = 'all', options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['completed-matches', competitionFilter],
     queryFn: async (): Promise<CompletedMatch[]> => {
       let query = supabase
         .from('fixtures_with_scores')
         .select('*')
-        .eq('status', 'completed')
+        .or('status.eq.completed,match_status.eq.completed')
         .order('scheduled_date', { ascending: false });
 
       // Apply competition filter
@@ -70,11 +70,12 @@ export function useCompletedMatches(competitionFilter = 'all') {
     },
     staleTime: 2 * 60 * 1000, // Consider fresh for 2 minutes
     gcTime: 10 * 60 * 1000,   // Keep in cache for 10 minutes
+    enabled: options?.enabled !== false, // default enabled unless explicitly false
   });
 }
 
 // Fetch goal scorers with stats
-export function useGoalScorers(competitionFilter = 'all') {
+export function useGoalScorers(competitionFilter = 'all', options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['goal-scorers', competitionFilter],
     queryFn: async (): Promise<GoalScorer[]> => {
@@ -93,7 +94,7 @@ export function useGoalScorers(competitionFilter = 'all') {
       const { data: fixtures, error: fixturesError } = await supabase
         .from('fixtures')
         .select('id')
-        .eq('status', 'completed')
+        .or('status.eq.completed,match_status.eq.completed')
         .match(competitionCondition);
 
       if (fixturesError) throw fixturesError;
@@ -154,11 +155,12 @@ export function useGoalScorers(competitionFilter = 'all') {
     },
     staleTime: 2 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
+    enabled: options?.enabled !== false,
   });
 }
 
 // Fetch player playing time stats
-export function usePlayerPlayingTime(competitionFilter = 'all') {
+export function usePlayerPlayingTime(competitionFilter = 'all', options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['player-playing-time', competitionFilter],
     queryFn: async (): Promise<PlayerPlayingTime[]> => {
@@ -177,7 +179,7 @@ export function usePlayerPlayingTime(competitionFilter = 'all') {
       const { data: fixtures, error: fixturesError } = await supabase
         .from('fixtures')
         .select('id, team_id, teams!fk_fixtures_team_id(name)')
-        .eq('status', 'completed')
+        .or('status.eq.completed,match_status.eq.completed')
         .match(competitionCondition);
 
       if (fixturesError) throw fixturesError;
@@ -233,18 +235,19 @@ export function usePlayerPlayingTime(competitionFilter = 'all') {
     },
     staleTime: 2 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
+    enabled: options?.enabled !== false,
   });
 }
 
 // Fetch available competitions
-export function useCompetitions() {
+export function useCompetitions(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['competitions'],
     queryFn: async (): Promise<Competition[]> => {
       const { data, error } = await supabase
         .from('fixtures')
         .select('competition_type, competition_name')
-        .eq('status', 'completed');
+        .or('status.eq.completed,match_status.eq.completed');
 
       if (error) throw error;
 
@@ -275,5 +278,6 @@ export function useCompetitions() {
     },
     staleTime: 10 * 60 * 1000, // Competitions don't change often
     gcTime: 30 * 60 * 1000,
+    enabled: options?.enabled !== false,
   });
 }

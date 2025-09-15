@@ -45,9 +45,10 @@ interface PlayerPlayingTime {
 
 export default function Reports() {
   const [competitionFilter, setCompetitionFilter] = useState<string>('all');
-  const { data: completedMatches = [], isLoading: matchesLoading } = useCompletedMatches(competitionFilter);
-  const { data: goalScorers = [], isLoading: scorersLoading } = useGoalScorers(competitionFilter);
-  const { data: playingTime = [], isLoading: timeLoading } = usePlayerPlayingTime(competitionFilter);
+  const [activeTab, setActiveTab] = useState<'matches' | 'scorers' | 'playing-time'>('matches');
+  const { data: completedMatches = [], isLoading: matchesLoading } = useCompletedMatches(competitionFilter, { enabled: activeTab === 'matches' });
+  const { data: goalScorers = [], isLoading: scorersLoading } = useGoalScorers(competitionFilter, { enabled: activeTab === 'scorers' });
+  const { data: playingTime = [], isLoading: timeLoading } = usePlayerPlayingTime(competitionFilter, { enabled: activeTab === 'playing-time' });
   const { data: competitions = [] } = useCompetitions();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -118,7 +119,7 @@ export default function Reports() {
     }
   };
 
-  const isLoading = matchesLoading || scorersLoading || timeLoading;
+  const isLoading = activeTab === 'matches' ? matchesLoading : activeTab === 'scorers' ? scorersLoading : timeLoading;
 
   if (isLoading) {
     return (
@@ -167,7 +168,7 @@ export default function Reports() {
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="matches" className="space-y-6 w-full">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'matches' | 'scorers' | 'playing-time')} className="space-y-6 w-full">
         <TabsList className="grid w-full grid-cols-3 h-auto">
           <TabsTrigger value="matches" className="flex flex-col sm:flex-row items-center space-y-1 sm:space-y-0 sm:space-x-2 p-2 sm:p-3 text-xs sm:text-sm">
             <Calendar className="h-4 w-4" />
