@@ -287,7 +287,11 @@ export default function Players() {
       ) : (
         <div className="bg-card border border-border rounded-lg overflow-hidden">
           {filteredPlayers
-            .sort((a, b) => a.last_name.localeCompare(b.last_name))
+            .sort((a, b) => {
+              const lastNameA = a.last_name || '';
+              const lastNameB = b.last_name || '';
+              return lastNameA.localeCompare(lastNameB);
+            })
             .map((player, index) => (
             <PlayerCard
               key={player.id}
