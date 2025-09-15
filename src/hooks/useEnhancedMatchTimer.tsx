@@ -320,6 +320,27 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
       matchStatus: 'completed',
       isRunning: false,
     }));
+
+    try {
+      // Update the fixture status in the database
+      const { error } = await supabase
+        .from('fixtures')
+        .update({ 
+          status: 'completed',
+          match_status: 'completed',
+          match_state: { 
+            status: 'completed', 
+            total_time_seconds: timerState.totalMatchTime 
+          }
+        })
+        .eq('id', fixtureId);
+
+      if (error) {
+        console.error('Error updating fixture status:', error);
+      }
+    } catch (error) {
+      console.error('Error ending match:', error);
+    }
   };
 
   const getCurrentMinute = () => Math.floor(timerState.currentTime / 60);

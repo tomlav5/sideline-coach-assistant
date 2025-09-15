@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -49,6 +49,8 @@ interface FixtureDetails {
   competition_name?: string;
   fixture_type: string;
   half_length: number;
+  status: string;
+  active_tracker_id?: string;
   teams: {
     name: string;
   };
@@ -57,6 +59,7 @@ interface FixtureDetails {
 export default function MatchReport() {
   const { fixtureId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   
   const [fixture, setFixture] = useState<FixtureDetails | null>(null);
@@ -86,6 +89,8 @@ export default function MatchReport() {
           competition_name,
           fixture_type,
           half_length,
+          status,
+          active_tracker_id,
           teams!fk_fixtures_team_id (name)
         `)
         .eq('id', fixtureId)
@@ -217,6 +222,24 @@ export default function MatchReport() {
     }
   };
 
+  const getBackNavigation = () => {
+    // If coming from live tracking, go back to tracking
+    if (location.state?.from === 'match-tracker' && fixture?.active_tracker_id) {
+      return () => navigate(`/match-tracker/${fixtureId}`);
+    }
+    // Otherwise go to reports
+    return () => navigate('/reports');
+  };
+
+  const getBackLabel = () => {
+    if (location.state?.from === 'match-tracker' && fixture?.active_tracker_id) {
+      return 'Back to Live Tracking';
+    }
+    return 'Back to Reports';
+  };
+
+  const isLiveMatch = fixture?.status !== 'completed' && fixture?.active_tracker_id;
+
   if (loading) {
     return (
       <ResponsiveWrapper>
@@ -232,9 +255,9 @@ export default function MatchReport() {
       <ResponsiveWrapper>
         <div className="text-center py-8">
           <h2 className="text-xl font-semibold mb-2">Match not found</h2>
-          <Button onClick={() => navigate('/reports')}>
+          <Button onClick={getBackNavigation()}>
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Reports
+            {getBackLabel()}
           </Button>
         </div>
       </ResponsiveWrapper>
@@ -247,12 +270,20 @@ export default function MatchReport() {
   return (
     <ResponsiveWrapper className="space-y-6 max-w-full">
       <div className="flex items-center space-x-4">
-        <Button variant="outline" onClick={() => navigate('/reports')}>
+        <Button variant="outline" onClick={getBackNavigation()}>
           <ArrowLeft className="h-4 w-4 mr-2" />
-          Back
+          {getBackLabel()}
         </Button>
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Match Report</h1>
+        <div className="flex-1">
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl sm:text-3xl font-bold">Match Report</h1>
+            {isLiveMatch && (
+              <div className="flex items-center gap-2 px-3 py-1 bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-200 rounded-full text-sm font-medium border border-red-200 dark:border-red-800">
+                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                LIVE MATCH
+              </div>
+            )}
+          </div>
           <p className="text-muted-foreground">
             {format(new Date(fixture.scheduled_date), 'EEEE, MMMM do, yyyy')}
           </p>

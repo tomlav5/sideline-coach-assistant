@@ -13,6 +13,8 @@ import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { ResponsiveWrapper } from '@/components/ui/responsive-wrapper';
 import { useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { ExportDialog } from '@/components/reports/ExportDialog';
 
 interface CompletedMatch {
   id: string;
@@ -50,14 +52,6 @@ export default function Reports() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  useEffect(() => {
-    fetchCompetitions();
-  }, []);
-
-  useEffect(() => {
-    fetchReportsData();
-  }, [competitionFilter]);
-
   const formatMinutes = (minutes: number) => {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
@@ -65,270 +59,6 @@ export default function Reports() {
       return `${hours}h ${mins}m`;
     }
     return `${mins}m`;
-  };
-
-  const fetchReportsData = async () => {
-    try {
-      setLoading(true);
-      
-      // Build competition filter condition
-      let competitionCondition = {};
-      if (competitionFilter !== 'all') {
-        if (competitionFilter.startsWith('type:')) {
-          const type = competitionFilter.replace('type:', '');
-          competitionCondition = { competition_type: type };
-        } else if (competitionFilter.startsWith('name:')) {
-          const name = competitionFilter.replace('name:', '');
-          competitionCondition = { competition_name: name };
-        }
-      }
-      
-      // Fetch completed matches with scores
-      const { data: fixtures, error: fixturesError } = await supabase
-        .from('fixtures')
-        .select(`
-          id,
-          scheduled_date,
-          opponent_name,
-          location,
-          competition_type,
-          competition_name,
-          teams!fk_fixtures_team_id (name)
-        `)
-        .eq('status', 'completed')
-        .match(competitionCondition)
-        .order('scheduled_date', { ascending: false });
-
-      if (fixturesError) throw fixturesError;
-
-      // Use optimized view to get fixtures with scores in single query
-      const { data: fixturesWithScores, error: scoresError } = await supabase
-        .from('fixtures_with_scores')
-        .select('*')
-        .eq('status', 'completed')
-        .match(competitionCondition)
-        .order('scheduled_date', { ascending: false });
-
-      if (scoresError) throw scoresError;
-
-      // Transform data to match expected format
-      const matchesWithScores = (fixturesWithScores || []).map(fixture => ({
-        id: fixture.id,
-        scheduled_date: fixture.scheduled_date,
-        opponent_name: fixture.opponent_name,
-        location: fixture.location || 'TBC',
-        our_score: fixture.our_goals || 0,
-        opponent_score: fixture.opponent_goals || 0,
-        team_name: fixture.team_name || 'Unknown Team'
-      }));
-
-      setCompletedMatches(matchesWithScores);
-
-      // Fetch goal scorers data with competition filter
-      const goalEventsQuery = supabase
-        .from('match_events')
-        .select(`
-          player_id,
-          event_type,
-          fixtures!fk_match_events_fixture_id (
-            status,
-            competition_type,
-            competition_name,
-            teams!fk_fixtures_team_id (name)
-          ),
-          players!fk_match_events_player_id (
-            first_name,
-            last_name
-          )
-        `)
-        .eq('is_our_team', true)
-        .eq('fixtures.status', 'completed')
-        .in('event_type', ['goal', 'assist']);
-
-      if (competitionFilter !== 'all') {
-        if (competitionFilter.startsWith('type:')) {
-          const type = competitionFilter.replace('type:', '');
-          goalEventsQuery.eq('fixtures.competition_type', type as 'league' | 'tournament' | 'friendly');
-        } else if (competitionFilter.startsWith('name:')) {
-          const name = competitionFilter.replace('name:', '');
-          goalEventsQuery.eq('fixtures.competition_name', name);
-        }
-      }
-
-      const { data: goalEvents, error: goalError } = await goalEventsQuery;
-
-      if (goalError) throw goalError;
-
-      // Process goal scorers
-      const scorersMap = new Map<string, GoalScorer>();
-      
-      (goalEvents || []).forEach((event) => {
-        if (!event.player_id || !event.players) return;
-        
-        const playerId = event.player_id;
-        const playerName = `${event.players.first_name} ${event.players.last_name}`;
-        const teamName = event.fixtures?.teams?.name || 'Unknown Team';
-        
-        if (!scorersMap.has(playerId)) {
-          scorersMap.set(playerId, {
-            player_id: playerId,
-            player_name: playerName,
-            goals: 0,
-            assists: 0,
-            team_name: teamName
-          });
-        }
-        
-        const scorer = scorersMap.get(playerId)!;
-        if (event.event_type === 'goal') {
-          scorer.goals++;
-        } else if (event.event_type === 'assist') {
-          scorer.assists++;
-        }
-      });
-
-      const sortedScorers = Array.from(scorersMap.values())
-        .sort((a, b) => {
-          if (b.goals !== a.goals) return b.goals - a.goals;
-          return b.assists - a.assists;
-        });
-
-      setGoalScorers(sortedScorers);
-
-      // Fetch playing time data
-      const playingTimeQuery = supabase
-        .from('player_time_logs')
-        .select(`
-          player_id,
-          fixture_id,
-          total_period_minutes,
-          fixtures!fk_player_time_logs_fixture_id (
-            status,
-            competition_type,
-            competition_name,
-            teams!fk_fixtures_team_id (name)
-          ),
-          players!fk_player_time_logs_player_id (
-            first_name,
-            last_name
-          )
-        `)
-        .eq('fixtures.status', 'completed');
-
-      if (competitionFilter !== 'all') {
-        if (competitionFilter.startsWith('type:')) {
-          const type = competitionFilter.replace('type:', '');
-          playingTimeQuery.eq('fixtures.competition_type', type as 'league' | 'tournament' | 'friendly');
-        } else if (competitionFilter.startsWith('name:')) {
-          const name = competitionFilter.replace('name:', '');
-          playingTimeQuery.eq('fixtures.competition_name', name);
-        }
-      }
-
-      const { data: playingTimeData, error: playingTimeError } = await playingTimeQuery;
-
-      if (playingTimeError) throw playingTimeError;
-
-      // Process playing time data - aggregate by player and match
-      const playerMatchMap = new Map<string, Map<string, number>>(); // playerId -> matchId -> totalMinutes
-      const playingTimeMap = new Map<string, PlayerPlayingTime>();
-      
-      (playingTimeData || []).forEach((record) => {
-        if (!record.player_id || !record.players) return;
-        
-        const playerId = record.player_id;
-        const playerName = `${record.players.first_name} ${record.players.last_name}`;
-        const teamName = record.fixtures?.teams?.name || 'Unknown Team';
-        const fixtureId = record.fixture_id || 'unknown';
-        
-        // Initialize player match tracking
-        if (!playerMatchMap.has(playerId)) {
-          playerMatchMap.set(playerId, new Map());
-        }
-        
-        // Initialize player stats
-        if (!playingTimeMap.has(playerId)) {
-          playingTimeMap.set(playerId, {
-            player_id: playerId,
-            player_name: playerName,
-            total_minutes: 0,
-            matches_played: 0,
-            average_minutes: 0,
-            team_name: teamName
-          });
-        }
-        
-        const playerMatches = playerMatchMap.get(playerId)!;
-        const currentMatchMinutes = playerMatches.get(fixtureId) || 0;
-        playerMatches.set(fixtureId, currentMatchMinutes + (record.total_period_minutes || 0));
-      });
-
-      // Calculate totals from aggregated match data
-      playerMatchMap.forEach((matches, playerId) => {
-        const playerStats = playingTimeMap.get(playerId)!;
-        let totalMinutes = 0;
-        
-        matches.forEach((minutes) => {
-          totalMinutes += minutes;
-        });
-        
-        playerStats.total_minutes = totalMinutes;
-        playerStats.matches_played = matches.size; // Number of different matches
-      });
-
-      // Calculate averages and sort
-      const sortedPlayingTime = Array.from(playingTimeMap.values())
-        .map(player => ({
-          ...player,
-          average_minutes: player.matches_played > 0 ? Math.round(player.total_minutes / player.matches_played) : 0
-        }))
-        .sort((a, b) => b.total_minutes - a.total_minutes);
-
-      setPlayingTime(sortedPlayingTime);
-
-    } catch (error) {
-      console.error('Error fetching reports data:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load reports data",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchCompetitions = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('fixtures')
-        .select('competition_type, competition_name')
-        .eq('status', 'completed');
-
-      if (error) throw error;
-
-      const competitionsSet = new Set<string>();
-      (data || []).forEach(fixture => {
-        if (fixture.competition_type) {
-          competitionsSet.add(`type:${fixture.competition_type}`);
-        }
-        if (fixture.competition_name) {
-          competitionsSet.add(`name:${fixture.competition_name}`);
-        }
-      });
-
-      const competitionsList = Array.from(competitionsSet).map(comp => {
-        if (comp.startsWith('type:')) {
-          return { type: comp.replace('type:', '') };
-        } else {
-          return { type: 'tournament', name: comp.replace('name:', '') };
-        }
-      });
-
-      setCompetitions(competitionsList);
-    } catch (error) {
-      console.error('Error fetching competitions:', error);
-    }
   };
 
   const getMatchResult = (ourScore: number, opponentScore: number) => {
@@ -339,8 +69,6 @@ export default function Reports() {
 
   const deleteMatch = async (matchId: string) => {
     try {
-      // Delete all related data in the correct order (due to foreign key constraints)
-      
       // Delete player time logs
       const { error: timeLogsError } = await supabase
         .from('player_time_logs')
@@ -390,6 +118,8 @@ export default function Reports() {
     }
   };
 
+  const isLoading = matchesLoading || scorersLoading || timeLoading;
+
   if (isLoading) {
     return (
       <ResponsiveWrapper>
@@ -426,7 +156,7 @@ export default function Reports() {
                 <SelectItem value="type:friendly">Friendly Matches Only</SelectItem>
                 {competitions.map((comp, index) => (
                   comp.name && (
-                    <SelectItem key={index} value={`name:${comp.name}`}>
+                    <SelectItem key={index} value={comp.type}>
                       {comp.name}
                     </SelectItem>
                   )
@@ -476,343 +206,182 @@ export default function Reports() {
                     );
                   })}
                   {completedMatches.length < 5 && (
-                    <span className="text-muted-foreground text-sm ml-4">
+                    <div className="text-sm text-muted-foreground ml-4">
                       {5 - completedMatches.length} more matches needed for full form
-                    </span>
+                    </div>
                   )}
                 </div>
               </CardContent>
             </Card>
           )}
 
+          {/* Completed Matches */}
           <Card>
             <CardHeader>
               <CardTitle>Completed Matches</CardTitle>
             </CardHeader>
-            <CardContent className="p-0 sm:p-6">
+            <CardContent>
               {completedMatches.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
+                <p className="text-muted-foreground text-center py-8">
                   No completed matches found
-                </div>
+                </p>
               ) : (
-                <div className="space-y-3 p-4 sm:p-0">
+                <div className="space-y-3">
                   {completedMatches.map((match) => {
                     const { result, color } = getMatchResult(match.our_score, match.opponent_score);
                     return (
-                      <Card key={match.id} className="sm:hidden">
-                        <CardContent className="p-4">
-                          <div className="flex items-center justify-between mb-3">
+                      <div key={match.id} className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                        <div className="flex items-center space-x-4">
+                          <div className={`w-8 h-8 rounded-full ${color} text-white flex items-center justify-center font-bold text-sm`}>
+                            {result}
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2 mb-1">
+                              <span className="font-medium">{match.team_name}</span>
+                              <span className="text-lg font-mono">{match.our_score} - {match.opponent_score}</span>
+                              <span className="font-medium">{match.opponent_name}</span>
+                            </div>
                             <div className="text-sm text-muted-foreground">
-                              {format(new Date(match.scheduled_date), 'dd/MM/yyyy')}
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <Badge className={`${color} text-white text-xs`}>
-                                {result}
-                              </Badge>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => window.open(`/match-report/${match.id}`, '_blank')}>
-                                    View Report
-                                  </DropdownMenuItem>
-                                  <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                      <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                                        <Trash2 className="h-4 w-4 mr-2" />
-                                        Delete Match
-                                      </DropdownMenuItem>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                      <AlertDialogHeader>
-                                        <AlertDialogTitle>Delete Match Record</AlertDialogTitle>
-                                        <AlertDialogDescription>
-                                          Are you sure you want to delete this match? This action cannot be undone and will permanently remove:
-                                          <br />• Match details and score
-                                          <br />• All goals and assists
-                                          <br />• Player playing time records
-                                          <br />• All other match events
-                                        </AlertDialogDescription>
-                                      </AlertDialogHeader>
-                                      <AlertDialogFooter>
-                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                        <AlertDialogAction onClick={() => deleteMatch(match.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                                          Delete Match
-                                        </AlertDialogAction>
-                                      </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                  </AlertDialog>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                              {format(new Date(match.scheduled_date), 'dd/MM/yyyy HH:mm')} • {match.location}
                             </div>
                           </div>
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <span className="font-medium text-sm truncate pr-2">{match.team_name}</span>
-                              <div className="flex items-center space-x-2">
-                                <span className="font-mono text-lg">{match.our_score}</span>
-                              </div>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm truncate pr-2">{match.opponent_name}</span>
-                              <div className="flex items-center space-x-2">
-                                <span className="font-mono text-lg">{match.opponent_score}</span>
-                              </div>
-                            </div>
-                            <div className="text-xs text-muted-foreground pt-2 border-t">
-                              {match.location}
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem asChild>
+                              <a href={`/match-report/${match.id}`}>
+                                View Report
+                              </a>
+                            </DropdownMenuItem>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Delete Match
+                                </DropdownMenuItem>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Match</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete this match? This will permanently remove all match data including events, player times, and statistics. This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => deleteMatch(match.id)}
+                                    className="bg-red-600 hover:bg-red-700"
+                                  >
+                                    Delete Match
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     );
                   })}
-                  
-                  {/* Desktop Table - Hidden on mobile */}
-                  <div className="hidden sm:block overflow-x-auto">
-                    <table className="w-full border-collapse">
-                       <thead>
-                         <tr className="border-b">
-                           <th className="text-left p-3 text-sm font-medium">Date</th>
-                           <th className="text-left p-3 text-sm font-medium">Team</th>
-                           <th className="text-left p-3 text-sm font-medium">Opponent</th>
-                           <th className="text-center p-3 text-sm font-medium">Score</th>
-                           <th className="text-center p-3 text-sm font-medium">Result</th>
-                           <th className="text-left p-3 text-sm font-medium">Location</th>
-                           <th className="text-center p-3 text-sm font-medium">Actions</th>
-                         </tr>
-                       </thead>
-                      <tbody>
-                         {completedMatches.map((match) => {
-                           const { result, color } = getMatchResult(match.our_score, match.opponent_score);
-                           return (
-                             <tr key={match.id} className="border-b hover:bg-muted/50">
-                               <td className="p-3 text-sm cursor-pointer" onClick={() => window.open(`/match-report/${match.id}`, '_blank')}>
-                                 {format(new Date(match.scheduled_date), 'dd/MM/yyyy')}
-                               </td>
-                               <td className="p-3 font-medium text-sm cursor-pointer" onClick={() => window.open(`/match-report/${match.id}`, '_blank')}>
-                                 {match.team_name}
-                               </td>
-                               <td className="p-3 text-sm cursor-pointer" onClick={() => window.open(`/match-report/${match.id}`, '_blank')}>{match.opponent_name}</td>
-                               <td className="p-3 text-center font-mono text-lg cursor-pointer" onClick={() => window.open(`/match-report/${match.id}`, '_blank')}>
-                                 {match.our_score} - {match.opponent_score}
-                               </td>
-                               <td className="p-3 text-center cursor-pointer" onClick={() => window.open(`/match-report/${match.id}`, '_blank')}>
-                                 <Badge className={`${color} text-white text-xs`}>
-                                   {result}
-                                 </Badge>
-                               </td>
-                               <td className="p-3 text-muted-foreground text-sm cursor-pointer" onClick={() => window.open(`/match-report/${match.id}`, '_blank')}>
-                                 {match.location}
-                               </td>
-                               <td className="p-3 text-center">
-                                 <DropdownMenu>
-                                   <DropdownMenuTrigger asChild>
-                                     <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                       <MoreVertical className="h-4 w-4" />
-                                     </Button>
-                                   </DropdownMenuTrigger>
-                                   <DropdownMenuContent align="end">
-                                     <DropdownMenuItem onClick={() => window.open(`/match-report/${match.id}`, '_blank')}>
-                                       View Report
-                                     </DropdownMenuItem>
-                                     <AlertDialog>
-                                       <AlertDialogTrigger asChild>
-                                         <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                                           <Trash2 className="h-4 w-4 mr-2" />
-                                           Delete Match
-                                         </DropdownMenuItem>
-                                       </AlertDialogTrigger>
-                                       <AlertDialogContent>
-                                         <AlertDialogHeader>
-                                           <AlertDialogTitle>Delete Match Record</AlertDialogTitle>
-                                           <AlertDialogDescription>
-                                             Are you sure you want to delete this match? This action cannot be undone and will permanently remove:
-                                             <br />• Match details and score
-                                             <br />• All goals and assists
-                                             <br />• Player playing time records
-                                             <br />• All other match events
-                                           </AlertDialogDescription>
-                                         </AlertDialogHeader>
-                                         <AlertDialogFooter>
-                                           <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                           <AlertDialogAction onClick={() => deleteMatch(match.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                                             Delete Match
-                                           </AlertDialogAction>
-                                         </AlertDialogFooter>
-                                       </AlertDialogContent>
-                                     </AlertDialog>
-                                   </DropdownMenuContent>
-                                 </DropdownMenu>
-                               </td>
-                             </tr>
-                           );
-                         })}
-                      </tbody>
-                    </table>
-                  </div>
                 </div>
               )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="scorers">
+        <TabsContent value="scorers" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Goal Scorer League Table</CardTitle>
+              <CardTitle>Goal Scorers</CardTitle>
+              <CardDescription>Top performers in goals and assists</CardDescription>
             </CardHeader>
-            <CardContent className="p-0 sm:p-6">
+            <CardContent>
               {goalScorers.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  No goal scorer data available
-                </div>
+                <p className="text-muted-foreground text-center py-8">
+                  No goal scorers found
+                </p>
               ) : (
-                <div className="space-y-3 p-4 sm:p-0">
-                  {goalScorers.map((scorer, index) => (
-                    <Card key={scorer.player_id} className="sm:hidden">
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-3">
-                            <div className="flex items-center">
-                              {index === 0 && (
-                                <Trophy className="h-4 w-4 text-yellow-500 mr-1" />
-                              )}
-                              <span className="font-medium text-sm">#{index + 1}</span>
-                            </div>
-                            <div>
-                              <div className="font-medium text-sm">{scorer.player_name}</div>
-                              <div className="text-xs text-muted-foreground">{scorer.team_name}</div>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-lg font-bold">{scorer.goals + scorer.assists}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {scorer.goals}G {scorer.assists}A
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                  
-                  {/* Desktop Table */}
-                  <div className="hidden sm:block overflow-x-auto">
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="text-left p-3 w-16 text-sm font-medium">Rank</th>
-                          <th className="text-left p-3 text-sm font-medium">Player</th>
-                          <th className="text-left p-3 text-sm font-medium">Team</th>
-                          <th className="text-center p-3 text-sm font-medium">Goals</th>
-                          <th className="text-center p-3 text-sm font-medium">Assists</th>
-                          <th className="text-center p-3 text-sm font-medium">Total</th>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b text-left">
+                        <th className="pb-2 font-medium">Player</th>
+                        <th className="pb-2 font-medium">Team</th>
+                        <th className="pb-2 font-medium text-center">Goals</th>
+                        <th className="pb-2 font-medium text-center">Assists</th>
+                        <th className="pb-2 font-medium text-center">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {goalScorers.map((player) => (
+                        <tr key={player.player_id} className="border-b">
+                          <td className="py-2 font-medium">{player.player_name}</td>
+                          <td className="py-2 text-muted-foreground">{player.team_name}</td>
+                          <td className="py-2 text-center">
+                            <Badge variant="secondary">{player.goals}</Badge>
+                          </td>
+                          <td className="py-2 text-center">
+                            <Badge variant="outline">{player.assists}</Badge>
+                          </td>
+                          <td className="py-2 text-center">
+                            <Badge variant="default">{player.goals + player.assists}</Badge>
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {goalScorers.map((scorer, index) => (
-                          <tr key={scorer.player_id} className="border-b hover:bg-muted/50">
-                            <td className="p-3 font-medium">
-                              {index === 0 && (
-                                <Trophy className="h-4 w-4 text-yellow-500 inline mr-1" />
-                              )}
-                              #{index + 1}
-                            </td>
-                            <td className="p-3 font-medium text-sm">
-                              {scorer.player_name}
-                            </td>
-                            <td className="p-3 text-muted-foreground text-sm">
-                              {scorer.team_name}
-                            </td>
-                            <td className="p-3 text-center text-lg font-bold">
-                              {scorer.goals}
-                            </td>
-                            <td className="p-3 text-center text-lg font-bold">
-                              {scorer.assists}
-                            </td>
-                            <td className="p-3 text-center text-lg font-bold">
-                              {scorer.goals + scorer.assists}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="playing-time">
+        <TabsContent value="playing-time" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Player Playing Time</CardTitle>
+              <CardTitle>Player Performance</CardTitle>
+              <CardDescription>Total playing time across all matches</CardDescription>
             </CardHeader>
-            <CardContent className="p-0 sm:p-6">
+            <CardContent>
               {playingTime.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  No playing time data available
-                </div>
+                <p className="text-muted-foreground text-center py-8">
+                  No playing time data found
+                </p>
               ) : (
-                <div className="space-y-3 p-4 sm:p-0">
-                  {playingTime.map((player) => (
-                    <Card key={player.player_id} className="sm:hidden">
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="font-medium text-sm">{player.player_name}</div>
-                            <div className="text-xs text-muted-foreground">{player.team_name}</div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-lg font-bold">{formatMinutes(player.total_minutes)}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {player.matches_played} matches • {formatMinutes(player.average_minutes)} avg
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                  
-                  {/* Desktop Table */}
-                  <div className="hidden sm:block overflow-x-auto">
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="text-left p-3 text-sm font-medium">Player</th>
-                          <th className="text-left p-3 text-sm font-medium">Team</th>
-                          <th className="text-center p-3 text-sm font-medium">Total Minutes</th>
-                          <th className="text-center p-3 text-sm font-medium">Matches Played</th>
-                          <th className="text-center p-3 text-sm font-medium">Average Minutes</th>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b text-left">
+                        <th className="pb-2 font-medium">Player</th>
+                        <th className="pb-2 font-medium">Team</th>
+                        <th className="pb-2 font-medium text-center">Matches</th>
+                        <th className="pb-2 font-medium text-center">Total Time</th>
+                        <th className="pb-2 font-medium text-center">Avg per Match</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {playingTime.map((player) => (
+                        <tr key={player.player_id} className="border-b">
+                          <td className="py-2 font-medium">{player.player_name}</td>
+                          <td className="py-2 text-muted-foreground">{player.team_name}</td>
+                          <td className="py-2 text-center">
+                            <Badge variant="secondary">{player.matches_played}</Badge>
+                          </td>
+                          <td className="py-2 text-center">
+                            <Badge variant="outline">{formatMinutes(player.total_minutes)}</Badge>
+                          </td>
+                          <td className="py-2 text-center">
+                            <Badge variant="default">{formatMinutes(player.average_minutes)}</Badge>
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {playingTime.map((player) => (
-                          <tr key={player.player_id} className="border-b hover:bg-muted/50">
-                            <td className="p-3 font-medium text-sm">
-                              {player.player_name}
-                            </td>
-                            <td className="p-3 text-muted-foreground text-sm">
-                              {player.team_name}
-                            </td>
-                            <td className="p-3 text-center font-bold">
-                              {formatMinutes(player.total_minutes)}
-                            </td>
-                            <td className="p-3 text-center">
-                              {player.matches_played}
-                            </td>
-                            <td className="p-3 text-center">
-                              {formatMinutes(player.average_minutes)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </CardContent>

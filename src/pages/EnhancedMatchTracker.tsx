@@ -470,7 +470,9 @@ export default function EnhancedMatchTracker() {
         </Button>
 
         <Button
-          onClick={() => navigate(`/match-report/${fixtureId}`)}
+          onClick={() => navigate(`/match-report/${fixtureId}`, { 
+            state: { from: 'match-tracker' } 
+          })}
           variant="outline"
           className="w-full"
         >
