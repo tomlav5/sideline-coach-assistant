@@ -326,34 +326,43 @@ export default function EnhancedMatchTracker() {
   }
 
   return (
-    <div className="container mx-auto p-4 space-y-6">
-      {/* Match Header */}
+    <div className="container mx-auto p-3 sm:p-4 space-y-4 sm:space-y-6 max-w-4xl">
+      {/* Match Header - Centered and Mobile-Optimized */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-4">
-            <div>
-              {fixture.teams?.name} vs {fixture.opponent_name}
+        <CardContent className="p-4 sm:p-6">
+          <div className="text-center space-y-4">
+            {/* Team Names and Score */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4">
+              <h1 className="text-lg sm:text-xl font-semibold truncate max-w-full">
+                {fixture.teams?.name}
+              </h1>
+              <div className="text-sm text-muted-foreground">vs</div>
+              <h1 className="text-lg sm:text-xl font-semibold truncate max-w-full">
+                {fixture.opponent_name}
+              </h1>
             </div>
-            <div className="flex items-center gap-4">
-              <Badge variant="outline" className="text-2xl font-bold">
+            
+            {/* Score Display - Prominent and Centered */}
+            <div className="flex items-center justify-center">
+              <Badge variant="outline" className="text-3xl sm:text-4xl font-bold px-4 py-2">
                 {ourGoals} - {opponentGoals}
               </Badge>
             </div>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4" />
-              <span>Total Time: {Math.floor(totalMatchMinute)} minutes</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              <span>{players.length} players available</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Target className="h-4 w-4" />
-              <span>{events.length} events recorded</span>
+            
+            {/* Match Stats */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 pt-2">
+              <div className="flex items-center justify-center gap-2 text-sm">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <span>Total Time: {Math.floor(totalMatchMinute)} minutes</span>
+              </div>
+              <div className="flex items-center justify-center gap-2 text-sm">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <span>{players.length} players available</span>
+              </div>
+              <div className="flex items-center justify-center gap-2 text-sm">
+                <Target className="h-4 w-4 text-muted-foreground" />
+                <span>{events.length} events recorded</span>
+              </div>
             </div>
           </div>
         </CardContent>
@@ -375,7 +384,7 @@ export default function EnhancedMatchTracker() {
       />
 
       {/* Action Buttons */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
         <Button
           onClick={() => setShowEventDialog(true)}
           className="flex items-center gap-2 w-full"
