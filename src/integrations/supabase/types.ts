@@ -584,6 +584,10 @@ export type Database = {
         Args: { fixture_id_param: string }
         Returns: boolean
       }
+      restart_match: {
+        Args: { fixture_id_param: string }
+        Returns: boolean
+      }
       test_auth_context: {
         Args: Record<PropertyKey, never>
         Returns: {

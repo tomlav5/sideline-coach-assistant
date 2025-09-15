@@ -9,8 +9,18 @@ import { MatchLockingBanner } from '@/components/match/MatchLockingBanner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Clock, Users, Target, History, ArrowUpDown } from 'lucide-react';
+import { Clock, Users, Target, History, ArrowUpDown, RotateCcw } from 'lucide-react';
 import { useRealtimeMatchSync } from '@/hooks/useRealtimeMatchSync';
 
 interface Player {
@@ -52,6 +62,8 @@ export default function EnhancedMatchTracker() {
   const [periods, setPeriods] = useState<MatchPeriod[]>([]);
   const [showEventDialog, setShowEventDialog] = useState(false);
   const [showRetrospectiveDialog, setShowRetrospectiveDialog] = useState(false);
+  const [showRestartConfirm, setShowRestartConfirm] = useState(false);
+  const [isRestarting, setIsRestarting] = useState(false);
   const [currentMinute, setCurrentMinute] = useState(0);
   const [totalMatchMinute, setTotalMatchMinute] = useState(0);
   const [currentPeriodNumber, setCurrentPeriodNumber] = useState(0);
@@ -298,6 +310,34 @@ export default function EnhancedMatchTracker() {
     refreshPlayerStatusLists();
   }, [periods.length]);
 
+  const handleRestartMatch = async () => {
+    if (!fixtureId) return;
+    
+    setIsRestarting(true);
+    try {
+      const { error } = await supabase.rpc('restart_match', {
+        fixture_id_param: fixtureId
+      });
+      
+      if (error) throw error;
+      
+      toast('Match Restarted', {
+        description: "All match data has been reset successfully.",
+      });
+      
+      // Reload all data
+      await loadMatchData();
+      setShowRestartConfirm(false);
+    } catch (error: any) {
+      console.error('Error restarting match:', error);
+      toast('Error', {
+        description: error.message || "Failed to restart match. Please try again.",
+      });
+    } finally {
+      setIsRestarting(false);
+    }
+  };
+
   // Refresh data when real-time updates are received
   useEffect(() => {
     if (matchTracker) {
@@ -423,6 +463,19 @@ export default function EnhancedMatchTracker() {
         </Button>
       </div>
 
+      {/* Match Management Buttons */}
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+        <Button
+          onClick={() => setShowRestartConfirm(true)}
+          variant="destructive"
+          className="flex items-center gap-2"
+          disabled={!matchTracker?.isActiveTracker}
+        >
+          <RotateCcw className="h-4 w-4" />
+          Restart Match
+        </Button>
+      </div>
+
       {/* Events List */}
       {events.length > 0 && (
         <Card>
@@ -528,6 +581,38 @@ export default function EnhancedMatchTracker() {
         players={players}
         onComplete={loadMatchData}
       />
+
+      {/* Restart Match Confirmation Dialog */}
+      <AlertDialog open={showRestartConfirm} onOpenChange={setShowRestartConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <RotateCcw className="h-5 w-5 text-destructive" />
+              Restart Match
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This action will permanently delete all recorded match data including:
+              <ul className="list-disc list-inside mt-2 space-y-1">
+                <li>All events (goals, cards, etc.)</li>
+                <li>All substitutions and player times</li>
+                <li>All match periods and timers</li>
+                <li>Player field positions</li>
+              </ul>
+              <strong className="block mt-3 text-destructive">This action cannot be undone.</strong>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isRestarting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRestartMatch}
+              disabled={isRestarting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isRestarting ? 'Restarting...' : 'Yes, Restart Match'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
