@@ -164,7 +164,8 @@ All colors MUST be HSL.
 
   /* Dropdown menu fixes */
   [data-radix-popper-content-wrapper] {
-    z-index: 50 !important;
+    /* Ensure popper content (Select, Popover, Dropdowns) appear above Dialog overlay/content */
+    z-index: 130 !important;
   }
 
   [data-radix-dropdown-menu-content] {
