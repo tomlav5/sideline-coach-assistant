@@ -231,11 +231,11 @@ All colors MUST be HSL.
 
   /* Dialog Consistency */
   .dialog-standard {
-    @apply max-w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto;
+    @apply max-w-[95vw] sm:max-w-md;
   }
 
   .dialog-large {
-    @apply max-w-[95vw] sm:max-w-lg max-h-[90vh] overflow-y-auto;
+    @apply max-w-[95vw] sm:max-w-lg;
   }
 
   /* Button Consistency */
