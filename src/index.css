@@ -229,6 +229,18 @@ All colors MUST be HSL.
     @apply text-base font-medium;
   }
 
+  /* Fix native time input sizing issues */
+  input[type="time"] {
+    @apply h-12 w-full;
+    /* Ensure consistent sizing across browsers */
+    -webkit-appearance: none;
+    -moz-appearance: textfield;
+  }
+
+  input[type="time"]::-webkit-calendar-picker-indicator {
+    @apply opacity-50 hover:opacity-100;
+  }
+
   /* Dialog Consistency */
   .dialog-standard {
     @apply max-w-[95vw] sm:max-w-md;

@@ -167,7 +167,7 @@ export function CreateFixtureDialog({
               value={selectedTime}
               onChange={(e) => onTimeChange(e.target.value)}
               placeholder="Not set"
-              className="form-input-standard"
+              className="w-full"
             />
           </div>
           
