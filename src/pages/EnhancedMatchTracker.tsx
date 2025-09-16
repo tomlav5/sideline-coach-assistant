@@ -438,11 +438,11 @@ export default function EnhancedMatchTracker() {
         onTimerUpdate={handleTimerUpdate}
       />
 
-      {/* Action Buttons */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+      {/* Action Buttons - Centered and Mobile-Optimized */}
+      <div className="flex flex-col sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-3">
         <Button
           onClick={() => setShowEventDialog(true)}
-          className="flex items-center gap-2 w-full"
+          className="flex items-center justify-center gap-2 w-full min-h-[44px]"
           disabled={!matchTracker?.isActiveTracker && (fixture?.status === 'in_progress' || fixture?.status === 'live')}
         >
           <Target className="h-4 w-4" />
@@ -452,7 +452,7 @@ export default function EnhancedMatchTracker() {
         <Button
           onClick={() => setShowRetrospectiveDialog(true)}
           variant="outline"
-          className="flex items-center gap-2 w-full"
+          className="flex items-center justify-center gap-2 w-full min-h-[44px]"
           disabled={!matchTracker?.isActiveTracker && (fixture?.status === 'in_progress' || fixture?.status === 'live')}
         >
           <History className="h-4 w-4" />
@@ -462,7 +462,7 @@ export default function EnhancedMatchTracker() {
         <Button
           onClick={() => setSubDialogOpen(true)}
           variant="secondary"
-          className="flex items-center gap-2 w-full"
+          className="flex items-center justify-center gap-2 w-full min-h-[44px]"
           disabled={!matchTracker?.isActiveTracker && (fixture?.status === 'in_progress' || fixture?.status === 'live')}
         >
           <ArrowUpDown className="h-4 w-4" />
@@ -474,18 +474,18 @@ export default function EnhancedMatchTracker() {
             state: { from: 'match-tracker' } 
           })}
           variant="outline"
-          className="w-full"
+          className="flex items-center justify-center gap-2 w-full min-h-[44px]"
         >
           View Report
         </Button>
       </div>
 
-      {/* Match Management Buttons */}
-      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+      {/* Match Management Buttons - Centered */}
+      <div className="flex flex-col sm:flex-row gap-3 sm:gap-3 justify-center">
         <Button
           onClick={() => setShowRestartConfirm(true)}
           variant="destructive"
-          className="flex items-center gap-2"
+          className="flex items-center justify-center gap-2 min-h-[44px]"
           disabled={!matchTracker?.isActiveTracker}
         >
           <RotateCcw className="h-4 w-4" />

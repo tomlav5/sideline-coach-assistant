@@ -651,14 +651,20 @@ export default function Fixtures() {
         </div>
         
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto shrink-0">
-          <Button onClick={() => setCreateDialogOpen(true)}>
+          <Button 
+            onClick={() => setCreateDialogOpen(true)}
+            className="h-10"
+          >
             <Plus className="h-4 w-4 mr-2" />
             Create Fixture
           </Button>
           {/* Date Filter Dialog */}
           <Dialog open={dateFilterOpen} onOpenChange={setDateFilterOpen}>
             <DialogTrigger asChild>
-              <Button variant="outline" className="touch-target w-full sm:w-auto">
+              <Button 
+                variant="outline" 
+                className="touch-target w-full sm:w-auto h-10"
+              >
                 <Filter className="h-4 w-4 mr-2" />
                 Date Filter
                 {(startDate || endDate) && (

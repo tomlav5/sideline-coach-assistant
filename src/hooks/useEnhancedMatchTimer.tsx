@@ -338,6 +338,13 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
       if (error) {
         console.error('Error updating fixture status:', error);
       }
+
+      // Navigate to match report after successful completion
+      if (typeof window !== 'undefined') {
+        setTimeout(() => {
+          window.location.href = `/match-report/${fixtureId}`;
+        }, 1000);
+      }
     } catch (error) {
       console.error('Error ending match:', error);
     }

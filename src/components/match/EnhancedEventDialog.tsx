@@ -119,7 +119,7 @@ export function EnhancedEventDialog({
   }, [open, fixtureId, currentPeriod, players]);
 
   const handleSubmit = async () => {
-    if (!currentPeriod) {
+    if (!resolvedPeriod) {
       toast.error('No active period to record event');
       return;
     }
@@ -175,13 +175,13 @@ export function EnhancedEventDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Record Match Event</DialogTitle>
           <DialogDescription>Choose team, player, and details, then record the event.</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-4 px-1">
           {/* Event Type */}
           <div>
             <Label>Event Type</Label>
