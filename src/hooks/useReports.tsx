@@ -47,30 +47,31 @@ export function useCompletedMatches(competitionFilter = 'all', options?: { enabl
   return useQuery({
     queryKey: ['completed-matches', competitionFilter, options?.limit, options?.offset],
     queryFn: async (): Promise<CompletedMatch[]> => {
-      let query = supabase
-        .from('mv_completed_matches')
-        .select('*')
-        .order('scheduled_date', { ascending: false });
+      const { data, error } = await supabase.rpc('get_completed_matches');
+      if (error) throw error;
+
+      let filteredData = data || [];
 
       // Apply competition filter
       if (competitionFilter !== 'all') {
         if (competitionFilter.startsWith('type:')) {
           const type = competitionFilter.replace('type:', '');
-          query = query.eq('competition_type', type);
+          filteredData = filteredData.filter(match => match.competition_type === type);
         } else {
-          query = query.eq('competition_name', competitionFilter);
+          filteredData = filteredData.filter(match => match.competition_name === competitionFilter);
         }
       }
 
+      // Sort by date descending
+      filteredData.sort((a, b) => new Date(b.scheduled_date).getTime() - new Date(a.scheduled_date).getTime());
+
       // Apply pagination
       if (options?.limit) {
-        query = query.range(options.offset || 0, (options.offset || 0) + options.limit - 1);
+        const start = options.offset || 0;
+        filteredData = filteredData.slice(start, start + options.limit);
       }
 
-      const { data, error } = await query;
-      if (error) throw error;
-
-      return (data || []).map(match => ({
+      return filteredData.map(match => ({
         id: match.id,
         scheduled_date: match.scheduled_date,
         opponent_name: match.opponent_name,
@@ -93,30 +94,10 @@ export function useGoalScorers(competitionFilter = 'all', options?: { enabled?: 
   return useQuery({
     queryKey: ['goal-scorers', competitionFilter, options?.limit, options?.offset],
     queryFn: async (): Promise<GoalScorer[]> => {
-      let query = supabase
-        .from('mv_goal_scorers')
-        .select('*')
-        .order('total_contributions', { ascending: false });
-
-      // Apply competition filter
-      if (competitionFilter !== 'all') {
-        if (competitionFilter.startsWith('type:')) {
-          const type = competitionFilter.replace('type:', '');
-          query = query.eq('competition_type', type);
-        } else {
-          query = query.eq('competition_name', competitionFilter);
-        }
-      }
-
-      // Apply pagination
-      if (options?.limit) {
-        query = query.range(options.offset || 0, (options.offset || 0) + options.limit - 1);
-      }
-
-      const { data, error } = await query;
+      const { data, error } = await supabase.rpc('get_goal_scorers');
       if (error) throw error;
 
-      // Aggregate by player (in case player appears in multiple competitions)
+      // Process and aggregate data
       const playerStats: Record<string, GoalScorer> = {};
 
       (data || []).forEach((row: any) => {
@@ -125,23 +106,29 @@ export function useGoalScorers(competitionFilter = 'all', options?: { enabled?: 
         if (!playerStats[playerId]) {
           playerStats[playerId] = {
             player_id: playerId,
-            player_name: row.player_name,
-            team_name: row.team_name,
+            player_name: `${row.first_name} ${row.last_name}`,
+            team_name: row.club_name, // Using club_name as team context
             goals: 0,
             assists: 0,
             total_contributions: 0,
-            competition_type: row.competition_type,
-            competition_name: row.competition_name
           };
         }
 
-        playerStats[playerId].goals += row.goals || 0;
-        playerStats[playerId].assists += row.assists || 0;
-        playerStats[playerId].total_contributions += row.total_contributions || 0;
+        playerStats[playerId].goals = row.goals || 0;
+        playerStats[playerId].assists = row.assists || 0;
+        playerStats[playerId].total_contributions = (row.goals || 0) + (row.assists || 0);
       });
 
-      return Object.values(playerStats)
+      let result = Object.values(playerStats)
         .sort((a, b) => b.total_contributions - a.total_contributions);
+
+      // Apply pagination
+      if (options?.limit) {
+        const start = options.offset || 0;
+        result = result.slice(start, start + options.limit);
+      }
+
+      return result;
     },
     staleTime: 15 * 60 * 1000, // Historical data stays fresh longer (15 min)
     gcTime: 60 * 60 * 1000,    // Keep in cache longer for historical data (1 hour)
@@ -154,30 +141,10 @@ export function usePlayerPlayingTime(competitionFilter = 'all', options?: { enab
   return useQuery({
     queryKey: ['player-playing-time', competitionFilter, options?.limit, options?.offset],
     queryFn: async (): Promise<PlayerPlayingTime[]> => {
-      let query = supabase
-        .from('mv_player_playing_time')
-        .select('*')
-        .order('total_minutes', { ascending: false });
-
-      // Apply competition filter
-      if (competitionFilter !== 'all') {
-        if (competitionFilter.startsWith('type:')) {
-          const type = competitionFilter.replace('type:', '');
-          query = query.eq('competition_type', type);
-        } else {
-          query = query.eq('competition_name', competitionFilter);
-        }
-      }
-
-      // Apply pagination
-      if (options?.limit) {
-        query = query.range(options.offset || 0, (options.offset || 0) + options.limit - 1);
-      }
-
-      const { data, error } = await query;
+      const { data, error } = await supabase.rpc('get_player_playing_time');
       if (error) throw error;
 
-      // Aggregate by player (in case player appears in multiple competitions)
+      // Process and aggregate data
       const playerStats: Record<string, PlayerPlayingTime> = {};
 
       (data || []).forEach((row: any) => {
@@ -186,29 +153,29 @@ export function usePlayerPlayingTime(competitionFilter = 'all', options?: { enab
         if (!playerStats[playerId]) {
           playerStats[playerId] = {
             player_id: playerId,
-            player_name: row.player_name,
-            team_name: row.team_name,
+            player_name: `${row.first_name} ${row.last_name}`,
+            team_name: row.team_name || row.club_name,
             total_minutes: 0,
             matches_played: 0,
             average_minutes: 0,
-            competition_type: row.competition_type,
-            competition_name: row.competition_name
           };
         }
 
-        playerStats[playerId].total_minutes += row.total_minutes || 0;
-        playerStats[playerId].matches_played += row.matches_played || 0;
+        playerStats[playerId].total_minutes = row.total_minutes_played || 0;
+        playerStats[playerId].matches_played = row.matches_played || 0;
+        playerStats[playerId].average_minutes = row.avg_minutes_per_match || 0;
       });
 
-      // Recalculate averages after aggregation
-      const result = Object.values(playerStats).map(player => ({
-        ...player,
-        average_minutes: player.matches_played > 0 
-          ? Math.round(player.total_minutes / player.matches_played) 
-          : 0
-      }));
+      let result = Object.values(playerStats)
+        .sort((a, b) => b.total_minutes - a.total_minutes);
 
-      return result.sort((a, b) => b.total_minutes - a.total_minutes);
+      // Apply pagination
+      if (options?.limit) {
+        const start = options.offset || 0;
+        result = result.slice(start, start + options.limit);
+      }
+
+      return result;
     },
     staleTime: 15 * 60 * 1000, // Historical data stays fresh longer (15 min)
     gcTime: 60 * 60 * 1000,    // Keep in cache longer for historical data (1 hour)
@@ -221,15 +188,11 @@ export function useCompetitions(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['competitions'],
     queryFn: async (): Promise<Competition[]> => {
-      const { data, error } = await supabase
-        .from('mv_competitions')
-        .select('*')
-        .order('display_name');
-
+      const { data, error } = await supabase.rpc('get_competitions');
       if (error) throw error;
 
       return (data || []).map(comp => ({
-        filter_value: comp.filter_value,
+        filter_value: comp.competition_name || `type:${comp.competition_type}`,
         display_name: comp.display_name,
         competition_type: comp.competition_type,
         competition_name: comp.competition_name
