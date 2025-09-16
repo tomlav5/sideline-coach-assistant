@@ -7,17 +7,22 @@ import { Label } from '@/components/ui/label';
 import { Trophy, Calendar, Target, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import { ResponsiveWrapper } from '@/components/ui/responsive-wrapper';
-import { useEnhancedReportsData } from '@/hooks/useEnhancedReports';
-import { Skeleton } from '@/components/ui/skeleton';
+import { useCompletedMatches, useGoalScorers, usePlayerPlayingTime, useCompetitions } from '@/hooks/useReports';
+import { useReportRefresh } from '@/hooks/useReportRefresh';
 
 export default function OptimizedReports() {
   const [competitionFilter, setCompetitionFilter] = useState<string>('all');
-  const { data: reportsData, isLoading: reportsLoading } = useEnhancedReportsData(competitionFilter === 'all' ? undefined : competitionFilter);
   
-  // Extract competitions from reports data for filter
-  const competitions = reportsData?.completedMatches ? 
-    Array.from(new Set(reportsData.completedMatches.map(m => m.competition_type)))
-      .map(type => ({ type })) : [];
+  // Use optimized materialized view queries
+  const { data: completedMatches = [], isLoading: matchesLoading } = useCompletedMatches(competitionFilter);
+  const { data: goalScorers = [], isLoading: scorersLoading } = useGoalScorers(competitionFilter);
+  const { data: playingTime = [], isLoading: timeLoading } = usePlayerPlayingTime(competitionFilter);
+  const { data: competitions = [] } = useCompetitions();
+  
+  // Enable automatic report refresh when data changes
+  useReportRefresh();
+  
+  const reportsLoading = matchesLoading || scorersLoading || timeLoading;
 
   const formatMinutes = (minutes: number) => {
     const hours = Math.floor(minutes / 60);
@@ -37,29 +42,17 @@ export default function OptimizedReports() {
   if (reportsLoading) {
     return (
       <ResponsiveWrapper>
-        <div className="space-y-6">
-          <div className="flex items-center space-x-2">
-            <Trophy className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
-            <h1 className="text-2xl sm:text-3xl font-bold">Reports</h1>
-          </div>
-          <Card>
-            <CardContent className="p-4">
-              <Skeleton className="h-12 w-64" />
-            </CardContent>
-          </Card>
-          <div className="space-y-4">
-            {[...Array(4)].map((_, i) => (
-              <Skeleton key={i} className="h-20" />
-            ))}
+        <div className="flex items-center justify-center h-64">
+          <div className="flex flex-col items-center space-y-2">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <div className="text-lg">Loading optimized reports...</div>
+            <div className="text-sm text-muted-foreground">Using high-performance materialized views</div>
           </div>
         </div>
       </ResponsiveWrapper>
     );
   }
 
-  const completedMatches = reportsData?.completedMatches || [];
-  const goalScorers = reportsData?.goalScorers || [];
-  const playingTime = reportsData?.playingTime || [];
 
   return (
     <ResponsiveWrapper className="space-y-6 max-w-full">
@@ -79,9 +72,16 @@ export default function OptimizedReports() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Competitions</SelectItem>
-                <SelectItem value="league">League Matches Only</SelectItem>
-                <SelectItem value="tournament">Tournament Matches Only</SelectItem>
-                <SelectItem value="friendly">Friendly Matches Only</SelectItem>
+                <SelectItem value="type:league">League Matches Only</SelectItem>
+                <SelectItem value="type:tournament">Tournament Matches Only</SelectItem>
+                <SelectItem value="type:friendly">Friendly Matches Only</SelectItem>
+                {competitions.map((comp, index) => (
+                  comp.display_name && (
+                    <SelectItem key={index} value={comp.filter_value}>
+                      {comp.display_name}
+                    </SelectItem>
+                  )
+                ))}
               </SelectContent>
             </Select>
           </div>

@@ -66,14 +66,17 @@ export function useReportRefresh() {
       }, debouncedInvalidatePlayingTime)
       .subscribe();
 
-    // Listen for manual refresh notifications (from pg_notify in triggers)
-    const refreshChannel = supabase
-      .channel('refresh_reports')
+    // Listen for pg_notify refresh signals from database triggers
+    const notifyChannel = supabase
+      .channel('refresh_notifications')
       .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'pg_notify',
-        table: 'refresh_reports'
-      }, debouncedInvalidateReports)
+        event: '*',
+        schema: 'public', 
+        table: 'fixtures'
+      }, (payload) => {
+        console.log('Database notify received:', payload);
+        debouncedInvalidateReports();
+      })
       .subscribe();
 
     // Cleanup function
@@ -82,7 +85,7 @@ export function useReportRefresh() {
         clearTimeout(debounceTimeoutRef.current);
       }
       supabase.removeChannel(channel);
-      supabase.removeChannel(refreshChannel);
+      supabase.removeChannel(notifyChannel);
     };
   }, [debouncedInvalidateReports, debouncedInvalidateScorers, debouncedInvalidatePlayingTime]);
 }
