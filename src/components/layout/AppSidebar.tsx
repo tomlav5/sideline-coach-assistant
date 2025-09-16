@@ -65,25 +65,31 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarHeader className="p-4">
         <div className="flex items-center space-x-2">
-          <Shield className="h-8 w-8 text-primary" />
-          <div>
-            <h2 className="text-lg font-semibold text-primary">SideLine</h2>
-            <p className="text-xs text-muted-foreground">Football Coach</p>
-          </div>
+          <Shield className="h-8 w-8 text-primary flex-shrink-0" />
+          {!collapsed && (
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold text-primary truncate">SideLine</h2>
+              <p className="text-xs text-muted-foreground truncate">Football Coach</p>
+            </div>
+          )}
         </div>
       </SidebarHeader>
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="text-foreground/80">Navigation</SidebarGroupLabel>
+          {!collapsed && (
+            <SidebarGroupLabel className="text-foreground/80">Navigation</SidebarGroupLabel>
+          )}
           <SidebarGroupContent>
             <SidebarMenu>
               {navigationItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
+                  <SidebarMenuButton asChild tooltip={collapsed ? item.title : undefined}>
                     <NavLink to={item.url} end className={getNavCls}>
-                      <item.icon className="h-4 w-4" />
-                      <span className="text-sidebar-foreground">{item.title}</span>
+                      <item.icon className="h-4 w-4 flex-shrink-0" />
+                      {!collapsed && (
+                        <span className="text-sidebar-foreground truncate">{item.title}</span>
+                      )}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -93,15 +99,19 @@ export function AppSidebar() {
         </SidebarGroup>
 
         <SidebarGroup>
-          <SidebarGroupLabel className="text-foreground/80">Settings</SidebarGroupLabel>
+          {!collapsed && (
+            <SidebarGroupLabel className="text-foreground/80">Settings</SidebarGroupLabel>
+          )}
           <SidebarGroupContent>
             <SidebarMenu>
               {settingsItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
+                  <SidebarMenuButton asChild tooltip={collapsed ? item.title : undefined}>
                     <NavLink to={item.url} className={getNavCls}>
-                      <item.icon className="h-4 w-4" />
-                      <span className="text-sidebar-foreground">{item.title}</span>
+                      <item.icon className="h-4 w-4 flex-shrink-0" />
+                      {!collapsed && (
+                        <span className="text-sidebar-foreground truncate">{item.title}</span>
+                      )}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -115,10 +125,15 @@ export function AppSidebar() {
         <Button 
           variant="ghost" 
           onClick={() => signOut()}
-          className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10"
+          className={`w-full text-destructive hover:text-destructive hover:bg-destructive/10 ${
+            collapsed ? "justify-center px-2" : "justify-start"
+          }`}
+          title={collapsed ? "Sign Out" : undefined}
         >
-          <LogOut className="h-4 w-4 text-destructive" />
-          <span className="ml-2 text-destructive">Sign Out</span>
+          <LogOut className="h-4 w-4 text-destructive flex-shrink-0" />
+          {!collapsed && (
+            <span className="ml-2 text-destructive truncate">Sign Out</span>
+          )}
         </Button>
       </SidebarFooter>
     </Sidebar>
