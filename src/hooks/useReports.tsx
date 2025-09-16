@@ -82,8 +82,8 @@ export function useCompletedMatches(competitionFilter = 'all', options?: { enabl
         competition_name: match.competition_name
       }));
     },
-    staleTime: 10 * 60 * 1000, // Historical data stays fresh longer
-    gcTime: 30 * 60 * 1000,    // Keep in cache longer for historical data
+    staleTime: 15 * 60 * 1000, // Historical data stays fresh longer (15 min)
+    gcTime: 60 * 60 * 1000,    // Keep in cache longer for historical data (1 hour)
     enabled: options?.enabled !== false,
   });
 }
@@ -143,8 +143,8 @@ export function useGoalScorers(competitionFilter = 'all', options?: { enabled?: 
       return Object.values(playerStats)
         .sort((a, b) => b.total_contributions - a.total_contributions);
     },
-    staleTime: 10 * 60 * 1000, // Historical data stays fresh longer
-    gcTime: 30 * 60 * 1000,
+    staleTime: 15 * 60 * 1000, // Historical data stays fresh longer (15 min)
+    gcTime: 60 * 60 * 1000,    // Keep in cache longer for historical data (1 hour)
     enabled: options?.enabled !== false,
   });
 }
@@ -210,8 +210,8 @@ export function usePlayerPlayingTime(competitionFilter = 'all', options?: { enab
 
       return result.sort((a, b) => b.total_minutes - a.total_minutes);
     },
-    staleTime: 10 * 60 * 1000, // Historical data stays fresh longer
-    gcTime: 30 * 60 * 1000,
+    staleTime: 15 * 60 * 1000, // Historical data stays fresh longer (15 min)
+    gcTime: 60 * 60 * 1000,    // Keep in cache longer for historical data (1 hour)
     enabled: options?.enabled !== false,
   });
 }

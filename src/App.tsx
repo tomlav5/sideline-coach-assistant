@@ -20,7 +20,7 @@ const ClubManagement = lazy(() => import("./pages/ClubManagement"));
 const SquadSelection = lazy(() => import("./pages/SquadSelection"));
 const MatchTracker = lazy(() => import("./pages/MatchTracker"));
 const EnhancedMatchTracker = lazy(() => import("./pages/EnhancedMatchTracker"));
-const Reports = lazy(() => import("./pages/OptimizedReports"));
+const Reports = lazy(() => import("./pages/Reports"));
 const Settings = lazy(() => import("./pages/Settings"));
 const FixtureDetail = lazy(() => import("./pages/FixtureDetail"));
 const MatchReport = lazy(() => import("./pages/MatchReport"));

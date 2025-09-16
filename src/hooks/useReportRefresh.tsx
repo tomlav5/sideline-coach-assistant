@@ -1,45 +1,69 @@
-import { useEffect } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 /**
  * Hook to automatically refresh report data when materialized views are updated
- * Listens for database notifications and invalidates relevant queries
+ * Uses debouncing to prevent excessive invalidations and optimize performance
  */
 export function useReportRefresh() {
   const queryClient = useQueryClient();
+  const debounceTimeoutRef = useRef<NodeJS.Timeout>();
+
+  // Debounced invalidation function to prevent excessive cache invalidations
+  const debouncedInvalidateReports = useCallback(() => {
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
+    }
+    
+    debounceTimeoutRef.current = setTimeout(() => {
+      // Only invalidate specific query keys, not all queries
+      queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
+      queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
+      queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
+      queryClient.invalidateQueries({ queryKey: ['competitions'] });
+    }, 2000); // 2 second debounce
+  }, [queryClient]);
+
+  const debouncedInvalidateScorers = useCallback(() => {
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
+    }
+    
+    debounceTimeoutRef.current = setTimeout(() => {
+      queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
+    }, 1000); // 1 second debounce for more targeted updates
+  }, [queryClient]);
+
+  const debouncedInvalidatePlayingTime = useCallback(() => {
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
+    }
+    
+    debounceTimeoutRef.current = setTimeout(() => {
+      queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
+    }, 1000); // 1 second debounce
+  }, [queryClient]);
 
   useEffect(() => {
-    // Subscribe to database notifications for report refreshes
+    // Subscribe to database notifications for report refreshes with debouncing
     const channel = supabase
       .channel('report-refresh')
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'fixtures'
-      }, () => {
-        // Invalidate all report queries when fixtures change
-        queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
-        queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
-        queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
-        queryClient.invalidateQueries({ queryKey: ['competitions'] });
-      })
+      }, debouncedInvalidateReports)
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'match_events'
-      }, () => {
-        // Invalidate goal scorers when events change
-        queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
-      })
+      }, debouncedInvalidateScorers)
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'player_time_logs'
-      }, () => {
-        // Invalidate playing time when logs change
-        queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
-      })
+      }, debouncedInvalidatePlayingTime)
       .subscribe();
 
     // Listen for manual refresh notifications (from pg_notify in triggers)
@@ -49,49 +73,43 @@ export function useReportRefresh() {
         event: 'INSERT',
         schema: 'pg_notify',
         table: 'refresh_reports'
-      }, async () => {
-        // Refresh materialized views when notified
-        try {
-          await supabase.rpc('refresh_report_views');
-          // Invalidate all report queries after refresh
-          queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
-          queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
-          queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
-          queryClient.invalidateQueries({ queryKey: ['competitions'] });
-        } catch (error) {
-          console.error('Error refreshing report views:', error);
-        }
-      })
+      }, debouncedInvalidateReports)
       .subscribe();
 
+    // Cleanup function
     return () => {
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+      }
       supabase.removeChannel(channel);
       supabase.removeChannel(refreshChannel);
     };
-  }, [queryClient]);
+  }, [debouncedInvalidateReports, debouncedInvalidateScorers, debouncedInvalidatePlayingTime]);
 }
 
 /**
- * Hook to manually trigger a report refresh
+ * Hook to manually refresh report data
+ * Returns a function that triggers materialized view refresh and invalidates caches
  */
 export function useManualReportRefresh() {
   const queryClient = useQueryClient();
-
-  return async () => {
+  
+  return useCallback(async () => {
     try {
       // Refresh materialized views
-      await supabase.rpc('refresh_report_views');
+      const { error } = await supabase.rpc('refresh_report_views');
+      if (error) throw error;
       
-      // Invalidate all report queries
-      await queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
-      await queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
-      await queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
-      await queryClient.invalidateQueries({ queryKey: ['competitions'] });
+      // Immediately invalidate caches after manual refresh
+      queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
+      queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
+      queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
+      queryClient.invalidateQueries({ queryKey: ['competitions'] });
       
       return true;
     } catch (error) {
       console.error('Error refreshing reports:', error);
       throw error;
     }
-  };
+  }, [queryClient]);
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useCompletedMatches, useGoalScorers, usePlayerPlayingTime, useCompetitions } from '@/hooks/useReports';
 import { useReportRefresh } from '@/hooks/useReportRefresh';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,6 +16,10 @@ import { ResponsiveWrapper } from '@/components/ui/responsive-wrapper';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { ExportDialog } from '@/components/reports/ExportDialog';
+import { VirtualList } from '@/components/ui/virtual-list';
+import { MatchItem } from '@/components/reports/MatchItem';
+import { ScorerItem } from '@/components/reports/ScorerItem';
+import { PlayingTimeItem } from '@/components/reports/PlayingTimeItem';
 
 interface CompletedMatch {
   id: string;
@@ -68,22 +72,24 @@ export default function Reports() {
   // Enable automatic report refresh when data changes
   useReportRefresh();
 
-  const formatMinutes = (minutes: number) => {
+  // Memoized utility functions for better performance
+  const formatMinutes = useCallback((minutes: number) => {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
     if (hours > 0) {
       return `${hours}h ${mins}m`;
     }
     return `${mins}m`;
-  };
+  }, []);
 
-  const getMatchResult = (ourScore: number, opponentScore: number) => {
+  const getMatchResult = useCallback((ourScore: number, opponentScore: number) => {
     if (ourScore > opponentScore) return { result: 'W', color: 'bg-green-500' };
     if (ourScore < opponentScore) return { result: 'L', color: 'bg-red-500' };
     return { result: 'D', color: 'bg-yellow-500' };
-  };
+  }, []);
 
-  const deleteMatch = async (matchId: string) => {
+  // Memoized delete function with optimized cache invalidation
+  const deleteMatch = useCallback(async (matchId: string) => {
     try {
       // Delete player time logs
       const { error: timeLogsError } = await supabase
@@ -114,16 +120,12 @@ export default function Reports() {
         description: "The match and all associated data have been removed",
       });
 
-      // Refresh the data and invalidate all relevant caches
+      // Optimized cache invalidation - only invalidate relevant queries
       queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
       queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
       queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
-      queryClient.invalidateQueries({ queryKey: ['live-match-detection'] });
-      queryClient.invalidateQueries({ queryKey: ['live-match-check'] });
-      queryClient.invalidateQueries({ queryKey: ['fixtures'] });
-      queryClient.invalidateQueries({ queryKey: ['reports'] });
+      // Don't invalidate all queries - be more targeted
+      queryClient.invalidateQueries({ queryKey: ['fixtures'], exact: false });
     } catch (error) {
       console.error('Error deleting match:', error);
       toast({
@@ -132,9 +134,19 @@ export default function Reports() {
         variant: "destructive",
       });
     }
-  };
+  }, [toast, queryClient]);
 
-  const isLoading = activeTab === 'matches' ? matchesLoading : activeTab === 'scorers' ? scorersLoading : timeLoading;
+  // Memoized recent form calculation
+  const recentForm = useMemo(() => {
+    return completedMatches.slice(0, 5);
+  }, [completedMatches]);
+
+  // Memoized loading state
+  const isLoading = useMemo(() => {
+    return activeTab === 'matches' ? matchesLoading : 
+           activeTab === 'scorers' ? scorersLoading : 
+           timeLoading;
+  }, [activeTab, matchesLoading, scorersLoading, timeLoading]);
 
   if (isLoading) {
     return (
