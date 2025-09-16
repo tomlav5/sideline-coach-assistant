@@ -110,7 +110,7 @@ export function CreateFixtureDialog({
           </div>
           
           <div>
-            <Label htmlFor="fixture_type">Match Type</Label>
+            <Label htmlFor="fixture_type" className="form-label-standard">Match Type</Label>
             <Select value={fixtureData.fixture_type} onValueChange={(value: any) => updateFixtureData({ fixture_type: value })}>
               <SelectTrigger>
                 <SelectValue />
@@ -129,7 +129,7 @@ export function CreateFixtureDialog({
           </div>
           
           <div>
-            <Label>Match Date</Label>
+            <Label className="form-label-standard">Match Date</Label>
             <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
               <PopoverTrigger asChild>
                 <Button
@@ -166,21 +166,23 @@ export function CreateFixtureDialog({
               value={selectedTime}
               onChange={(e) => onTimeChange(e.target.value)}
               placeholder="Not set"
+              className="form-input-standard"
             />
           </div>
           
           <div>
-            <Label htmlFor="location">Location (Optional)</Label>
+            <Label htmlFor="location" className="form-label-standard">Location (Optional)</Label>
             <Input
               id="location"
               value={fixtureData.location}
               onChange={(e) => updateFixtureData({ location: e.target.value })}
               placeholder="Match venue"
+              className="form-input-standard"
             />
           </div>
           
           <div>
-            <Label htmlFor="competition_type">Competition Type</Label>
+            <Label htmlFor="competition_type" className="form-label-standard">Competition Type</Label>
             <Select 
               value={fixtureData.competition_type} 
               onValueChange={(value: 'league' | 'tournament' | 'friendly') => updateFixtureData({ 
@@ -203,7 +205,7 @@ export function CreateFixtureDialog({
           
           {(fixtureData.competition_type === 'tournament' || fixtureData.competition_type === 'league') && (
             <div>
-              <Label htmlFor="competition_name">
+              <Label htmlFor="competition_name" className="form-label-standard">
                 {fixtureData.competition_type === 'tournament' ? 'Tournament Name' : 'League Name'} 
                 {fixtureData.competition_type === 'tournament' && <span className="text-destructive">*</span>}
               </Label>
@@ -212,16 +214,17 @@ export function CreateFixtureDialog({
                 value={fixtureData.competition_name}
                 onChange={(e) => updateFixtureData({ competition_name: e.target.value })}
                 placeholder={`Enter ${fixtureData.competition_type} name`}
+                className="form-input-standard"
               />
             </div>
           )}
 
           
           <div className="flex gap-2 pt-4">
-            <Button onClick={onConfirm} disabled={isCreating} className="flex-1">
+            <Button onClick={onConfirm} disabled={isCreating} className="flex-1 button-touch-friendly">
               {isCreating ? "Creating..." : "Create Fixture"}
             </Button>
-            <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1">
+            <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1 button-touch-friendly">
               Cancel
             </Button>
           </div>
