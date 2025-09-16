@@ -75,7 +75,7 @@ export function CreateFixtureDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="dialog-standard">
-        <DialogHeader>
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>Create New Fixture</DialogTitle>
           <DialogDescription>
             Schedule a new match for your team
@@ -85,7 +85,7 @@ export function CreateFixtureDialog({
           <div>
             <Label htmlFor="team" className="form-label-standard">Team</Label>
             <Select value={fixtureData.team_id} onValueChange={(value) => updateFixtureData({ team_id: value })}>
-              <SelectTrigger>
+              <SelectTrigger id="team">
                 <SelectValue placeholder="Select a team" />
               </SelectTrigger>
               <SelectContent>
@@ -112,7 +112,7 @@ export function CreateFixtureDialog({
           <div>
             <Label htmlFor="fixture_type" className="form-label-standard">Match Type</Label>
             <Select value={fixtureData.fixture_type} onValueChange={(value: any) => updateFixtureData({ fixture_type: value })}>
-              <SelectTrigger>
+              <SelectTrigger id="fixture_type">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -129,13 +129,14 @@ export function CreateFixtureDialog({
           </div>
           
           <div>
-            <Label className="form-label-standard">Match Date</Label>
+            <Label id="match_date_label" className="form-label-standard">Match Date</Label>
             <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
+                  aria-labelledby="match_date_label"
                   className={cn(
-                    "w-full justify-start text-left font-normal",
+                    "w-full justify-start text-left font-normal form-input-standard",
                     !selectedDate && "text-muted-foreground"
                   )}
                 >
@@ -190,7 +191,7 @@ export function CreateFixtureDialog({
                 competition_name: value === 'friendly' ? '' : fixtureData.competition_name
               })}
             >
-              <SelectTrigger>
+              <SelectTrigger id="competition_type">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
