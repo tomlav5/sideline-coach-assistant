@@ -74,7 +74,7 @@ export function CreateFixtureDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="dialog-standard">
         <DialogHeader>
           <DialogTitle>Create New Fixture</DialogTitle>
           <DialogDescription>
@@ -83,7 +83,7 @@ export function CreateFixtureDialog({
         </DialogHeader>
         <div className="space-y-4 px-1">
           <div>
-            <Label htmlFor="team" className="text-base">Team</Label>
+            <Label htmlFor="team" className="form-label-standard">Team</Label>
             <Select value={fixtureData.team_id} onValueChange={(value) => updateFixtureData({ team_id: value })}>
               <SelectTrigger>
                 <SelectValue placeholder="Select a team" />
@@ -99,13 +99,13 @@ export function CreateFixtureDialog({
           </div>
           
           <div>
-            <Label htmlFor="opponent" className="text-base">Opponent</Label>
+            <Label htmlFor="opponent" className="form-label-standard">Opponent</Label>
             <Input
               id="opponent"
               value={fixtureData.opponent_name}
               onChange={(e) => updateFixtureData({ opponent_name: e.target.value })}
               placeholder="Opponent team name"
-              className="text-base min-h-[44px]"
+              className="form-input-standard"
             />
           </div>
           

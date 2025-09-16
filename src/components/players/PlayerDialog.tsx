@@ -125,7 +125,7 @@ export function PlayerDialog({ open, onOpenChange, clubs, onPlayerCreated }: Pla
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="dialog-standard">
         <DialogHeader>
           <DialogTitle>Add New Player</DialogTitle>
           <DialogDescription>

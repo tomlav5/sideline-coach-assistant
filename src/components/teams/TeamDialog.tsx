@@ -84,7 +84,7 @@ export function TeamDialog({ open, onOpenChange, clubs, onTeamCreated }: TeamDia
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="dialog-standard">
         <DialogHeader>
           <DialogTitle>Create New Team</DialogTitle>
           <DialogDescription>
