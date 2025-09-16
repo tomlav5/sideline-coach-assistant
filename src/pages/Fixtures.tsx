@@ -120,16 +120,20 @@ export default function Fixtures() {
   const fetchTeams = async () => {
     try {
       const { data, error } = await supabase
-        .from('teams')
-        .select(`
-          id,
-          name,
-          club:clubs(id, name)
-        `)
+        .from('teams_with_stats')
+        .select('*')
         .order('name');
 
       if (error) throw error;
-      setTeams(data || []);
+      
+      // Transform to expected format
+      const transformedTeams = (data || []).map(team => ({
+        id: team.id,
+        name: team.name,
+        club: { id: team.club_id, name: team.club_name || '' }
+      }));
+      
+      setTeams(transformedTeams);
     } catch (error) {
       console.error('Error fetching teams:', error);
     }

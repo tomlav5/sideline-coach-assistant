@@ -51,7 +51,7 @@ export function useTeams() {
         created_at: team.created_at,
         club: { id: team.club_id, name: team.club_name || '' },
         _count: {
-          team_players: team.player_count || 0
+          team_players: Number(team.player_count) || 0
         }
       }));
     },

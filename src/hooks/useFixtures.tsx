@@ -30,19 +30,36 @@ export function useFixtures() {
     queryKey: ['fixtures'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('fixtures')
-        .select(`
-          *,
-          team:teams!fk_fixtures_team_id(
-            id,
-            name,
-            club:clubs(id, name)
-          )
-        `)
+        .from('fixtures_with_scores')
+        .select('*')
         .order('scheduled_date', { ascending: false });
 
       if (error) throw error;
-      return (data || []) as unknown as Fixture[];
+      
+      // Transform to expected format
+      return (data || []).map(fixture => ({
+        id: fixture.id,
+        scheduled_date: fixture.scheduled_date,
+        opponent_name: fixture.opponent_name,
+        location: fixture.location,
+        fixture_type: fixture.fixture_type,
+        status: fixture.status,
+        half_length: fixture.half_length,
+        team_id: fixture.team_id,
+        team: {
+          id: fixture.team_id,
+          name: fixture.team_name || '',
+          club: {
+            id: '', // Not available in view but not critical for display
+            name: fixture.club_name || ''
+          }
+        },
+        created_at: fixture.created_at,
+        competition_type: fixture.competition_type,
+        competition_name: fixture.competition_name,
+        selected_squad_data: fixture.selected_squad_data,
+        match_status: fixture.match_status
+      })) as unknown as Fixture[];
     }
   });
 }
