@@ -36,8 +36,16 @@ export function useTeams() {
     queryKey: ['teams'],
     queryFn: async (): Promise<Team[]> => {
       const { data, error } = await supabase
-        .from('teams_with_stats')
-        .select('*')
+        .from('teams')
+        .select(`
+          id,
+          name,
+          team_type,
+          club_id,
+          created_at,
+          club:clubs(id, name),
+          team_players(count)
+        `)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -49,9 +57,9 @@ export function useTeams() {
         team_type: team.team_type,
         club_id: team.club_id,
         created_at: team.created_at,
-        club: { id: team.club_id, name: team.club_name || '' },
+        club: { id: team.club_id, name: team.club?.name || '' },
         _count: {
-          team_players: Number(team.player_count) || 0
+          team_players: Array.isArray(team.team_players) ? team.team_players.length : 0
         }
       }));
     },

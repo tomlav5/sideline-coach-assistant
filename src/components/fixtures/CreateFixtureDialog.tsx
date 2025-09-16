@@ -159,7 +159,7 @@ export function CreateFixtureDialog({
           </div>
           
           <div>
-            <Label htmlFor="time">Match Time (Optional)</Label>
+            <Label htmlFor="time" className="form-label-standard">Match Time (Optional)</Label>
             <Input
               id="time"
               type="time"

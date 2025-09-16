@@ -120,20 +120,16 @@ export default function Fixtures() {
   const fetchTeams = async () => {
     try {
       const { data, error } = await supabase
-        .from('teams_with_stats')
-        .select('*')
+        .from('teams')
+        .select(`
+          id,
+          name,
+          club:clubs(id, name)
+        `)
         .order('name');
 
       if (error) throw error;
-      
-      // Transform to expected format
-      const transformedTeams = (data || []).map(team => ({
-        id: team.id,
-        name: team.name,
-        club: { id: team.club_id, name: team.club_name || '' }
-      }));
-      
-      setTeams(transformedTeams);
+      setTeams(data || []);
     } catch (error) {
       console.error('Error fetching teams:', error);
     }
@@ -773,7 +769,7 @@ export default function Fixtures() {
           </Dialog>
 
           <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-            <DialogContent className="max-w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
+            <DialogContent className="dialog-standard">
               <DialogHeader>
                 <DialogTitle>Create New Fixture</DialogTitle>
                 <DialogDescription>
@@ -782,7 +778,7 @@ export default function Fixtures() {
               </DialogHeader>
               <div className="space-y-4 px-1">
                 <div>
-                  <Label htmlFor="team" className="text-base">Team</Label>
+                  <Label htmlFor="team" className="form-label-standard">Team</Label>
                   <Select value={newFixture.team_id} onValueChange={(value) => setNewFixture({ ...newFixture, team_id: value })}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select a team" />
@@ -798,13 +794,13 @@ export default function Fixtures() {
                 </div>
                 
                 <div>
-                  <Label htmlFor="opponent" className="text-base">Opponent</Label>
+                  <Label htmlFor="opponent" className="form-label-standard">Opponent</Label>
                   <Input
                     id="opponent"
                     value={newFixture.opponent_name}
                     onChange={(e) => setNewFixture({ ...newFixture, opponent_name: e.target.value })}
                     placeholder="Opponent team name"
-                    className="text-base min-h-[44px]"
+                    className="form-input-standard"
                   />
                 </div>
                 
@@ -855,7 +851,7 @@ export default function Fixtures() {
                 </div>
                 
                 <div>
-                  <Label htmlFor="time">Match Time</Label>
+                  <Label htmlFor="time" className="form-label-standard">Match Time (Optional)</Label>
                   <Input
                     id="time"
                     type="time"
@@ -927,7 +923,7 @@ export default function Fixtures() {
 
           {/* Edit Dialog */}
           <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-            <DialogContent className="max-w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
+            <DialogContent className="dialog-standard">
               <DialogHeader>
                 <DialogTitle>Edit Fixture</DialogTitle>
                 <DialogDescription>
@@ -936,7 +932,7 @@ export default function Fixtures() {
               </DialogHeader>
               <div className="space-y-4 px-1">
                 <div>
-                  <Label htmlFor="edit-team" className="text-base">Team</Label>
+                  <Label htmlFor="edit-team" className="form-label-standard">Team</Label>
                   <Select value={newFixture.team_id} onValueChange={(value) => setNewFixture({ ...newFixture, team_id: value })}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select a team" />
@@ -952,13 +948,13 @@ export default function Fixtures() {
                 </div>
                 
                 <div>
-                  <Label htmlFor="edit-opponent" className="text-base">Opponent</Label>
+                  <Label htmlFor="edit-opponent" className="form-label-standard">Opponent</Label>
                   <Input
                     id="edit-opponent"
                     value={newFixture.opponent_name}
                     onChange={(e) => setNewFixture({ ...newFixture, opponent_name: e.target.value })}
                     placeholder="Opponent team name"
-                    className="text-base min-h-[44px]"
+                    className="form-input-standard"
                   />
                 </div>
                 
@@ -1009,7 +1005,7 @@ export default function Fixtures() {
                 </div>
                 
                 <div>
-                  <Label htmlFor="edit-time">Match Time</Label>
+                  <Label htmlFor="edit-time" className="form-label-standard">Match Time (Optional)</Label>
                   <Input
                     id="edit-time"
                     type="time"

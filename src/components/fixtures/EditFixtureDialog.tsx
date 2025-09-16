@@ -153,7 +153,7 @@ export function EditFixtureDialog({
           </div>
           
           <div>
-            <Label htmlFor="edit-time">Match Time</Label>
+            <Label htmlFor="edit-time" className="form-label-standard">Match Time (Optional)</Label>
             <Input
               id="edit-time"
               type="time"
