@@ -6,14 +6,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useEnhancedMatchTimer } from '@/hooks/useEnhancedMatchTimer';
-import { Play, Pause, Square, Plus, Timer } from 'lucide-react';
+import { Play, Pause, Square, Plus, Timer, RefreshCw } from 'lucide-react';
+import { useEffect } from 'react';
 
 interface EnhancedMatchControlsProps {
   fixtureId: string;
   onTimerUpdate?: (currentMinute: number, totalMinute: number, periodNumber: number) => void;
+  forceRefresh?: boolean;
 }
 
-export function EnhancedMatchControls({ fixtureId, onTimerUpdate }: EnhancedMatchControlsProps) {
+export function EnhancedMatchControls({ fixtureId, onTimerUpdate, forceRefresh }: EnhancedMatchControlsProps) {
 
   const {
     timerState,
@@ -25,6 +27,7 @@ export function EnhancedMatchControls({ fixtureId, onTimerUpdate }: EnhancedMatc
     getCurrentMinute,
     getTotalMatchMinute,
     formatTime,
+    loadMatchState,
   } = useEnhancedMatchTimer({
     fixtureId,
     onSaveState: () => {
@@ -33,14 +36,23 @@ export function EnhancedMatchControls({ fixtureId, onTimerUpdate }: EnhancedMatc
     }
   });
 
+  // Force refresh when control is taken
+  useEffect(() => {
+    if (forceRefresh) {
+      loadMatchState();
+    }
+  }, [forceRefresh, loadMatchState]);
+
   const handleStartNewPeriod = async () => {
     await startNewPeriod();
   };
 
-  // Simplified button logic
+  // Enhanced button logic to handle all resume scenarios
   const canStartPeriod = !timerState.currentPeriod && timerState.matchStatus !== 'completed';
   const canPausePeriod = timerState.isRunning && timerState.currentPeriod;
-  const canResumePeriod = timerState.matchStatus === 'paused' && timerState.currentPeriod;
+  // Show resume button when there's a current period that's not running (paused or stopped)
+  const canResumePeriod = timerState.currentPeriod && !timerState.isRunning && 
+                         (timerState.matchStatus === 'paused' || timerState.matchStatus === 'in_progress');
   const canEndPeriod = timerState.currentPeriod;
   const canEndMatch = timerState.periods.length > 0 && timerState.matchStatus !== 'completed';
 
@@ -142,6 +154,17 @@ export function EnhancedMatchControls({ fixtureId, onTimerUpdate }: EnhancedMatc
             </Button>
           )}
 
+          {/* Refresh State Button - for troubleshooting paused states */}
+          <Button
+            onClick={loadMatchState}
+            variant="ghost"
+            size="sm"
+            className="w-full flex items-center justify-center gap-2 text-xs"
+          >
+            <RefreshCw className="h-3 w-3" />
+            Refresh Timer State
+          </Button>
+
           {/* End Period Button */}
           {canEndPeriod && (
             <Button
@@ -170,6 +193,11 @@ export function EnhancedMatchControls({ fixtureId, onTimerUpdate }: EnhancedMatc
         {timerState.matchStatus === 'not_started' && (
           <div className="text-sm text-muted-foreground text-center p-4 bg-muted rounded-lg">
             Click "Start Period" to begin the first period of the match
+          </div>
+        )}
+        {timerState.matchStatus === 'paused' && timerState.currentPeriod && (
+          <div className="text-sm text-muted-foreground text-center p-4 bg-yellow-100 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+            Period {timerState.currentPeriod.period_number} is paused. Click "Resume Period" to continue.
           </div>
         )}
       </CardContent>

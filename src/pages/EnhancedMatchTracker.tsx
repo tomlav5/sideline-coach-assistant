@@ -436,6 +436,7 @@ export default function EnhancedMatchTracker() {
       <EnhancedMatchControls
         fixtureId={fixtureId!}
         onTimerUpdate={handleTimerUpdate}
+        forceRefresh={matchTracker?.isActiveTracker}
       />
 
       {/* Action Buttons - Centered and Mobile-Optimized */}
