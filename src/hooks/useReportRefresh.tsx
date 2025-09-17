@@ -11,17 +11,29 @@ export function useReportRefresh() {
   const debounceTimeoutRef = useRef<NodeJS.Timeout>();
 
   // Debounced invalidation function to prevent excessive cache invalidations
-  const debouncedInvalidateReports = useCallback(() => {
+  const debouncedInvalidateReports = useCallback(async () => {
     if (debounceTimeoutRef.current) {
       clearTimeout(debounceTimeoutRef.current);
     }
     
-    debounceTimeoutRef.current = setTimeout(() => {
-      // Only invalidate specific query keys, not all queries
-      queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
-      queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
-      queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
-      queryClient.invalidateQueries({ queryKey: ['competitions'] });
+    debounceTimeoutRef.current = setTimeout(async () => {
+      try {
+        // Refresh materialized views first
+        await supabase.rpc('refresh_report_views');
+        
+        // Then invalidate specific query keys
+        queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
+        queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
+        queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
+        queryClient.invalidateQueries({ queryKey: ['competitions'] });
+      } catch (error) {
+        console.error('Error refreshing report views:', error);
+        // Still invalidate cache even if refresh fails
+        queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
+        queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
+        queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
+        queryClient.invalidateQueries({ queryKey: ['competitions'] });
+      }
     }, 2000); // 2 second debounce
   }, [queryClient]);
 

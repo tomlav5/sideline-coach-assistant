@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface RetrospectiveMatchData {
   fixture_id: string;
@@ -29,16 +30,19 @@ interface RetrospectiveMatchData {
 
 export function useRetrospectiveMatch() {
   const [isLoading, setIsLoading] = useState(false);
+  const queryClient = useQueryClient();
 
   const saveRetrospectiveMatch = async (data: RetrospectiveMatchData) => {
     setIsLoading(true);
     
     try {
-      // Mark fixture as retrospective
+      // Mark fixture as retrospective and completed
       const { error: fixtureError } = await supabase
         .from('fixtures')
         .update({
           is_retrospective: true,
+          status: 'completed',
+          match_status: 'completed',
           match_state: {
             status: 'completed',
             total_time_seconds: data.periods.reduce((sum, p) => sum + (p.duration_minutes * 60), 0),
@@ -145,6 +149,19 @@ export function useRetrospectiveMatch() {
           .insert(timeLogsToInsert);
 
         if (timeLogsError) throw timeLogsError;
+      }
+
+      // Refresh materialized views for reports
+      try {
+        await supabase.rpc('refresh_report_views');
+        
+        // Invalidate relevant query caches
+        queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
+        queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
+        queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
+        queryClient.invalidateQueries({ queryKey: ['competitions'] });
+      } catch (refreshError) {
+        console.error('Error refreshing report views:', refreshError);
       }
 
       toast.success('Retrospective match data saved successfully');

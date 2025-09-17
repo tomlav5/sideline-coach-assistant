@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface MatchPeriod {
   id: string;
@@ -29,6 +30,7 @@ interface UseEnhancedMatchTimerProps {
 }
 
 export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMatchTimerProps) {
+  const queryClient = useQueryClient();
   const [timerState, setTimerState] = useState<TimerState>({
     periods: [],
     isRunning: false,
@@ -337,6 +339,19 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
 
       if (error) {
         console.error('Error updating fixture status:', error);
+      } else {
+        // Refresh materialized views for reports
+        try {
+          await supabase.rpc('refresh_report_views');
+          
+          // Invalidate relevant query caches
+          queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
+          queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
+          queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
+          queryClient.invalidateQueries({ queryKey: ['competitions'] });
+        } catch (refreshError) {
+          console.error('Error refreshing report views:', refreshError);
+        }
       }
 
       // Navigate to match report after successful completion
