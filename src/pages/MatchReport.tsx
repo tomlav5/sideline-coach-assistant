@@ -24,6 +24,11 @@ interface MatchEvent {
     last_name: string;
     jersey_number?: number;
   };
+  assist_players?: {
+    first_name: string;
+    last_name: string;
+    jersey_number?: number;
+  };
 }
 
 interface PlayerTime {
@@ -111,6 +116,11 @@ export default function MatchReport() {
           is_penalty,
           player_id,
           players!fk_match_events_player_id (
+            first_name,
+            last_name,
+            jersey_number
+          ),
+          assist_players:players!fk_match_events_assist_player_id (
             first_name,
             last_name,
             jersey_number
