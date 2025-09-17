@@ -322,8 +322,8 @@ export default function EnhancedMatchTracker() {
     setTotalMatchMinute(totalMinute);
     setCurrentPeriodNumber(periodNumber);
     
-    // Update player times when timer updates - ensure sync
-    if (activePlayersList.length > 0 && periodNumber > 0) {
+    // Update player times when timer updates - but only for players actually on field
+    if (periodNumber > 0) {
       try {
         const { data: currentPeriod } = await supabase
           .from('match_periods')
@@ -333,19 +333,28 @@ export default function EnhancedMatchTracker() {
           .single();
 
         if (currentPeriod) {
-          // Update active player time logs to stay synchronized
-          for (const player of activePlayersList) {
-            await supabase
-              .from('player_time_logs')
-              .upsert({
-                fixture_id: fixtureId,
-                player_id: player.id,
-                period_id: currentPeriod.id,
-                total_period_minutes: minute,
-                is_active: true,
-              }, {
-                onConflict: 'fixture_id,player_id,period_id'
-              });
+          // Get players who are actually on field RIGHT NOW from the database
+          const { data: onFieldPlayers } = await supabase
+            .from('player_match_status')
+            .select('player_id')
+            .eq('fixture_id', fixtureId)
+            .eq('is_on_field', true);
+
+          if (onFieldPlayers && onFieldPlayers.length > 0) {
+            // Update time logs only for players currently on field
+            for (const playerStatus of onFieldPlayers) {
+              await supabase
+                .from('player_time_logs')
+                .upsert({
+                  fixture_id: fixtureId,
+                  player_id: playerStatus.player_id,
+                  period_id: currentPeriod.id,
+                  total_period_minutes: minute,
+                  is_active: true,
+                }, {
+                  onConflict: 'fixture_id,player_id,period_id'
+                });
+            }
           }
         }
       } catch (error) {
@@ -632,7 +641,7 @@ export default function EnhancedMatchTracker() {
               .eq('is_active', true)
               .single();
 
-            // Update player statuses
+            // Update player statuses and handle time logs
             const { error: outErr } = await supabase
               .from('player_match_status')
               .update({ is_on_field: false })
@@ -646,6 +655,38 @@ export default function EnhancedMatchTracker() {
               .eq('fixture_id', fixtureId)
               .eq('player_id', playerIn);
             if (inErr) throw inErr;
+
+            // Handle player time logs for substitution
+            if (currentPeriod) {
+              // Finalize time log for player going OUT
+              await supabase
+                .from('player_time_logs')
+                .upsert({
+                  fixture_id: fixtureId,
+                  player_id: playerOut,
+                  period_id: currentPeriod.id,
+                  time_off_minute: currentMinute,
+                  total_period_minutes: currentMinute,
+                  is_active: false,
+                }, {
+                  onConflict: 'fixture_id,player_id,period_id'
+                });
+
+              // Create/initialize time log for player coming IN
+              await supabase
+                .from('player_time_logs')
+                .upsert({
+                  fixture_id: fixtureId,
+                  player_id: playerIn,
+                  period_id: currentPeriod.id,
+                  time_on_minute: currentMinute,
+                  total_period_minutes: 0, // Will be updated by timer
+                  is_starter: false,
+                  is_active: true,
+                }, {
+                  onConflict: 'fixture_id,player_id,period_id'
+                });
+            }
 
             // Record substitution as match event
             if (currentPeriod) {
