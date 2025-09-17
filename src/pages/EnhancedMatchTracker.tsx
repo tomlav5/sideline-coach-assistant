@@ -633,13 +633,48 @@ export default function EnhancedMatchTracker() {
               return;
             }
 
-            // Get current period for event recording
-            const { data: currentPeriod } = await supabase
+            // Get current period for event recording with fallbacks
+            let currentPeriod = null;
+            
+            // Try to get active period first
+            const { data: activePeriod } = await supabase
               .from('match_periods')
               .select('*')
               .eq('fixture_id', fixtureId)
               .eq('is_active', true)
               .single();
+            
+            if (activePeriod) {
+              currentPeriod = activePeriod;
+            } else {
+              // Fallback 1: Use current_period_id from fixture
+              const { data: fixtureData } = await supabase
+                .from('fixtures')
+                .select('current_period_id')
+                .eq('id', fixtureId)
+                .single();
+              
+              if (fixtureData?.current_period_id) {
+                const { data: periodById } = await supabase
+                  .from('match_periods')
+                  .select('*')
+                  .eq('id', fixtureData.current_period_id)
+                  .single();
+                currentPeriod = periodById;
+              } else {
+                // Fallback 2: Use the most recent period
+                const { data: latestPeriod } = await supabase
+                  .from('match_periods')
+                  .select('*')
+                  .eq('fixture_id', fixtureId)
+                  .order('period_number', { ascending: false })
+                  .limit(1)
+                  .single();
+                currentPeriod = latestPeriod;
+              }
+            }
+            
+            console.log('Current period for substitution:', currentPeriod);
 
             // Update player statuses and handle time logs
             const { error: outErr } = await supabase
