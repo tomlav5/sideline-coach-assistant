@@ -75,6 +75,8 @@ export default function EnhancedMatchTracker() {
   const [playerIn, setPlayerIn] = useState('');
   const [activePlayersList, setActivePlayersList] = useState<Player[]>([]);
   const [substitutePlayersList, setSubstitutePlayersList] = useState<Player[]>([]);
+  // Local log of substitutions for UI only (not persisted as match_events)
+  const [substitutions, setSubstitutions] = useState<{ outId: string; inId: string; minute: number; total: number }[]>([]);
   
   // Real-time sync and match locking
   const { 
@@ -548,15 +550,40 @@ export default function EnhancedMatchTracker() {
         </Button>
       </div>
 
-      {/* Events List */}
-      {events.length > 0 && (
+      {/* Recent Substitutions (UI only) */}
+      {substitutions.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">Recent Substitutions</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="space-y-1.5">
+              {substitutions.slice(-5).map((sub, idx) => (
+                <div key={`${idx}-${sub.outId}-${sub.inId}-${sub.minute}`} className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
+                  <div className="text-sm">
+                    <span className="font-mono font-bold text-xs bg-muted px-2 py-1 rounded mr-2">{sub.total}'</span>
+                    <span className="font-medium">
+                      {(players.find(p => p.id === sub.outId)?.first_name || 'Unknown')} {(players.find(p => p.id === sub.outId)?.last_name || '')}
+                      {' '}→{' '}
+                      {(players.find(p => p.id === sub.inId)?.first_name || 'Unknown')} {(players.find(p => p.id === sub.inId)?.last_name || '')}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Events List (goals & assists only) */}
+      {events.filter(e => e.event_type !== 'substitution').length > 0 && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-lg">Match Events</CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
             <div className="space-y-1.5">
-              {events.map((event) => (
+              {events.filter(e => e.event_type !== 'substitution').map((event) => (
                 <div key={event.id} className="flex flex-col sm:flex-row sm:items-center gap-2 p-3 border rounded-lg bg-card/50">
                   <div className="flex items-center gap-2 min-w-0">
                     <Badge variant="secondary" className="text-xs font-mono shrink-0">
@@ -571,16 +598,7 @@ export default function EnhancedMatchTracker() {
                     </div>
                   </div>
                   
-                  {event.event_type === 'substitution' ? (
-                    <div className="text-sm text-muted-foreground sm:ml-auto sm:text-right">
-                      <span className="font-medium text-foreground">
-                        {event.players ? `${event.players.first_name} ${event.players.last_name}` : 'Unknown'} → {event.assist_players ? `${event.assist_players.first_name} ${event.assist_players.last_name}` : 'Unknown'}
-                      </span>
-                      <div className="text-xs">
-                        Player Substitution
-                      </div>
-                    </div>
-                  ) : event.players && (
+                  {event.players && (
                     <div className="text-sm text-muted-foreground sm:ml-auto sm:text-right">
                       <span className="font-medium text-foreground">
                         {event.players.first_name} {event.players.last_name}
@@ -723,37 +741,11 @@ export default function EnhancedMatchTracker() {
                 });
             }
 
-            // Record substitution as match event
-            if (currentPeriod) {
-              const eventData = {
-                fixture_id: fixtureId,
-                period_id: currentPeriod.id,
-                event_type: 'substitution',
-                player_id: playerOut, // Player going off
-                assist_player_id: playerIn, // Player coming on (using assist_player_id field)
-                minute_in_period: currentMinute,
-                total_match_minute: totalMatchMinute,
-                is_our_team: true,
-                is_penalty: false,
-                notes: `Substitution: Player out, Player in`,
-                is_retrospective: false,
-              };
-
-              console.log('Recording substitution event:', eventData);
-
-              const { error: eventError } = await supabase
-                .from('match_events')
-                .insert(eventData);
-
-              if (eventError) {
-                console.error('Error recording substitution event:', eventError);
-                // Don't fail the substitution if event recording fails
-              } else {
-                console.log('Substitution event recorded successfully');
-              }
-            } else {
-              console.warn('No current period found - substitution event not recorded');
-            }
+            // Note substitution in UI only (events restricted to goals/assists)
+            const outPlayer = players.find(p => p.id === playerOut);
+            const inPlayer = players.find(p => p.id === playerIn);
+            setSubstitutions(prev => [...prev, { outId: playerOut, inId: playerIn, minute: currentMinute, total: totalMatchMinute }]);
+            console.log('Substitution noted (UI only):', { out: outPlayer, in: inPlayer, minute: currentMinute, total: totalMatchMinute });
 
             toast.success('Substitution made and recorded');
             setSubDialogOpen(false);
