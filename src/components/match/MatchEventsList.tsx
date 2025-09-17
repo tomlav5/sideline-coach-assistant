@@ -1,16 +1,18 @@
 import { memo, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Goal, Users, Clock } from 'lucide-react';
+import { Goal, Users, Clock, ArrowUpDown } from 'lucide-react';
 
 interface MatchEvent {
   id: string;
-  event_type: 'goal' | 'assist' | 'throw_in' | 'corner' | 'free_kick' | 'penalty' | 'goal_kick';
+  event_type: 'goal' | 'assist' | 'throw_in' | 'corner' | 'free_kick' | 'penalty' | 'goal_kick' | 'substitution';
   minute: number;
   half: 'first' | 'second';
   is_our_team: boolean;
   player_id: string;
+  assist_player_id?: string; // For substitutions, this holds the player coming in
   is_penalty?: boolean;
+  notes?: string;
 }
 
 interface MatchEventsListProps {
@@ -33,6 +35,8 @@ export const MatchEventsList = memo(({ events, getPlayerName }: MatchEventsListP
         return <Goal className="h-4 w-4" />;
       case 'assist':
         return <Users className="h-4 w-4" />;
+      case 'substitution':
+        return <ArrowUpDown className="h-4 w-4" />;
       default:
         return <Clock className="h-4 w-4" />;
     }
@@ -44,6 +48,9 @@ export const MatchEventsList = memo(({ events, getPlayerName }: MatchEventsListP
     }
     if (eventType === 'assist') {
       return isOurTeam ? 'bg-blue-500' : 'bg-orange-500';
+    }
+    if (eventType === 'substitution') {
+      return 'bg-purple-500';
     }
     return 'bg-gray-500';
   };
@@ -66,7 +73,15 @@ export const MatchEventsList = memo(({ events, getPlayerName }: MatchEventsListP
                 
                 <div className="flex-1">
                   <div className="flex items-center space-x-2">
-                    <span className="font-medium">{getPlayerName(event.player_id)}</span>
+                    <span className="font-medium">
+                      {event.event_type === 'substitution' ? (
+                        <>
+                          {getPlayerName(event.player_id)} → {getPlayerName(event.assist_player_id || '')}
+                        </>
+                      ) : (
+                        getPlayerName(event.player_id)
+                      )}
+                    </span>
                     <Badge variant="outline" className="text-xs">
                       {event.minute}' {event.half.charAt(0).toUpperCase() + event.half.slice(1)}
                     </Badge>
@@ -75,8 +90,14 @@ export const MatchEventsList = memo(({ events, getPlayerName }: MatchEventsListP
                     )}
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    {event.event_type.charAt(0).toUpperCase() + event.event_type.slice(1)}
-                    {event.is_our_team ? ' (Our Team)' : ' (Opposition)'}
+                    {event.event_type === 'substitution' ? (
+                      'Substitution'
+                    ) : (
+                      <>
+                        {event.event_type.charAt(0).toUpperCase() + event.event_type.slice(1)}
+                        {event.is_our_team ? ' (Our Team)' : ' (Opposition)'}
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

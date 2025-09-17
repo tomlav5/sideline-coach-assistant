@@ -614,7 +614,16 @@ export default function EnhancedMatchTracker() {
               toast.error('Select both players to make a substitution');
               return;
             }
-            // Update statuses
+
+            // Get current period for event recording
+            const { data: currentPeriod } = await supabase
+              .from('match_periods')
+              .select('*')
+              .eq('fixture_id', fixtureId)
+              .eq('is_active', true)
+              .single();
+
+            // Update player statuses
             const { error: outErr } = await supabase
               .from('player_match_status')
               .update({ is_on_field: false })
@@ -629,11 +638,38 @@ export default function EnhancedMatchTracker() {
               .eq('player_id', playerIn);
             if (inErr) throw inErr;
 
-            toast.success('Substitution made');
+            // Record substitution as match event
+            if (currentPeriod) {
+              const eventData = {
+                fixture_id: fixtureId,
+                period_id: currentPeriod.id,
+                event_type: 'substitution',
+                player_id: playerOut, // Player going off
+                assist_player_id: playerIn, // Player coming on (using assist_player_id field)
+                minute_in_period: currentMinute,
+                total_match_minute: totalMatchMinute,
+                is_our_team: true,
+                is_penalty: false,
+                notes: `Substitution: Player out, Player in`,
+                is_retrospective: false,
+              };
+
+              const { error: eventError } = await supabase
+                .from('match_events')
+                .insert(eventData);
+
+              if (eventError) {
+                console.error('Error recording substitution event:', eventError);
+                // Don't fail the substitution if event recording fails
+              }
+            }
+
+            toast.success('Substitution made and recorded');
             setSubDialogOpen(false);
             setPlayerOut('');
             setPlayerIn('');
             await refreshPlayerStatusLists();
+            await loadEvents(); // Refresh events list to show the substitution
           } catch (e) {
             console.error('Error making substitution:', e);
             toast.error('Failed to make substitution');
