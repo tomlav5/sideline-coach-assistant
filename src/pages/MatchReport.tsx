@@ -170,9 +170,6 @@ export default function MatchReport() {
         return b.total_minutes - a.total_minutes;
       }));
 
-      if (playerTimesError) throw playerTimesError;
-      setPlayerTimes((playerTimesData || []) as unknown as PlayerTime[]);
-
     } catch (error) {
       console.error('Error fetching match report:', error);
       toast({
@@ -417,36 +414,43 @@ export default function MatchReport() {
           </CardContent>
         </Card>
 
-        {/* Player Performance */}
+        {/* Playing Time */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Clock className="h-5 w-5" />
-              Player Performance
+              Playing Time
             </CardTitle>
           </CardHeader>
           <CardContent>
             <ScrollArea className="h-96">
               {playerTimes.length === 0 ? (
-                <p className="text-muted-foreground text-center py-4">No player data available</p>
+                <p className="text-muted-foreground text-center py-4">No player time data available</p>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {playerTimes.map((playerTime) => (
-                    <div key={playerTime.player_id} className="flex items-center justify-between p-3 bg-muted/50 rounded">
+                    <div key={playerTime.player_id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                       <div className="flex items-center gap-3">
-                        <Badge variant={playerTime.is_starter ? "default" : "secondary"} className="text-xs">
-                          {playerTime.is_starter ? "Starter" : "Sub"}
-                        </Badge>
-                        <span className="font-medium">
-                          {getPlayerName(playerTime.players)}
-                        </span>
+                        {playerTime.players.jersey_number && (
+                          <Badge variant="outline" className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-mono">
+                            {playerTime.players.jersey_number}
+                          </Badge>
+                        )}
+                        <div>
+                          <div className="font-medium">
+                            {playerTime.players.first_name} {playerTime.players.last_name}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {playerTime.is_starter ? 'Starter' : 'Substitute'}
+                          </div>
+                        </div>
                       </div>
                       <div className="text-right">
-                        <div className="font-bold">{formatMinutes(playerTime.total_minutes)}</div>
+                        <div className="font-bold text-lg">{playerTime.total_minutes} min</div>
                         {playerTime.time_on !== null && (
                           <div className="text-xs text-muted-foreground">
-                            On: {playerTime.time_on}' 
-                            {playerTime.time_off && ` | Off: ${playerTime.time_off}'`}
+                            {playerTime.time_on !== null && `On: ${playerTime.time_on}'`}
+                            {playerTime.time_off !== null && ` • Off: ${playerTime.time_off}'`}
                           </div>
                         )}
                       </div>
