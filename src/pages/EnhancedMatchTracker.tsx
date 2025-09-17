@@ -562,7 +562,16 @@ export default function EnhancedMatchTracker() {
                     </div>
                   </div>
                   
-                  {event.players && (
+                  {event.event_type === 'substitution' ? (
+                    <div className="text-sm text-muted-foreground sm:ml-auto sm:text-right">
+                      <span className="font-medium text-foreground">
+                        {event.players ? `${event.players.first_name} ${event.players.last_name}` : 'Unknown'} → {event.assist_players ? `${event.assist_players.first_name} ${event.assist_players.last_name}` : 'Unknown'}
+                      </span>
+                      <div className="text-xs">
+                        Player Substitution
+                      </div>
+                    </div>
+                  ) : event.players && (
                     <div className="text-sm text-muted-foreground sm:ml-auto sm:text-right">
                       <span className="font-medium text-foreground">
                         {event.players.first_name} {event.players.last_name}
@@ -654,6 +663,8 @@ export default function EnhancedMatchTracker() {
                 is_retrospective: false,
               };
 
+              console.log('Recording substitution event:', eventData);
+
               const { error: eventError } = await supabase
                 .from('match_events')
                 .insert(eventData);
@@ -661,7 +672,11 @@ export default function EnhancedMatchTracker() {
               if (eventError) {
                 console.error('Error recording substitution event:', eventError);
                 // Don't fail the substitution if event recording fails
+              } else {
+                console.log('Substitution event recorded successfully');
               }
+            } else {
+              console.warn('No current period found - substitution event not recorded');
             }
 
             toast.success('Substitution made and recorded');
