@@ -194,44 +194,84 @@ export default function EnhancedMatchTracker() {
     }
   };
 
-  // Ensure player status exists and refresh active/sub lists
+  // Ensure player status exists and keep it in sync with selected squad
   const ensurePlayerStatuses = async (fixtureData: any, squadPlayers: Player[]) => {
     try {
       const { data: statusRows, error } = await supabase
         .from('player_match_status')
-        .select('id')
+        .select('id, player_id, is_on_field')
         .eq('fixture_id', fixtureId);
 
       if (error) throw error;
 
+      const sd = (fixtureData?.selected_squad_data as any) || {};
+
+      // Resolve starters from multiple possible shapes
+      let starters: string[] = [];
+      if (Array.isArray(sd.startingPlayerIds) && sd.startingPlayerIds.length) {
+        starters = sd.startingPlayerIds;
+      } else if (Array.isArray(sd.startingLineup) && sd.startingLineup.length) {
+        starters = sd.startingLineup.map((p: any) => p.id || p);
+      } else if (Array.isArray(sd.starting_players) && sd.starting_players.length) {
+        starters = sd.starting_players.map((p: any) => p.id || p);
+      } else if (Array.isArray(sd.starters) && sd.starters.length) {
+        starters = sd.starters.map((p: any) => p.id || p);
+      }
+
+      const desiredActiveSet = new Set(starters);
+      const squadIds = new Set(squadPlayers.map(p => p.id));
+
       if (!statusRows || statusRows.length === 0) {
         // Initialize statuses based on selected squad (starters on field)
-        const sd = (fixtureData.selected_squad_data as any) || {};
-        
-        // Try different possible field names for starters
-        let starters: string[] = [];
-        if (sd.startingPlayerIds && Array.isArray(sd.startingPlayerIds)) {
-          starters = sd.startingPlayerIds;
-        } else if (sd.startingLineup && Array.isArray(sd.startingLineup)) {
-          starters = sd.startingLineup.map((p: any) => p.id || p);
-        } else if (sd.starting_players && Array.isArray(sd.starting_players)) {
-          starters = sd.starting_players.map((p: any) => p.id || p);
-        }
-
         console.log('[MatchTracker] Initializing player statuses', {
           totalSquadPlayers: squadPlayers.length,
           startersFound: starters.length,
           squadData: sd
         });
-        
+
         const rows = squadPlayers.map((p) => ({
           fixture_id: fixtureId!,
           player_id: p.id,
-          is_on_field: starters.includes(p.id),
+          is_on_field: desiredActiveSet.has(p.id),
         }));
         
         const { error: insertErr } = await supabase.from('player_match_status').insert(rows);
         if (insertErr) throw insertErr;
+      } else {
+        // Heal/Sync: ensure statuses match the selected squad and starters
+        const existingById = new Map(statusRows.map((r: any) => [r.player_id, r]));
+        const missingIds = [...squadIds].filter(id => !existingById.has(id));
+
+        if (missingIds.length > 0) {
+          const { error: insertMissingErr } = await supabase.from('player_match_status').insert(
+            missingIds.map(id => ({
+              fixture_id: fixtureId!,
+              player_id: id,
+              is_on_field: desiredActiveSet.has(id),
+            }))
+          );
+          if (insertMissingErr) throw insertMissingErr;
+        }
+
+        // Reconcile active/inactive flags to reflect starters
+        if (desiredActiveSet.size > 0) {
+          const { error: setActivesErr } = await supabase
+            .from('player_match_status')
+            .update({ is_on_field: true })
+            .eq('fixture_id', fixtureId)
+            .in('player_id', Array.from(desiredActiveSet));
+          if (setActivesErr) throw setActivesErr;
+
+          const others = [...squadIds].filter(id => !desiredActiveSet.has(id));
+          if (others.length > 0) {
+            const { error: setSubsErr } = await supabase
+              .from('player_match_status')
+              .update({ is_on_field: false })
+              .eq('fixture_id', fixtureId)
+              .in('player_id', others);
+            if (setSubsErr) throw setSubsErr;
+          }
+        }
       }
 
       await refreshPlayerStatusLists();
@@ -240,7 +280,6 @@ export default function EnhancedMatchTracker() {
       toast.error('Failed to prepare player statuses');
     }
   };
-
   const refreshPlayerStatusLists = async () => {
     try {
       const { data, error } = await supabase
