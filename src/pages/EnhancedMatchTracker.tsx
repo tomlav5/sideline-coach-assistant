@@ -264,6 +264,8 @@ export default function EnhancedMatchTracker() {
         statusRows: rows.length,
         activeCount: activesFromState.length,
         subsCount: subsFromState.length,
+        activePlayerIds: activeIds,
+        allPlayerIds: allIds
       });
 
       setActivePlayersList(activesFromState);
@@ -461,7 +463,11 @@ export default function EnhancedMatchTracker() {
         </Button>
 
         <Button
-          onClick={() => setSubDialogOpen(true)}
+          onClick={async () => {
+            // Ensure player statuses are current before opening dialog
+            await refreshPlayerStatusLists();
+            setSubDialogOpen(true);
+          }}
           variant="secondary"
           className="flex items-center justify-center gap-2 w-full min-h-[44px]"
           disabled={!matchTracker?.isActiveTracker && (fixture?.status === 'in_progress' || fixture?.status === 'live')}
