@@ -39,6 +39,11 @@ export default function Auth() {
     const lastName = formData.get('lastName') as string;
 
     const { error } = await signUp(email, password, firstName, lastName);
+    
+    if (!error) {
+      navigate('/registration-success');
+    }
+    
     setIsLoading(false);
   };
 

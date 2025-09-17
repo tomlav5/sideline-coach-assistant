@@ -15,6 +15,7 @@ const Teams = lazy(() => import("./pages/Teams"));
 const Players = lazy(() => import("./pages/Players"));
 const Fixtures = lazy(() => import("./pages/Fixtures"));
 const Auth = lazy(() => import("./pages/Auth"));
+const RegistrationSuccess = lazy(() => import("./pages/RegistrationSuccess"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const ClubManagement = lazy(() => import("./pages/ClubManagement"));
 const SquadSelection = lazy(() => import("./pages/SquadSelection"));
@@ -36,6 +37,11 @@ const App = () => (
             <Route path="/auth" element={
               <LazyLoader>
                 <Auth />
+              </LazyLoader>
+            } />
+            <Route path="/registration-success" element={
+              <LazyLoader>
+                <RegistrationSuccess />
               </LazyLoader>
             } />
             <Route path="/" element={
