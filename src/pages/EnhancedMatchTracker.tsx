@@ -473,14 +473,7 @@ export default function EnhancedMatchTracker() {
         matchStatus={fixture?.status || 'scheduled'}
       />
 
-      {/* Enhanced Timer Controls */}
-      <EnhancedMatchControls
-        fixtureId={fixtureId!}
-        onTimerUpdate={handleTimerUpdate}
-        forceRefresh={matchTracker?.isActiveTracker}
-      />
-
-      {/* Action Buttons - Centered and Mobile-Optimized */}
+      {/* Action Buttons - Moved higher for better accessibility */}
       <div className="flex flex-col sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-3">
         <Button
           onClick={() => setShowEventDialog(true)}
@@ -525,6 +518,13 @@ export default function EnhancedMatchTracker() {
           View Report
         </Button>
       </div>
+
+      {/* Enhanced Timer Controls */}
+      <EnhancedMatchControls
+        fixtureId={fixtureId!}
+        onTimerUpdate={handleTimerUpdate}
+        forceRefresh={matchTracker?.isActiveTracker}
+      />
 
       {/* Match Management Buttons - Centered */}
       <div className="flex flex-col sm:flex-row gap-3 sm:gap-3 justify-center">
