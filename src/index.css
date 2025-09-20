@@ -107,8 +107,13 @@ All colors MUST be HSL.
     -moz-osx-font-smoothing: grayscale;
     /* Hardware acceleration for smoother animations */
     transform: translateZ(0);
-    /* Prevent bounce scrolling on iOS */
-    overscroll-behavior: none;
+  }
+
+  /* Prevent bounce scrolling on iOS - mobile only */
+  @media (max-width: 768px) {
+    body {
+      overscroll-behavior: none;
+    }
   }
 
   /* Mobile-first responsive typography */
