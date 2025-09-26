@@ -44,8 +44,7 @@ export function usePlayers() {
     queryKey: ['players'],
     queryFn: async (): Promise<Player[]> => {
       const { data, error } = await supabase
-        .rpc('get_players_with_teams_secure')
-        .order('created_at', { ascending: false });
+        .rpc('get_players_with_teams_secure');
 
       if (error) throw error;
       
@@ -62,7 +61,7 @@ export function usePlayers() {
           id: team.id,
           name: team.name,
           team_type: team.team_type,
-          club_id: team.club_id
+          club_id: player.club_id // Use player's club_id since teams might not have it in the view
         })) : []
       }));
     },
