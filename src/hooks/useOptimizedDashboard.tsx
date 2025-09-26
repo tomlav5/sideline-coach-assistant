@@ -20,12 +20,10 @@ export function useOptimizedDashboardStats() {
   return useQuery({
     queryKey: ['dashboard-stats', user?.id],
     queryFn: async (): Promise<DashboardStats> => {
-      // Use optimized dashboard_stats view for single query
-      const { data, error } = await supabase
-        .from('dashboard_stats')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
+      // Use secure function for dashboard statistics
+      const { data: dataArray, error } = await supabase
+        .rpc('get_user_dashboard_stats');
+      const data = dataArray?.[0];
 
       if (error) throw error;
 

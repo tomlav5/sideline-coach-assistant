@@ -653,16 +653,6 @@ export type Database = {
       }
     }
     Views: {
-      dashboard_stats: {
-        Row: {
-          total_clubs: number | null
-          total_players: number | null
-          total_teams: number | null
-          upcoming_fixtures: number | null
-          user_id: string | null
-        }
-        Relationships: []
-      }
       fixtures_with_scores: {
         Row: {
           active_tracker_id: string | null
@@ -833,6 +823,16 @@ export type Database = {
           player_id: string
           team_name: string
           total_minutes_played: number
+        }[]
+      }
+      get_user_dashboard_stats: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          total_clubs: number
+          total_players: number
+          total_teams: number
+          upcoming_fixtures: number
+          user_id: string
         }[]
       }
       refresh_report_views: {

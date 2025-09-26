@@ -59,12 +59,10 @@ export function useDashboardData() {
 
       const clubIds = clubs.map(club => club.id);
 
-      // Use optimized dashboard_stats view for statistics
-      const { data: dashboardStats } = await supabase
-        .from('dashboard_stats')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
+      // Use secure function for dashboard statistics
+      const { data: dashboardStatsArray } = await supabase
+        .rpc('get_user_dashboard_stats');
+      const dashboardStats = dashboardStatsArray?.[0];
 
       const stats: DashboardStats = {
         clubs: dashboardStats?.total_clubs || 0,

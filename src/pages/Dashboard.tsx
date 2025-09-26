@@ -78,12 +78,10 @@ export default function Dashboard() {
         const clubIds = clubsData?.map(club => club.id) || [];
         
         if (clubIds.length > 0) {
-          // Use optimized dashboard_stats view for single query
-          const { data: dashboardData } = await supabase
-            .from('dashboard_stats')
-            .select('*')
-            .eq('user_id', user.id)
-            .single();
+          // Use secure function for dashboard statistics
+          const { data: dashboardDataArray } = await supabase
+            .rpc('get_user_dashboard_stats');
+          const dashboardData = dashboardDataArray?.[0];
 
           setStats({
             clubs: dashboardData?.total_clubs || 0,
