@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useTeams } from '@/hooks/useTeams';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -71,8 +72,8 @@ export default function Fixtures() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { data: liveMatchData } = useLiveMatchDetection();
+  const { data: teams = [], isLoading: teamsLoading } = useTeams();
   const [fixtures, setFixtures] = useState<Fixture[]>([]);
-  const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -113,27 +114,9 @@ export default function Fixtures() {
   useEffect(() => {
     if (user) {
       fetchFixtures();
-      fetchTeams();
     }
   }, [user]);
 
-  const fetchTeams = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('teams')
-        .select(`
-          id,
-          name,
-          club:clubs(id, name)
-        `)
-        .order('name');
-
-      if (error) throw error;
-      setTeams(data || []);
-    } catch (error) {
-      console.error('Error fetching teams:', error);
-    }
-  };
 
   const fetchFixtures = async () => {
     try {
@@ -386,7 +369,7 @@ export default function Fixtures() {
   };
 
   const renderFixtures = (fixtureList: Fixture[], type: 'upcoming' | 'completed') => {
-    if (loading) {
+    if (loading || teamsLoading) {
       return (
         <div className="space-y-3">
           {[...Array(4)].map((_, i) => (
