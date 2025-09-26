@@ -1,7 +1,7 @@
-import React from 'npm:react@18.3.1'
+import React from 'https://esm.sh/react@18.3.1'
 import { Webhook } from 'https://esm.sh/standardwebhooks@1.0.0'
-import { Resend } from 'npm:resend@4.0.0'
-import { renderAsync } from 'npm:@react-email/components@0.0.22'
+import { Resend } from 'https://esm.sh/resend@4.0.0'
+import { renderAsync } from 'https://esm.sh/@react-email/render@0.0.12'
 import { ConfirmationEmail } from './_templates/confirmation-email.tsx'
 
 const resend = new Resend(Deno.env.get('RESEND_API_KEY') as string)
@@ -66,12 +66,12 @@ Deno.serve(async (req) => {
       throw error
     }
   } catch (error) {
-    console.log(error)
+    console.error('Error in send-email function:', error)
     return new Response(
       JSON.stringify({
         error: {
-          http_code: error.code,
-          message: error.message,
+          http_code: (error as any)?.code || 500,
+          message: (error as any)?.message || 'Internal server error',
         },
       }),
       {
