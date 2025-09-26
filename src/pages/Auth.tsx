@@ -7,6 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Shield, Users, BarChart3 } from 'lucide-react';
+import { authSignInSchema, authSignUpSchema } from '@/lib/validation';
+import { toast } from '@/hooks/use-toast';
 
 export default function Auth() {
   const [isLoading, setIsLoading] = useState(false);
@@ -18,9 +20,25 @@ export default function Auth() {
     setIsLoading(true);
     
     const formData = new FormData(e.currentTarget);
-    const email = formData.get('email') as string;
-    const password = formData.get('password') as string;
+    const rawData = {
+      email: formData.get('email') as string,
+      password: formData.get('password') as string,
+    };
 
+    // Validate input data
+    const validation = authSignInSchema.safeParse(rawData);
+    if (!validation.success) {
+      const errors = validation.error.errors.map(err => err.message).join(', ');
+      toast({
+        title: "Validation Error",
+        description: errors,
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
+    }
+
+    const { email, password } = validation.data;
     const { error } = await signIn(email, password);
     if (!error) {
       navigate('/');
@@ -33,11 +51,27 @@ export default function Auth() {
     setIsLoading(true);
     
     const formData = new FormData(e.currentTarget);
-    const email = formData.get('email') as string;
-    const password = formData.get('password') as string;
-    const firstName = formData.get('firstName') as string;
-    const lastName = formData.get('lastName') as string;
+    const rawData = {
+      email: formData.get('email') as string,
+      password: formData.get('password') as string,
+      firstName: formData.get('firstName') as string,
+      lastName: formData.get('lastName') as string,
+    };
 
+    // Validate input data
+    const validation = authSignUpSchema.safeParse(rawData);
+    if (!validation.success) {
+      const errors = validation.error.errors.map(err => err.message).join(', ');
+      toast({
+        title: "Validation Error",
+        description: errors,
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
+    }
+
+    const { email, password, firstName, lastName } = validation.data;
     const { error } = await signUp(email, password, firstName, lastName);
     
     if (!error) {

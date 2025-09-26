@@ -44,8 +44,7 @@ export function usePlayers() {
     queryKey: ['players'],
     queryFn: async (): Promise<Player[]> => {
       const { data, error } = await supabase
-        .from('players_with_teams')
-        .select('*')
+        .rpc('get_players_with_teams_secure')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
