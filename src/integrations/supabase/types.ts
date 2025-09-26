@@ -825,6 +825,20 @@ export type Database = {
           total_minutes_played: number
         }[]
       }
+      get_players_with_teams_secure: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          club_id: string
+          club_name: string
+          created_at: string
+          first_name: string
+          id: string
+          jersey_number: number
+          last_name: string
+          teams: Json
+          updated_at: string
+        }[]
+      }
       get_user_dashboard_stats: {
         Args: Record<PropertyKey, never>
         Returns: {
