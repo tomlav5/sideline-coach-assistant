@@ -31,15 +31,35 @@ const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
 >(({ className, children, ...props }, ref) => {
-  // Lock body scroll when dialog is open
+  // Improved body scroll lock with counter to handle multiple dialogs
   React.useEffect(() => {
-    const originalStyle = window.getComputedStyle(document.body).overflow;
-    document.body.style.overflow = 'hidden';
-    document.body.style.paddingRight = 'var(--scrollbar-width, 0px)';
+    // Get or initialize counter
+    const currentCount = parseInt(document.body.getAttribute('data-dialog-count') || '0', 10);
+    const newCount = currentCount + 1;
+    
+    // Only lock on first dialog
+    if (newCount === 1) {
+      const originalStyle = window.getComputedStyle(document.body).overflow;
+      document.body.setAttribute('data-original-overflow', originalStyle);
+      document.body.style.overflow = 'hidden';
+      document.body.style.paddingRight = 'var(--scrollbar-width, 0px)';
+    }
+    
+    document.body.setAttribute('data-dialog-count', newCount.toString());
     
     return () => {
-      document.body.style.overflow = originalStyle;
-      document.body.style.paddingRight = '';
+      const currentCount = parseInt(document.body.getAttribute('data-dialog-count') || '1', 10);
+      const newCount = Math.max(0, currentCount - 1);
+      document.body.setAttribute('data-dialog-count', newCount.toString());
+      
+      // Only unlock when no dialogs are open
+      if (newCount === 0) {
+        const originalStyle = document.body.getAttribute('data-original-overflow') || 'auto';
+        document.body.style.overflow = originalStyle;
+        document.body.style.paddingRight = '';
+        document.body.removeAttribute('data-original-overflow');
+        document.body.removeAttribute('data-dialog-count');
+      }
     };
   }, []);
 
