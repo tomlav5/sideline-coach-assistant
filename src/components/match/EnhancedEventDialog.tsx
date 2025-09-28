@@ -344,3 +344,4 @@ export function EnhancedEventDialog({
       </DialogContent>
     </Dialog>
   );
+}
