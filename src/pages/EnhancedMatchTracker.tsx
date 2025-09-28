@@ -22,6 +22,7 @@ import {
 import { toast } from 'sonner';
 import { Clock, Users, Target, History, ArrowUpDown, RotateCcw } from 'lucide-react';
 import { useRealtimeMatchSync } from '@/hooks/useRealtimeMatchSync';
+import { useWakeLock } from '@/hooks/useWakeLock';
 
 interface Player {
   id: string;
@@ -55,6 +56,7 @@ interface MatchPeriod {
 export default function EnhancedMatchTracker() {
   const { fixtureId } = useParams<{ fixtureId: string }>();
   const navigate = useNavigate();
+  const { isSupported: wakeLockSupported, requestWakeLock, releaseWakeLock } = useWakeLock();
   
   const [fixture, setFixture] = useState<any>(null);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -90,6 +92,19 @@ export default function EnhancedMatchTracker() {
       loadMatchData();
     }
   }, [fixtureId]);
+
+  // Keep screen awake during match tracking
+  useEffect(() => {
+    // Only attempt if supported
+    if (wakeLockSupported) {
+      requestWakeLock();
+    }
+    return () => {
+      if (wakeLockSupported) {
+        releaseWakeLock();
+      }
+    };
+  }, [wakeLockSupported, requestWakeLock, releaseWakeLock]);
 
   const loadMatchData = async () => {
     try {
