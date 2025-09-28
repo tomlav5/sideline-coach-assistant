@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -59,6 +61,7 @@ export function RetrospectiveMatchDialog({
   players,
   onComplete
 }: RetrospectiveMatchDialogProps) {
+  const isMobile = useIsMobile();
   const [periods, setPeriods] = useState<Period[]>([{ period_number: 1, duration_minutes: 25 }]);
   const [events, setEvents] = useState<MatchEvent[]>([]);
   const [playerTimes, setPlayerTimes] = useState<PlayerTime[]>([]);
@@ -166,14 +169,8 @@ export function RetrospectiveMatchDialog({
     return player ? `${player.first_name} ${player.last_name}` : 'Unknown Player';
   };
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl">
-        <DialogHeader>
-          <DialogTitle>Log Retrospective Match Data</DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-4">
+  const content = (
+    <div className="space-y-4">
           {/* Tab Navigation */}
           <div className="flex gap-2 flex-wrap">
             <Button
@@ -485,8 +482,29 @@ export function RetrospectiveMatchDialog({
               {isLoading ? 'Saving...' : 'Save'}
             </Button>
           </div>
-        </div>
+    </div>
+  );
+
+  if (isMobile) {
+    return (
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent side="bottom" className="h-[85dvh] p-4 overflow-auto pb-[max(16px,env(safe-area-inset-bottom))]">
+          <SheetHeader>
+            <SheetTitle>Log Retrospective Match Data</SheetTitle>
+          </SheetHeader>
+          {content}
+        </SheetContent>
+      </Sheet>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Log Retrospective Match Data</DialogTitle>
+        </DialogHeader>
+        {content}
       </DialogContent>
     </Dialog>
   );
-}
