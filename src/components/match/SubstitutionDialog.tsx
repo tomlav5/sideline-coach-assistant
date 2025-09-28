@@ -1,4 +1,6 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -34,23 +36,10 @@ export function SubstitutionDialog({
   onConfirm,
   isHalftime = false
 }: SubstitutionDialogProps) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <ArrowUpDown className="h-5 w-5" />
-            {isHalftime ? 'Halftime Substitution' : 'Make Substitution'}
-          </DialogTitle>
-          <DialogDescription>
-            {isHalftime 
-              ? 'Set up changes for the second half. Players will be swapped when the second half begins.'
-              : 'Replace a player currently on the field'
-            }
-          </DialogDescription>
-        </DialogHeader>
-        
-        <div className="space-y-4">
+  const isMobile = useIsMobile();
+
+  const content = (
+    <div className="space-y-4">
           <div>
             <Label>Player Coming Off</Label>
             <Select 
@@ -100,7 +89,47 @@ export function SubstitutionDialog({
               Cancel
             </Button>
           </div>
-        </div>
+    </div>
+  );
+
+  if (isMobile) {
+    return (
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent side="bottom" className="h-[85dvh] p-4 overflow-auto pb-[max(16px,env(safe-area-inset-bottom))]">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <ArrowUpDown className="h-5 w-5" />
+              {isHalftime ? 'Halftime Substitution' : 'Make Substitution'}
+            </SheetTitle>
+            <SheetDescription>
+              {isHalftime 
+                ? 'Set up changes for the second half. Players will be swapped when the second half begins.'
+                : 'Replace a player currently on the field'
+              }
+            </SheetDescription>
+          </SheetHeader>
+          {content}
+        </SheetContent>
+      </Sheet>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ArrowUpDown className="h-5 w-5" />
+            {isHalftime ? 'Halftime Substitution' : 'Make Substitution'}
+          </DialogTitle>
+          <DialogDescription>
+            {isHalftime 
+              ? 'Set up changes for the second half. Players will be swapped when the second half begins.'
+              : 'Replace a player currently on the field'
+            }
+          </DialogDescription>
+        </DialogHeader>
+        {content}
       </DialogContent>
     </Dialog>
   );

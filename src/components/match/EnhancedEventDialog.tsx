@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
@@ -43,6 +45,7 @@ export function EnhancedEventDialog({
   players,
   onEventRecorded
 }: EnhancedEventDialogProps) {
+  const isMobile = useIsMobile();
   const [eventType, setEventType] = useState<'goal' | 'assist'>('goal');
   const [selectedPlayer, setSelectedPlayer] = useState('');
   const [assistPlayer, setAssistPlayer] = useState('');
@@ -173,15 +176,8 @@ export function EnhancedEventDialog({
     }
   };
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[95vw] sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Record Match Event</DialogTitle>
-          <DialogDescription>Choose team, player, and details, then record the event.</DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4 px-1">
+  const content = (
+    <div className="space-y-4 px-1">
           {/* Event Type */}
           <div>
             <Label>Event Type</Label>
@@ -320,8 +316,31 @@ export function EnhancedEventDialog({
               Cancel
             </Button>
           </div>
-        </div>
+    </div>
+  );
+
+  if (isMobile) {
+    return (
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent side="bottom" className="h-[85dvh] p-4 overflow-auto pb-[max(16px,env(safe-area-inset-bottom))]">
+          <SheetHeader>
+            <SheetTitle>Record Match Event</SheetTitle>
+            <SheetDescription>Choose team, player, and details, then record the event.</SheetDescription>
+          </SheetHeader>
+          {content}
+        </SheetContent>
+      </Sheet>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-[95vw] sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Record Match Event</DialogTitle>
+          <DialogDescription>Choose team, player, and details, then record the event.</DialogDescription>
+        </DialogHeader>
+        {content}
       </DialogContent>
     </Dialog>
   );
-}
