@@ -484,7 +484,14 @@ export default function EnhancedMatchTracker() {
         matchStatus={fixture?.status || 'scheduled'}
       />
 
-      {/* Action Buttons - Moved higher for better accessibility */}
+      {/* Enhanced Timer Controls - moved above action buttons for prominence */}
+      <EnhancedMatchControls
+        fixtureId={fixtureId!}
+        onTimerUpdate={handleTimerUpdate}
+        forceRefresh={matchTracker?.isActiveTracker}
+      />
+
+      {/* Action Buttons - placed beneath timer controls */}
       <div className="flex flex-col sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-3">
         <Button
           onClick={() => setShowEventDialog(true)}
@@ -530,13 +537,6 @@ export default function EnhancedMatchTracker() {
         </Button>
       </div>
 
-      {/* Enhanced Timer Controls */}
-      <EnhancedMatchControls
-        fixtureId={fixtureId!}
-        onTimerUpdate={handleTimerUpdate}
-        forceRefresh={matchTracker?.isActiveTracker}
-      />
-
       {/* Match Management Buttons - Centered */}
       <div className="flex flex-col sm:flex-row gap-3 sm:gap-3 justify-center">
         <Button
@@ -575,47 +575,56 @@ export default function EnhancedMatchTracker() {
         </Card>
       )}
 
-      {/* Events List (goals & assists only) */}
+      {/* Events grouped by period (aligns with flexible periods) */}
       {events.filter(e => e.event_type !== 'substitution').length > 0 && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-lg">Match Events</CardTitle>
           </CardHeader>
-          <CardContent className="pt-0">
-            <div className="space-y-1.5">
-              {events.filter(e => e.event_type !== 'substitution').map((event) => (
-                <div key={event.id} className="flex flex-col sm:flex-row sm:items-center gap-2 p-3 border rounded-lg bg-card/50">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Badge variant="secondary" className="text-xs font-mono shrink-0">
-                      {event.total_match_minute}'
-                    </Badge>
-                    <span className="text-sm font-medium truncate">
-                      {event.event_type.charAt(0).toUpperCase() + event.event_type.slice(1)}
-                    </span>
-                    <div className="flex gap-1">
-                      {event.is_penalty && <Badge variant="outline" className="text-xs">Penalty</Badge>}
-                      {!event.is_our_team && <Badge variant="destructive" className="text-xs">Opposition</Badge>}
-                    </div>
-                  </div>
-                  
-                  {event.players && (
-                    <div className="text-sm text-muted-foreground sm:ml-auto sm:text-right">
-                      <span className="font-medium text-foreground">
-                        {event.players.first_name} {event.players.last_name}
-                      </span>
-                      {event.assist_players && (
-                        <div className="text-xs">
-                          Assist: {event.assist_players.first_name} {event.assist_players.last_name}
+          <CardContent className="pt-0 space-y-4">
+            {periods.map((p) => {
+              const periodEvents = events.filter(
+                (e) => e.event_type !== 'substitution' && e.period_id === p.id
+              );
+              if (periodEvents.length === 0) return null;
+              return (
+                <div key={p.id} className="space-y-1.5">
+                  <div className="text-sm font-medium text-muted-foreground">Period {p.period_number}</div>
+                  {periodEvents.map((event) => (
+                    <div key={event.id} className="flex flex-col sm:flex-row sm:items-center gap-2 p-3 border rounded-lg bg-card/50">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Badge variant="secondary" className="text-xs font-mono shrink-0">
+                          {event.total_match_minute}'
+                        </Badge>
+                        <span className="text-sm font-medium truncate">
+                          {event.event_type.charAt(0).toUpperCase() + event.event_type.slice(1)}
+                        </span>
+                        <div className="flex gap-1">
+                          {event.is_penalty && <Badge variant="outline" className="text-xs">Penalty</Badge>}
+                          {!event.is_our_team && <Badge variant="destructive" className="text-xs">Opposition</Badge>}
+                        </div>
+                      </div>
+                      {event.players && (
+                        <div className="text-sm text-muted-foreground sm:ml-auto sm:text-right">
+                          <span className="font-medium text-foreground">
+                            {event.players.first_name} {event.players.last_name}
+                          </span>
+                          {event.assist_players && (
+                            <div className="text-xs">
+                              Assist: {event.assist_players.first_name} {event.assist_players.last_name}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
-                  )}
+                  ))}
                 </div>
-              ))}
-            </div>
+              );
+            })}
           </CardContent>
         </Card>
       )}
+
 
       {/* Event Dialog */}
       <EnhancedEventDialog

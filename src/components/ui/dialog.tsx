@@ -69,13 +69,13 @@ const DialogContent = React.forwardRef<
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
-          "fixed left-4 right-4 top-4 z-[110] flex flex-col max-w-lg mx-auto max-h-[calc(100vh-2rem)] min-h-0 border bg-background shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:left-[50%] sm:right-auto sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg overflow-hidden",
+          "fixed left-4 right-4 top-4 bottom-4 z-[110] flex flex-col max-w-lg mx-auto max-h-[calc(100dvh-2rem)] min-h-0 border bg-background shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:left-[50%] sm:right-auto sm:top-[50%] sm:bottom-auto sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg overflow-hidden",
           className
         )}
         {...props}
       >
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y" style={{ WebkitOverflowScrolling: 'touch' }}>
-          <div className="p-6">
+          <div className="p-6 pb-24">
             {children}
           </div>
         </div>
