@@ -341,13 +341,7 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
     }));
 
     try {
-      // Server-side finalize: closes periods, computes totals, updates fixture
-      const { error } = await supabase.rpc('finalize_match', { p_fixture_id: fixtureId });
-
-      if (error) {
-        console.error('Error finalizing match via RPC:', error);
-      } else {
-        // Refresh materialized views for reports
+      // Refresh materialized views for reports
         try {
           await supabase.rpc('refresh_report_views');
           
