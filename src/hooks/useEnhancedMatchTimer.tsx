@@ -342,17 +342,16 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
 
     try {
       // Refresh materialized views for reports
-        try {
-          await supabase.rpc('refresh_report_views');
-          
-          // Invalidate relevant query caches
-          queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
-          queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
-          queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
-          queryClient.invalidateQueries({ queryKey: ['competitions'] });
-        } catch (refreshError) {
-          console.error('Error refreshing report views:', refreshError);
-        }
+      try {
+        await supabase.rpc('refresh_report_views');
+        
+        // Invalidate relevant query caches
+        queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
+        queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
+        queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
+        queryClient.invalidateQueries({ queryKey: ['competitions'] });
+      } catch (refreshError) {
+        console.error('Error refreshing report views:', refreshError);
       }
 
       // Navigate to match report after successful completion
