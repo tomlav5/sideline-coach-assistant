@@ -89,9 +89,8 @@ export function SubstitutionDialog({
               Cancel
             </Button>
           </div>
-    </div>
-  );
-
+        </div>
+      );
   if (isMobile) {
     return (
       <Sheet open={open} onOpenChange={onOpenChange}>

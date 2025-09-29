@@ -37,6 +37,8 @@ interface MatchEvent {
   period_id: string;
   player_id?: string;
   assist_player_id?: string;
+  sub_out_player_id?: string;
+  sub_in_player_id?: string;
   minute_in_period: number;
   total_match_minute: number;
   is_our_team: boolean;
@@ -591,16 +593,14 @@ export default function EnhancedMatchTracker() {
       )}
 
       {/* Events grouped by period (aligns with flexible periods) */}
-      {events.filter(e => e.event_type !== 'substitution').length > 0 && (
+      {events.length > 0 && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-lg">Match Events</CardTitle>
           </CardHeader>
           <CardContent className="pt-0 space-y-4">
             {periods.map((p) => {
-              const periodEvents = events.filter(
-                (e) => e.event_type !== 'substitution' && e.period_id === p.id
-              );
+              const periodEvents = events.filter((e) => e.period_id === p.id);
               if (periodEvents.length === 0) return null;
               return (
                 <div key={p.id} className="space-y-1.5">
@@ -611,15 +611,23 @@ export default function EnhancedMatchTracker() {
                         <Badge variant="secondary" className="text-xs font-mono shrink-0">
                           {event.total_match_minute}'
                         </Badge>
-                        <span className="text-sm font-medium truncate">
-                          {event.event_type.charAt(0).toUpperCase() + event.event_type.slice(1)}
-                        </span>
+                        {event.event_type === 'substitution' ? (
+                          <span className="text-sm font-medium truncate">
+                            Substitution: {players.find(ply => ply.id === event.sub_out_player_id)?.first_name || 'Unknown'} {players.find(ply => ply.id === event.sub_out_player_id)?.last_name || ''}
+                            {' '}→{' '}
+                            {players.find(ply => ply.id === event.sub_in_player_id)?.first_name || 'Unknown'} {players.find(ply => ply.id === event.sub_in_player_id)?.last_name || ''}
+                          </span>
+                        ) : (
+                          <span className="text-sm font-medium truncate">
+                            {event.event_type.charAt(0).toUpperCase() + event.event_type.slice(1)}
+                          </span>
+                        )}
                         <div className="flex gap-1">
                           {event.is_penalty && <Badge variant="outline" className="text-xs">Penalty</Badge>}
                           {!event.is_our_team && <Badge variant="destructive" className="text-xs">Opposition</Badge>}
                         </div>
                       </div>
-                      {event.players && (
+                      {event.event_type !== 'substitution' && event.players && (
                         <div className="text-sm text-muted-foreground sm:ml-auto sm:text-right">
                           <span className="font-medium text-foreground">
                             {event.players.first_name} {event.players.last_name}
@@ -763,6 +771,31 @@ export default function EnhancedMatchTracker() {
                 }, {
                   onConflict: 'fixture_id,player_id,period_id'
                 });
+
+              // Persist a substitution event (idempotent via client_event_id)
+              try {
+                const clientEventId = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+                  ? (crypto as any).randomUUID()
+                  : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+                const { error: subEventErr } = await supabase
+                  .from('match_events')
+                  .upsert({
+                    fixture_id: fixtureId,
+                    period_id: currentPeriod.id,
+                    event_type: 'substitution',
+                    sub_out_player_id: playerOut,
+                    sub_in_player_id: playerIn,
+                    minute_in_period: currentMinute,
+                    total_match_minute: totalMatchMinute,
+                    is_our_team: true,
+                    notes: null,
+                    is_retrospective: false,
+                    client_event_id: clientEventId,
+                  }, { onConflict: 'client_event_id' });
+                if (subEventErr) throw subEventErr;
+              } catch (subEventCatch) {
+                console.error('Failed to record substitution event:', subEventCatch);
+              }
             }
 
             // Note substitution in UI only (events restricted to goals/assists)
