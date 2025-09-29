@@ -4,6 +4,20 @@
 -- 1. First, fix the clubs table policy
 DROP POLICY IF EXISTS "Temporary - Anyone can create clubs" ON public.clubs;
 
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'clubs'
+      AND policyname = 'Authenticated users can create clubs'
+  ) THEN
+    EXECUTE 'DROP POLICY "Authenticated users can create clubs" ON public.clubs';
+  END IF;
+END
+$$;
+
 -- Restore proper club creation policy using auth.role()
 CREATE POLICY "Authenticated users can create clubs" 
 ON public.clubs 

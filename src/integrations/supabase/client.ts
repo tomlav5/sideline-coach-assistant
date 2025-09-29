@@ -2,13 +2,31 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Prefer VITE_SUPABASE_URL, but allow deriving from VITE_SUPABASE_PROJECT_ID
+const RAW_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const PROJECT_ID = import.meta.env.VITE_SUPABASE_PROJECT_ID as string | undefined;
+const SUPABASE_URL = RAW_URL || (PROJECT_ID ? `https://${PROJECT_ID}.supabase.co` : undefined);
+
+// Prefer VITE_SUPABASE_ANON_KEY, fallback to VITE_SUPABASE_PUBLISHABLE_KEY
+const SUPABASE_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)
+  ?? (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined);
+
+// helpful diagnostics in console to avoid a blank app if envs are missing
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  // eslint-disable-next-line no-console
+  console.error('[Supabase Env Missing] Expected build-time env vars not found.\n'
+    + `- VITE_SUPABASE_URL (or VITE_SUPABASE_PROJECT_ID) is ${SUPABASE_URL ? 'set' : 'MISSING'}\n`
+    + `- VITE_SUPABASE_ANON_KEY (or VITE_SUPABASE_PUBLISHABLE_KEY) is ${SUPABASE_KEY ? 'set' : 'MISSING'}\n\n`
+    + 'Fix: In your hosting provider (e.g., Lovable) set these env vars and redeploy:\n'
+    + '  VITE_SUPABASE_URL = https://<PROJECT_REF>.supabase.co\n'
+    + '  VITE_SUPABASE_ANON_KEY = <anon/public key>\n'
+    + 'Alternatively: set VITE_SUPABASE_PROJECT_ID = <PROJECT_REF> to derive the URL.');
+}
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+export const supabase = createClient<Database>(SUPABASE_URL as string, SUPABASE_KEY as string, {
   auth: {
     storage: localStorage,
     persistSession: true,
