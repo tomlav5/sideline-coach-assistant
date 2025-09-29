@@ -245,13 +245,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "fk_match_events_assist_player_id"
-            columns: ["assist_player_id"]
-            isOneToOne: false
-            referencedRelation: "players_with_teams"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "fk_match_events_fixture_id"
             columns: ["fixture_id"]
             isOneToOne: false
@@ -270,13 +263,6 @@ export type Database = {
             columns: ["player_id"]
             isOneToOne: false
             referencedRelation: "players"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_match_events_player_id"
-            columns: ["player_id"]
-            isOneToOne: false
-            referencedRelation: "players_with_teams"
             referencedColumns: ["id"]
           },
           {
@@ -405,13 +391,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "fk_player_match_status_player_id"
-            columns: ["player_id"]
-            isOneToOne: false
-            referencedRelation: "players_with_teams"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "player_match_status_last_action_period_id_fkey"
             columns: ["last_action_period_id"]
             isOneToOne: false
@@ -480,13 +459,6 @@ export type Database = {
             columns: ["player_id"]
             isOneToOne: false
             referencedRelation: "players"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_player_time_logs_player_id"
-            columns: ["player_id"]
-            isOneToOne: false
-            referencedRelation: "players_with_teams"
             referencedColumns: ["id"]
           },
           {
@@ -591,13 +563,6 @@ export type Database = {
             columns: ["player_id"]
             isOneToOne: false
             referencedRelation: "players"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "team_players_player_id_fkey"
-            columns: ["player_id"]
-            isOneToOne: false
-            referencedRelation: "players_with_teams"
             referencedColumns: ["id"]
           },
           {
@@ -716,28 +681,6 @@ export type Database = {
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams_with_stats"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      players_with_teams: {
-        Row: {
-          club_id: string | null
-          club_name: string | null
-          created_at: string | null
-          first_name: string | null
-          id: string | null
-          jersey_number: number | null
-          last_name: string | null
-          teams: Json | null
-          updated_at: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "players_club_id_fkey"
-            columns: ["club_id"]
-            isOneToOne: false
-            referencedRelation: "clubs"
             referencedColumns: ["id"]
           },
         ]
