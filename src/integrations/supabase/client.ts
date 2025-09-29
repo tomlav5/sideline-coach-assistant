@@ -11,13 +11,13 @@ const SUPABASE_URL = RAW_URL || (PROJECT_ID ? `https://${PROJECT_ID}.supabase.co
 const SUPABASE_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)
   ?? (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined);
 
-// helpful diagnostics in console to avoid a blank app if envs are missing
+// Helpful diagnostics to avoid a blank app if envs are missing
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   // eslint-disable-next-line no-console
   console.error('[Supabase Env Missing] Expected build-time env vars not found.\n'
     + `- VITE_SUPABASE_URL (or VITE_SUPABASE_PROJECT_ID) is ${SUPABASE_URL ? 'set' : 'MISSING'}\n`
     + `- VITE_SUPABASE_ANON_KEY (or VITE_SUPABASE_PUBLISHABLE_KEY) is ${SUPABASE_KEY ? 'set' : 'MISSING'}\n\n`
-    + 'Fix: In your hosting provider (e.g., Lovable) set these env vars and redeploy:\n'
+    + 'Fix: Set these in hosting (e.g., Lovable) and redeploy:\n'
     + '  VITE_SUPABASE_URL = https://<PROJECT_REF>.supabase.co\n'
     + '  VITE_SUPABASE_ANON_KEY = <anon/public key>\n'
     + 'Alternatively: set VITE_SUPABASE_PROJECT_ID = <PROJECT_REF> to derive the URL.');
