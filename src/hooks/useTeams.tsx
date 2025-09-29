@@ -36,30 +36,20 @@ export function useTeams() {
     queryKey: ['teams'],
     queryFn: async (): Promise<Team[]> => {
       const { data, error } = await supabase
-        .from('teams_with_stats')
-        .select(`
-          id,
-          name,
-          team_type,
-          club_id,
-          created_at,
-          club_name,
-          player_count
-        `)
-        .order('created_at', { ascending: false });
+        .rpc('get_teams_with_stats_secure');
 
       if (error) throw error;
       
-      // Transform data from teams_with_stats view to match expected format
+      // Transform data from secure function to match expected format
       return (data || []).map(team => ({
         id: team.id,
         name: team.name,
         team_type: team.team_type,
         club_id: team.club_id,
         created_at: team.created_at,
-        club: { id: team.club_id, name: (team as any).club_name || '' },
+        club: { id: team.club_id, name: team.club_name || '' },
         _count: {
-          team_players: typeof (team as any).player_count === 'number'
+          team_players: typeof team.player_count === 'number'
             ? Number((team as any).player_count)
             : parseInt(((team as any).player_count ?? '0') as string, 10)
         }

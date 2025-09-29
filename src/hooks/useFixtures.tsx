@@ -30,9 +30,7 @@ export function useFixtures() {
     queryKey: ['fixtures'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('fixtures_with_scores')
-        .select('*')
-        .order('scheduled_date', { ascending: false });
+        .rpc('get_fixtures_with_scores_secure');
 
       if (error) throw error;
       

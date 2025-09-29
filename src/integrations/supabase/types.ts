@@ -162,24 +162,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "fixtures_team_id_fkey"
-            columns: ["team_id"]
-            isOneToOne: false
-            referencedRelation: "teams_with_stats"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "fk_fixtures_team_id"
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_fixtures_team_id"
-            columns: ["team_id"]
-            isOneToOne: false
-            referencedRelation: "teams_with_stats"
             referencedColumns: ["id"]
           },
         ]
@@ -252,13 +238,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "fk_match_events_fixture_id"
-            columns: ["fixture_id"]
-            isOneToOne: false
-            referencedRelation: "fixtures_with_scores"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "fk_match_events_player_id"
             columns: ["player_id"]
             isOneToOne: false
@@ -325,13 +304,6 @@ export type Database = {
             referencedRelation: "fixtures"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "fk_match_periods_fixture_id"
-            columns: ["fixture_id"]
-            isOneToOne: false
-            referencedRelation: "fixtures_with_scores"
-            referencedColumns: ["id"]
-          },
         ]
       }
       player_match_status: {
@@ -374,13 +346,6 @@ export type Database = {
             columns: ["fixture_id"]
             isOneToOne: false
             referencedRelation: "fixtures"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_player_match_status_fixture_id"
-            columns: ["fixture_id"]
-            isOneToOne: false
-            referencedRelation: "fixtures_with_scores"
             referencedColumns: ["id"]
           },
           {
@@ -445,13 +410,6 @@ export type Database = {
             columns: ["fixture_id"]
             isOneToOne: false
             referencedRelation: "fixtures"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_player_time_logs_fixture_id"
-            columns: ["fixture_id"]
-            isOneToOne: false
-            referencedRelation: "fixtures_with_scores"
             referencedColumns: ["id"]
           },
           {
@@ -572,13 +530,6 @@ export type Database = {
             referencedRelation: "teams"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "team_players_team_id_fkey"
-            columns: ["team_id"]
-            isOneToOne: false
-            referencedRelation: "teams_with_stats"
-            referencedColumns: ["id"]
-          },
         ]
       }
       teams: {
@@ -618,94 +569,7 @@ export type Database = {
       }
     }
     Views: {
-      fixtures_with_scores: {
-        Row: {
-          active_tracker_id: string | null
-          club_name: string | null
-          competition_name: string | null
-          competition_type:
-            | Database["public"]["Enums"]["competition_type"]
-            | null
-          created_at: string | null
-          current_period_id: string | null
-          fixture_type: Database["public"]["Enums"]["fixture_type"] | null
-          half_length: number | null
-          id: string | null
-          is_retrospective: boolean | null
-          last_activity_at: string | null
-          location: string | null
-          match_state: Json | null
-          match_status: string | null
-          opponent_goals: number | null
-          opponent_name: string | null
-          our_goals: number | null
-          scheduled_date: string | null
-          selected_squad_data: Json | null
-          status: Database["public"]["Enums"]["match_status"] | null
-          team_id: string | null
-          team_name: string | null
-          tracking_started_at: string | null
-          updated_at: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "fixtures_current_period_id_fkey"
-            columns: ["current_period_id"]
-            isOneToOne: false
-            referencedRelation: "match_periods"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fixtures_team_id_fkey"
-            columns: ["team_id"]
-            isOneToOne: false
-            referencedRelation: "teams"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fixtures_team_id_fkey"
-            columns: ["team_id"]
-            isOneToOne: false
-            referencedRelation: "teams_with_stats"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_fixtures_team_id"
-            columns: ["team_id"]
-            isOneToOne: false
-            referencedRelation: "teams"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_fixtures_team_id"
-            columns: ["team_id"]
-            isOneToOne: false
-            referencedRelation: "teams_with_stats"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      teams_with_stats: {
-        Row: {
-          club_id: string | null
-          club_name: string | null
-          created_at: string | null
-          id: string | null
-          name: string | null
-          player_count: number | null
-          team_type: Database["public"]["Enums"]["team_type"] | null
-          updated_at: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "teams_club_id_fkey"
-            columns: ["club_id"]
-            isOneToOne: false
-            referencedRelation: "clubs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+      [_ in never]: never
     }
     Functions: {
       claim_match_tracking: {
@@ -739,6 +603,35 @@ export type Database = {
           our_goals: number
           scheduled_date: string
           team_name: string
+        }[]
+      }
+      get_fixtures_with_scores_secure: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          active_tracker_id: string
+          club_name: string
+          competition_name: string
+          competition_type: Database["public"]["Enums"]["competition_type"]
+          created_at: string
+          current_period_id: string
+          fixture_type: Database["public"]["Enums"]["fixture_type"]
+          half_length: number
+          id: string
+          is_retrospective: boolean
+          last_activity_at: string
+          location: string
+          match_state: Json
+          match_status: string
+          opponent_goals: number
+          opponent_name: string
+          our_goals: number
+          scheduled_date: string
+          selected_squad_data: Json
+          status: Database["public"]["Enums"]["match_status"]
+          team_id: string
+          team_name: string
+          tracking_started_at: string
+          updated_at: string
         }[]
       }
       get_goal_scorers: {
@@ -779,6 +672,19 @@ export type Database = {
           jersey_number: number
           last_name: string
           teams: Json
+          updated_at: string
+        }[]
+      }
+      get_teams_with_stats_secure: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          club_id: string
+          club_name: string
+          created_at: string
+          id: string
+          name: string
+          player_count: number
+          team_type: Database["public"]["Enums"]["team_type"]
           updated_at: string
         }[]
       }
