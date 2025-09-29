@@ -149,11 +149,12 @@ export function EnhancedEventDialog({
         is_penalty: eventType === 'goal' ? isPenalty : false,
         notes: notes || null,
         is_retrospective: false,
+        client_event_id: (typeof crypto !== 'undefined' && 'randomUUID' in crypto) ? (crypto as any).randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       };
 
       const { error } = await supabase
         .from('match_events')
-        .insert(eventData);
+        .upsert(eventData, { onConflict: 'client_event_id' });
 
       if (error) throw error;
 

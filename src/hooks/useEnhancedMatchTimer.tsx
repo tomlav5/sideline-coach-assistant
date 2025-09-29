@@ -117,12 +117,29 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
   // Timer effect - synchronized timers
   useEffect(() => {
     if (timerState.isRunning && timerState.currentPeriod) {
+      // Tick every second, but compute from wall-clock timestamps to avoid drift
       intervalRef.current = setInterval(() => {
-        setTimerState(prev => ({
-          ...prev,
-          currentTime: prev.currentTime + 1,
-          totalMatchTime: prev.totalMatchTime + 1,
-        }));
+        setTimerState(prev => {
+          const currentComputed = calculateCurrentPeriodTime(prev.currentPeriod);
+          const totalComputed = (prev.periods || []).reduce((sum, p) => {
+            if (p.actual_end_time) {
+              const start = new Date(p.actual_start_time!).getTime();
+              const end = new Date(p.actual_end_time).getTime();
+              const elapsed = Math.floor((end - start) / 1000) - (p.total_paused_seconds || 0);
+              return sum + Math.max(0, elapsed);
+            }
+            if (prev.currentPeriod && p.id === prev.currentPeriod.id) {
+              return sum + Math.max(0, currentComputed);
+            }
+            return sum;
+          }, 0);
+
+          return {
+            ...prev,
+            currentTime: currentComputed,
+            totalMatchTime: totalComputed,
+          };
+        });
       }, 1000);
     } else {
       if (intervalRef.current) {
@@ -324,21 +341,11 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
     }));
 
     try {
-      // Update the fixture status in the database
-      const { error } = await supabase
-        .from('fixtures')
-        .update({ 
-          status: 'completed',
-          match_status: 'completed',
-          match_state: { 
-            status: 'completed', 
-            total_time_seconds: timerState.totalMatchTime 
-          }
-        })
-        .eq('id', fixtureId);
+      // Server-side finalize: closes periods, computes totals, updates fixture
+      const { error } = await supabase.rpc('finalize_match', { p_fixture_id: fixtureId });
 
       if (error) {
-        console.error('Error updating fixture status:', error);
+        console.error('Error finalizing match via RPC:', error);
       } else {
         // Refresh materialized views for reports
         try {
@@ -378,6 +385,26 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
   useEffect(() => {
     loadMatchState();
   }, [loadMatchState]);
+
+  // Re-sync when tab becomes visible again (e.g., after backgrounding)
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        loadMatchState();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [loadMatchState]);
+
+  // Optional: periodic lightweight re-sync with server while running to correct any drift
+  useEffect(() => {
+    if (!timerState.isRunning) return;
+    const id = setInterval(() => {
+      loadMatchState();
+    }, 30000); // 30s
+    return () => clearInterval(id);
+  }, [timerState.isRunning, loadMatchState]);
 
   return {
     timerState,
