@@ -169,9 +169,9 @@ export function EnhancedEventDialog({
       
       onEventRecorded?.();
       onOpenChange(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error recording event:', error);
-      toast.error('Failed to record event');
+      toast.error(error?.message || 'Failed to record event');
     } finally {
       setIsLoading(false);
     }

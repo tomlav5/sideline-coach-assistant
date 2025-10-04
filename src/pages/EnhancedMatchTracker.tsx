@@ -793,8 +793,9 @@ export default function EnhancedMatchTracker() {
                     client_event_id: clientEventId,
                   }, { onConflict: 'client_event_id' });
                 if (subEventErr) throw subEventErr;
-              } catch (subEventCatch) {
+              } catch (subEventCatch: any) {
                 console.error('Failed to record substitution event:', subEventCatch);
+                toast.error(subEventCatch?.message || 'Failed to record substitution event');
               }
             }
 
