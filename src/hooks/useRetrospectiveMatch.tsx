@@ -70,7 +70,7 @@ export function useRetrospectiveMatch() {
 
       if (periodsError) throw periodsError;
 
-      // Create events with calculated total match minutes
+      // Create events with calculated total match minutes (idempotent via client_event_id)
       let totalMinutes = 0;
       const eventsToInsert = [];
 
@@ -87,6 +87,10 @@ export function useRetrospectiveMatch() {
         
         const totalMatchMinute = previousPeriodsTime + event.minute_in_period;
 
+        const clientEventId = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+          ? (crypto as any).randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
         eventsToInsert.push({
           fixture_id: data.fixture_id,
           period_id: periodId,
@@ -99,13 +103,14 @@ export function useRetrospectiveMatch() {
           is_penalty: event.is_penalty || false,
           notes: event.notes,
           is_retrospective: true,
+          client_event_id: clientEventId,
         });
       }
 
       if (eventsToInsert.length > 0) {
         const { error: eventsError } = await supabase
           .from('match_events')
-          .insert(eventsToInsert);
+          .upsert(eventsToInsert, { onConflict: 'client_event_id' });
 
         if (eventsError) throw eventsError;
       }
@@ -166,9 +171,9 @@ export function useRetrospectiveMatch() {
 
       toast.success('Retrospective match data saved successfully');
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving retrospective match:', error);
-      toast.error('Failed to save retrospective match data');
+      toast.error(error?.message || 'Failed to save retrospective match data');
       return false;
     } finally {
       setIsLoading(false);

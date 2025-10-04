@@ -229,6 +229,8 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
         currentTime: 0,
         matchStatus: 'in_progress',
       }));
+      // Immediate resync to ensure we align with server timestamps
+      loadMatchState();
     } catch (error) {
       console.error('Error starting new period:', error);
     }
@@ -260,6 +262,8 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
           pause_time: new Date().toISOString(),
         } : undefined,
       }));
+      // Resync derived times after pausing
+      loadMatchState();
     } catch (error) {
       console.error('Error pausing timer:', error);
     }
@@ -297,6 +301,8 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
       }));
 
       pauseStartRef.current = undefined;
+      // Resync immediately to correct any drift after resume
+      loadMatchState();
     } catch (error) {
       console.error('Error resuming timer:', error);
     }
@@ -324,6 +330,8 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
         currentTime: 0,
         matchStatus: 'paused',
       }));
+      // Resync after ending a period to finalize totals
+      loadMatchState();
     } catch (error) {
       console.error('Error ending period:', error);
     }

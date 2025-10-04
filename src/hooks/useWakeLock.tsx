@@ -2,14 +2,17 @@ import { useRef, useEffect } from 'react';
 
 export function useWakeLock() {
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+  const requestInFlightRef = useRef<boolean>(false);
   const isSupported = typeof navigator !== 'undefined' && 'wakeLock' in navigator;
 
   const requestWakeLock = async () => {
     try {
-      if (isSupported) {
+      if (isSupported && !wakeLockRef.current && !requestInFlightRef.current) {
+        requestInFlightRef.current = true;
         // Request a new wake lock (replaces any previous reference)
         const sentinel = await (navigator as any).wakeLock.request('screen');
         wakeLockRef.current = sentinel as WakeLockSentinel;
+        requestInFlightRef.current = false;
 
         // Attempt re-acquire if the lock gets released by the UA
         // Some TS lib versions may not have addEventListener on the type; guard accordingly
@@ -24,6 +27,7 @@ export function useWakeLock() {
     } catch (error) {
       // Can fail on unsupported platforms or when the device disallows wake locks
       console.error('Wake lock request failed:', error);
+      requestInFlightRef.current = false;
     }
   };
 
@@ -46,8 +50,24 @@ export function useWakeLock() {
         requestWakeLock();
       }
     };
+    const onOrientation = () => {
+      if (document.visibilityState === 'visible' && !wakeLockRef.current) {
+        requestWakeLock();
+      }
+    };
+    const onFullscreen = () => {
+      if (document.visibilityState === 'visible' && !wakeLockRef.current) {
+        requestWakeLock();
+      }
+    };
     document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
+    window.addEventListener('orientationchange', onOrientation);
+    document.addEventListener('fullscreenchange', onFullscreen);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('orientationchange', onOrientation);
+      document.removeEventListener('fullscreenchange', onFullscreen);
+    };
   }, [isSupported]);
 
   // Cleanup on unmount
