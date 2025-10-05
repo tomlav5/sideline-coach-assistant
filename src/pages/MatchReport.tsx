@@ -99,9 +99,20 @@ export default function MatchReport() {
           teams!fk_fixtures_team_id (name)
         `)
         .eq('id', fixtureId)
-        .single();
+        .maybeSingle();
 
-      if (fixtureError) throw fixtureError;
+      if (fixtureError) {
+        console.error('Error fetching fixture:', fixtureError);
+        throw fixtureError;
+      }
+      
+      if (!fixtureData) {
+        console.error('No fixture found with id:', fixtureId);
+        setFixture(null);
+        setLoading(false);
+        return;
+      }
+      
       setFixture(fixtureData as unknown as FixtureDetails);
 
       // Fetch match events
@@ -180,11 +191,17 @@ export default function MatchReport() {
         return b.total_minutes - a.total_minutes;
       }));
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching match report:', error);
+      console.error('Error details:', {
+        message: error?.message,
+        code: error?.code,
+        details: error?.details,
+        hint: error?.hint
+      });
       toast({
         title: "Error",
-        description: "Failed to load match report",
+        description: error?.message || "Failed to load match report",
         variant: "destructive",
       });
     } finally {
