@@ -105,8 +105,6 @@ All colors MUST be HSL.
     touch-action: manipulation;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    /* Hardware acceleration for smoother animations */
-    transform: translateZ(0);
   }
 
   /* Prevent bounce scrolling on iOS - mobile only */

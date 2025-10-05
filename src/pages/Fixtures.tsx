@@ -47,6 +47,7 @@ interface Fixture {
   competition_type: 'league' | 'tournament' | 'friendly';
   competition_name: string | null;
   selected_squad_data: any;
+  kickoff_time_tbd?: boolean;
 }
 
 const FIXTURE_TYPES = [
@@ -143,7 +144,7 @@ export default function Fixtures() {
   };
 
   const createFixture = async () => {
-    if (!newFixture.team_id || !newFixture.opponent_name.trim() || !selectedDate || !selectedTime) {
+    if (!newFixture.team_id || !newFixture.opponent_name.trim() || !selectedDate) {
       return;
     }
 
@@ -155,10 +156,15 @@ export default function Fixtures() {
     try {
       setCreating(true);
       
-      // Combine date and time
-      const [hours, minutes] = selectedTime.split(':');
+      // Combine date and optional time
       const scheduledDateTime = new Date(selectedDate);
-      scheduledDateTime.setHours(parseInt(hours), parseInt(minutes));
+      if (selectedTime) {
+        const [hours, minutes] = selectedTime.split(':');
+        scheduledDateTime.setHours(parseInt(hours), parseInt(minutes));
+      } else {
+        // Default to midnight if time not specified
+        scheduledDateTime.setHours(0, 0, 0, 0);
+      }
 
       const { error } = await supabase
         .from('fixtures')
@@ -172,6 +178,7 @@ export default function Fixtures() {
           status: 'scheduled',
           competition_type: newFixture.competition_type,
           competition_name: newFixture.competition_name.trim() || null,
+          kickoff_time_tbd: !selectedTime,
         }]);
 
       if (error) throw error;
@@ -206,12 +213,12 @@ export default function Fixtures() {
       competition_name: fixture.competition_name || '',
     });
     setSelectedDate(new Date(fixture.scheduled_date));
-    setSelectedTime(format(new Date(fixture.scheduled_date), 'HH:mm'));
+    setSelectedTime(fixture.kickoff_time_tbd ? '' : format(new Date(fixture.scheduled_date), 'HH:mm'));
     setEditDialogOpen(true);
   };
 
   const updateFixture = async () => {
-    if (!editingFixture || !newFixture.team_id || !newFixture.opponent_name.trim() || !selectedDate || !selectedTime) {
+    if (!editingFixture || !newFixture.team_id || !newFixture.opponent_name.trim() || !selectedDate) {
       return;
     }
 
@@ -234,6 +241,7 @@ export default function Fixtures() {
           scheduled_date: scheduledDateTime.toISOString(),
           competition_type: newFixture.competition_type,
           competition_name: newFixture.competition_name.trim() || null,
+          kickoff_time_tbd: !selectedTime,
         })
         .eq('id', editingFixture.id);
 
@@ -465,9 +473,9 @@ export default function Fixtures() {
                          {format(new Date(fixture.scheduled_date), 'dd/MM/yyyy')}
                        </span>
                        <span className="flex items-center gap-1">
-                         <Clock className="h-3 w-3" />
-                         {format(new Date(fixture.scheduled_date), 'HH:mm')}
-                       </span>
+                        <Clock className="h-3 w-3" />
+                        {fixture.kickoff_time_tbd ? 'TBD' : format(new Date(fixture.scheduled_date), 'HH:mm')}
+                      </span>
                        <span className="capitalize hidden xs:inline flex-shrink-0">
                          {fixture.competition_type === 'league' ? 'League' : 
                           fixture.competition_type === 'tournament' ? 'Tournament' : 'Friendly'}
