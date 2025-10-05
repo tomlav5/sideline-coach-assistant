@@ -430,6 +430,24 @@ export default function EnhancedMatchTracker() {
     }
   }, [matchTracker?.isActiveTracker]);
 
+  // Realtime: refresh events list when any event for this fixture changes
+  useEffect(() => {
+    if (!fixtureId) return;
+    const channel = supabase
+      .channel(`match-events-live-${fixtureId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'match_events', filter: `fixture_id=eq.${fixtureId}` },
+        () => {
+          loadEvents();
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fixtureId]);
+
   const ourGoals = events.filter(e => e.event_type === 'goal' && e.is_our_team).length;
   const opponentGoals = events.filter(e => e.event_type === 'goal' && !e.is_our_team).length;
 
