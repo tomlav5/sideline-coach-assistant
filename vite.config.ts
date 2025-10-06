@@ -5,8 +5,8 @@ import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
-  // Use relative base for production (Capacitor) and default for dev
-  base: mode === 'production' ? './' : '/',
+  // Use absolute base for web deployment
+  base: '/',
   server: {
     host: "::",
     port: 8080,
