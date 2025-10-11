@@ -258,7 +258,7 @@ export default function Reports() {
                   No completed matches found
                 </p>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-3 max-h-[calc(100vh-300px)] overflow-y-auto pr-1 -mr-1">
                   {completedMatches.map((match) => {
                     const { result, color } = getMatchResult(match.our_score, match.opponent_score);
                     return (
@@ -327,44 +327,73 @@ export default function Reports() {
         </TabsContent>
 
         <TabsContent value="scorers" className="space-y-6">
+          {/* Goals Table */}
           <Card>
             <CardHeader>
-              <CardTitle>Goal Scorers</CardTitle>
-              <CardDescription>Top performers in goals and assists</CardDescription>
+              <CardTitle>Top Goal Scorers</CardTitle>
             </CardHeader>
             <CardContent>
               {goalScorers.length === 0 ? (
-                <p className="text-muted-foreground text-center py-8">
-                  No goal scorers found
-                </p>
+                <p className="text-muted-foreground text-center py-8">No goal scorers found</p>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto max-h-[calc(100vh-320px)] overflow-y-auto pr-1 -mr-1">
                   <table className="w-full">
                     <thead>
                       <tr className="border-b text-left">
                         <th className="pb-2 font-medium">Player</th>
                         <th className="pb-2 font-medium">Team</th>
                         <th className="pb-2 font-medium text-center">Goals</th>
-                        <th className="pb-2 font-medium text-center">Assists</th>
-                        <th className="pb-2 font-medium text-center">Total</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {goalScorers.map((player) => (
-                        <tr key={player.player_id} className="border-b">
-                          <td className="py-2 font-medium">{player.player_name}</td>
-                          <td className="py-2 text-muted-foreground">{player.team_name}</td>
-                          <td className="py-2 text-center">
-                            <Badge variant="secondary">{player.goals}</Badge>
-                          </td>
-                          <td className="py-2 text-center">
-                            <Badge variant="outline">{player.assists}</Badge>
-                          </td>
-                          <td className="py-2 text-center">
-                            <Badge variant="default">{player.goals + player.assists}</Badge>
-                          </td>
-                        </tr>
-                      ))}
+                      {[...goalScorers]
+                        .sort((a, b) => (b.goals || 0) - (a.goals || 0))
+                        .map((player) => (
+                          <tr key={`goals-${player.player_id}`} className="border-b">
+                            <td className="py-2 font-medium">{player.player_name}</td>
+                            <td className="py-2 text-muted-foreground">{player.team_name}</td>
+                            <td className="py-2 text-center">
+                              <Badge variant="secondary">{player.goals}</Badge>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Assists Table */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Top Assist Providers</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {goalScorers.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">No assists found</p>
+              ) : (
+                <div className="overflow-x-auto max-h-[calc(100vh-320px)] overflow-y-auto pr-1 -mr-1">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b text-left">
+                        <th className="pb-2 font-medium">Player</th>
+                        <th className="pb-2 font-medium">Team</th>
+                        <th className="pb-2 font-medium text-center">Assists</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...goalScorers]
+                        .sort((a, b) => (b.assists || 0) - (a.assists || 0))
+                        .map((player) => (
+                          <tr key={`assists-${player.player_id}`} className="border-b">
+                            <td className="py-2 font-medium">{player.player_name}</td>
+                            <td className="py-2 text-muted-foreground">{player.team_name}</td>
+                            <td className="py-2 text-center">
+                              <Badge variant="outline">{player.assists}</Badge>
+                            </td>
+                          </tr>
+                        ))}
                     </tbody>
                   </table>
                 </div>
@@ -385,7 +414,7 @@ export default function Reports() {
                   No playing time data found
                 </p>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto max-h-[calc(100vh-320px)] overflow-y-auto pr-1 -mr-1">
                   <table className="w-full">
                     <thead>
                       <tr className="border-b text-left">
