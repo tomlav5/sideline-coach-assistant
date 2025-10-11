@@ -383,6 +383,84 @@ export default function EnhancedMatchTracker() {
   };
   const currentPeriod = periods.find(p => p.is_active) || (periods.length > 0 ? periods[periods.length - 1] : null);
 
+  // Ensure we initialize/close player_time_logs across period changes
+  const [prevPeriodNumber, setPrevPeriodNumber] = useState<number>(0);
+
+  useEffect(() => {
+    // Detect period transition by number change
+    if (currentPeriodNumber && currentPeriodNumber !== prevPeriodNumber) {
+      const newPeriodNumber = currentPeriodNumber;
+      const oldPeriodNumber = prevPeriodNumber;
+
+      const runPeriodTransitions = async () => {
+        try {
+          // 1) Finalize previous period: close any active logs without an explicit time_off
+          if (oldPeriodNumber > 0) {
+            const { data: prevPeriod } = await supabase
+              .from('match_periods')
+              .select('*')
+              .eq('fixture_id', fixtureId)
+              .eq('period_number', oldPeriodNumber)
+              .single();
+
+            if (prevPeriod) {
+              // Set time_off_minute to full period length where still active and no time_off
+              await supabase
+                .from('player_time_logs')
+                .update({
+                  time_off_minute: prevPeriod.planned_duration_minutes,
+                  is_active: false,
+                })
+                .eq('fixture_id', fixtureId)
+                .eq('period_id', prevPeriod.id)
+                .is('time_off_minute', null);
+            }
+          }
+
+          // 2) Initialize new period for currently on-field players with time_on = 0
+          if (newPeriodNumber > 0) {
+            const { data: nextPeriod } = await supabase
+              .from('match_periods')
+              .select('*')
+              .eq('fixture_id', fixtureId)
+              .eq('period_number', newPeriodNumber)
+              .single();
+
+            if (nextPeriod) {
+              const { data: onFieldPlayers } = await supabase
+                .from('player_match_status')
+                .select('player_id')
+                .eq('fixture_id', fixtureId)
+                .eq('is_on_field', true);
+
+              if (onFieldPlayers && onFieldPlayers.length > 0) {
+                for (const row of onFieldPlayers) {
+                  await supabase
+                    .from('player_time_logs')
+                    .upsert({
+                      fixture_id: fixtureId!,
+                      player_id: row.player_id,
+                      period_id: nextPeriod.id,
+                      time_on_minute: 0,
+                      is_starter: true,
+                      is_active: true,
+                      total_period_minutes: 0,
+                    }, { onConflict: 'fixture_id,player_id,period_id' });
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Error handling period transitions:', e);
+        } finally {
+          setPrevPeriodNumber(newPeriodNumber);
+        }
+      };
+
+      runPeriodTransitions();
+    }
+  }, [currentPeriodNumber, prevPeriodNumber, fixtureId]);
+
   // Keep player status lists fresh when periods change (e.g., after starting a new one)
   useEffect(() => {
     if (players.length > 0 && fixtureId) {
