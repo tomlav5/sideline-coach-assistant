@@ -48,7 +48,8 @@ export function EnhancedMatchControls({ fixtureId, onTimerUpdate, forceRefresh }
   };
 
   // Enhanced button logic to handle all resume scenarios
-  const canStartPeriod = !timerState.currentPeriod && timerState.matchStatus !== 'completed';
+  const canStartPeriod = (!timerState.currentPeriod || timerState.currentPeriod.actual_end_time) && 
+                         timerState.matchStatus !== 'completed';
   const canPausePeriod = timerState.isRunning && timerState.currentPeriod;
   // Show resume button when there's a current period that's not running (paused or stopped)
   const canResumePeriod = timerState.currentPeriod && !timerState.isRunning && 
