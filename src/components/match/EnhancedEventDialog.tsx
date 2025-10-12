@@ -336,7 +336,7 @@ export function EnhancedEventDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[95vw] sm:max-w-md">
+      <DialogContent className="dialog-standard">
         <DialogHeader>
           <DialogTitle>Record Match Event</DialogTitle>
           <DialogDescription>Choose team, player, and details, then record the event.</DialogDescription>

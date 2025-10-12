@@ -500,7 +500,7 @@ export function RetrospectiveMatchDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="dialog-large">
         <DialogHeader>
           <DialogTitle>Log Retrospective Match Data</DialogTitle>
         </DialogHeader>

@@ -115,7 +115,7 @@ export function SubstitutionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="dialog-standard">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ArrowUpDown className="h-5 w-5" />
