@@ -444,6 +444,56 @@ export default function EnhancedMatchTracker() {
     refreshPlayerStatusLists();
   }, [periods.length]);
 
+  // Initialize starter logs when an active period exists and logs are missing (safety net)
+  useEffect(() => {
+    const initMissingStarterLogs = async () => {
+      if (!fixtureId) return;
+      try {
+        // Find active period
+        const { data: activeP } = await supabase
+          .from('match_periods')
+          .select('*')
+          .eq('fixture_id', fixtureId)
+          .eq('is_active', true)
+          .single();
+        if (!activeP) return;
+
+        // On-field players now
+        const { data: onField } = await supabase
+          .from('player_match_status')
+          .select('player_id')
+          .eq('fixture_id', fixtureId)
+          .eq('is_on_field', true);
+        if (!onField || onField.length === 0) return;
+
+        for (const row of onField) {
+          const { data: existing } = await supabase
+            .from('player_time_logs')
+            .select('id')
+            .eq('fixture_id', fixtureId)
+            .eq('player_id', row.player_id)
+            .eq('period_id', activeP.id)
+            .maybeSingle();
+          if (!existing) {
+            await supabase
+              .from('player_time_logs')
+              .insert({
+                fixture_id: fixtureId,
+                player_id: row.player_id,
+                period_id: activeP.id,
+                time_on_minute: 0,
+                is_starter: true,
+                is_active: true,
+              });
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to init missing starter logs:', e);
+      }
+    };
+    initMissingStarterLogs();
+  }, [fixtureId, currentPeriod?.id]);
+
   const handleRestartMatch = async () => {
     if (!fixtureId) return;
     
@@ -681,9 +731,9 @@ export default function EnhancedMatchTracker() {
                         </Badge>
                         {event.event_type === 'substitution' ? (
                           <span className="text-sm font-medium truncate">
-                            Substitution: {players.find(ply => ply.id === event.sub_out_player_id)?.first_name || 'Unknown'} {players.find(ply => ply.id === event.sub_out_player_id)?.last_name || ''}
+                            Substitution: {players.find(ply => ply.id === event.player_id)?.first_name || 'Unknown'} {players.find(ply => ply.id === event.player_id)?.last_name || ''}
                             {' '}→{' '}
-                            {players.find(ply => ply.id === event.sub_in_player_id)?.first_name || 'Unknown'} {players.find(ply => ply.id === event.sub_in_player_id)?.last_name || ''}
+                            {players.find(ply => ply.id === event.assist_player_id)?.first_name || 'Unknown'} {players.find(ply => ply.id === event.assist_player_id)?.last_name || ''}
                           </span>
                         ) : (
                           <span className="text-sm font-medium truncate">
@@ -715,6 +765,30 @@ export default function EnhancedMatchTracker() {
           </CardContent>
         </Card>
       )}
+
+      {/* Substitutions Timeline */}
+      {events.some(e => e.event_type === 'substitution') && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">Substitutions Timeline</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="flex flex-wrap gap-2">
+              {events.filter(e => e.event_type === 'substitution').map((e) => (
+                <div key={e.id} className="flex items-center gap-2 px-3 py-2 border rounded-full">
+                  <Badge variant="secondary" className="font-mono text-xs">{e.total_match_minute}'</Badge>
+                  <span className="text-sm">
+                    {players.find(p => p.id === e.player_id)?.first_name || 'Unknown'} → {players.find(p => p.id === e.assist_player_id)?.first_name || 'Unknown'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Guard: ensure starter logs exist when a period is active */}
+      {/* This is a no-op UI-wise; we leverage an effect below */}
 
 
       {/* Event Dialog */}
@@ -811,34 +885,62 @@ export default function EnhancedMatchTracker() {
 
             // Handle player time logs for substitution
             if (currentPeriod) {
+              // Ensure a row exists for the player going OUT; if missing, initialize as starter at 0
+              const { data: outRow } = await supabase
+                .from('player_time_logs')
+                .select('player_id')
+                .eq('fixture_id', fixtureId)
+                .eq('player_id', playerOut)
+                .eq('period_id', currentPeriod.id)
+                .maybeSingle();
+
+              if (!outRow) {
+                await supabase
+                  .from('player_time_logs')
+                  .insert({
+                    fixture_id: fixtureId,
+                    player_id: playerOut,
+                    period_id: currentPeriod.id,
+                    time_on_minute: 0,
+                    is_starter: true,
+                    is_active: true,
+                  });
+              }
+
               // Finalize time log for player going OUT
               await supabase
                 .from('player_time_logs')
-                .upsert({
-                  fixture_id: fixtureId,
-                  player_id: playerOut,
-                  period_id: currentPeriod.id,
+                .update({
                   time_off_minute: currentMinute,
-                  total_period_minutes: currentMinute,
                   is_active: false,
-                }, {
-                  onConflict: 'fixture_id,player_id,period_id'
-                });
+                })
+                .eq('fixture_id', fixtureId)
+                .eq('player_id', playerOut)
+                .eq('period_id', currentPeriod.id);
 
-              // Create/initialize time log for player coming IN
-              await supabase
+              // Create/initialize time log for player coming IN (Phase 1: one interval per period)
+              const { data: inRow } = await supabase
                 .from('player_time_logs')
-                .upsert({
-                  fixture_id: fixtureId,
-                  player_id: playerIn,
-                  period_id: currentPeriod.id,
-                  time_on_minute: currentMinute,
-                  total_period_minutes: 0, // Will be updated by timer
-                  is_starter: false,
-                  is_active: true,
-                }, {
-                  onConflict: 'fixture_id,player_id,period_id'
-                });
+                .select('player_id, time_off_minute')
+                .eq('fixture_id', fixtureId)
+                .eq('player_id', playerIn)
+                .eq('period_id', currentPeriod.id)
+                .maybeSingle();
+
+              if (!inRow) {
+                await supabase
+                  .from('player_time_logs')
+                  .insert({
+                    fixture_id: fixtureId,
+                    player_id: playerIn,
+                    period_id: currentPeriod.id,
+                    time_on_minute: currentMinute,
+                    is_starter: false,
+                    is_active: true,
+                  });
+              } else if (inRow && inRow.time_off_minute == null) {
+                // If a row exists and is open, do nothing (already on field)
+              }
 
               // Persist a substitution event (idempotent via client_event_id)
               try {
@@ -851,8 +953,8 @@ export default function EnhancedMatchTracker() {
                     fixture_id: fixtureId,
                     period_id: currentPeriod.id,
                     event_type: 'substitution',
-                    sub_out_player_id: playerOut,
-                    sub_in_player_id: playerIn,
+                    player_id: playerOut,           // use existing column as OUT
+                    assist_player_id: playerIn,     // use existing column as IN
                     minute_in_period: currentMinute,
                     total_match_minute: totalMatchMinute,
                     is_our_team: true,
