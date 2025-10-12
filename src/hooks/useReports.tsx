@@ -141,13 +141,14 @@ export function usePlayerPlayingTime(competitionFilter = 'all', options?: { enab
   return useQuery({
     queryKey: ['player-playing-time', competitionFilter, options?.limit, options?.offset],
     queryFn: async (): Promise<PlayerPlayingTime[]> => {
-      const { data, error } = await supabase.rpc('get_player_playing_time');
+      // Temporary: call the new RPC name with a cast until types are regenerated
+      const { data, error } = await supabase.rpc('get_player_playing_time_v2' as any);
       if (error) throw error;
 
       // Process and aggregate data
       const playerStats: Record<string, PlayerPlayingTime> = {};
-
-      (data || []).forEach((row: any) => {
+      const rows: any[] = Array.isArray(data) ? (data as any[]) : ((data as any) ?? []);
+      rows.forEach((row: any) => {
         const playerId = row.player_id;
         
         if (!playerStats[playerId]) {
