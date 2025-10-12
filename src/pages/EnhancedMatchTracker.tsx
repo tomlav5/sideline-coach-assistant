@@ -271,7 +271,6 @@ export default function EnhancedMatchTracker() {
           );
           if (insertMissingErr) throw insertMissingErr;
         }
-
         // Reconcile active/inactive flags to reflect starters
         if (desiredActiveSet.size > 0) {
           const { error: setActivesErr } = await supabase
@@ -290,6 +289,14 @@ export default function EnhancedMatchTracker() {
               .in('player_id', others);
             if (setSubsErr) throw setSubsErr;
           }
+        } else {
+          // If no starters resolved, explicitly set everyone in squad to off-field to avoid phantom minutes
+          const { error: setAllOffErr } = await supabase
+            .from('player_match_status')
+            .update({ is_on_field: false })
+            .eq('fixture_id', fixtureId)
+            .in('player_id', Array.from(squadIds));
+          if (setAllOffErr) throw setAllOffErr;
         }
       }
 
@@ -340,46 +347,11 @@ export default function EnhancedMatchTracker() {
     setCurrentMinute(minute);
     setTotalMatchMinute(totalMinute);
     setCurrentPeriodNumber(periodNumber);
-    
-    // Update player times when timer updates - but only for players actually on field
-    if (periodNumber > 0) {
-      try {
-        const { data: currentPeriod } = await supabase
-          .from('match_periods')
-          .select('id')
-          .eq('fixture_id', fixtureId)
-          .eq('period_number', periodNumber)
-          .single();
 
-        if (currentPeriod) {
-          // Get players who are actually on field RIGHT NOW from the database
-          const { data: onFieldPlayers } = await supabase
-            .from('player_match_status')
-            .select('player_id')
-            .eq('fixture_id', fixtureId)
-            .eq('is_on_field', true);
-
-          if (onFieldPlayers && onFieldPlayers.length > 0) {
-            // Update time logs only for players currently on field
-            for (const playerStatus of onFieldPlayers) {
-              await supabase
-                .from('player_time_logs')
-                .upsert({
-                  fixture_id: fixtureId,
-                  player_id: playerStatus.player_id,
-                  period_id: currentPeriod.id,
-                  total_period_minutes: minute,
-                  is_active: true,
-                }, {
-                  onConflict: 'fixture_id,player_id,period_id'
-                });
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error synchronizing player times:', error);
-      }
-    }
+    // Removed per-second DB writes to player_time_logs. We now only write on transitions:
+    // - New period start initializes starters at time_on=0 in useEffect on period change
+    // - Substitution on/off writes time_on_minute/time_off_minute
+    // - Period end finalizes open intervals
   };
   const currentPeriod = periods.find(p => p.is_active) || (periods.length > 0 ? periods[periods.length - 1] : null);
 
