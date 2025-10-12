@@ -20,6 +20,7 @@ import { VirtualList } from '@/components/ui/virtual-list';
 import { MatchItem } from '@/components/reports/MatchItem';
 import { ScorerItem } from '@/components/reports/ScorerItem';
 import { PlayingTimeItem } from '@/components/reports/PlayingTimeItem';
+import { TimeDebugPanel } from '@/components/reports/TimeDebugPanel';
 
 interface CompletedMatch {
   id: string;
@@ -50,7 +51,7 @@ interface PlayerPlayingTime {
 
 export default function Reports() {
   const [competitionFilter, setCompetitionFilter] = useState<string>('all');
-  const [activeTab, setActiveTab] = useState<'matches' | 'scorers' | 'playing-time'>('matches');
+  const [activeTab, setActiveTab] = useState<'matches' | 'scorers' | 'playing-time' | 'dev-time'>('matches');
   
   // Use optimized hooks with pagination (show 50 items per page for better performance)
   const { data: completedMatches = [], isLoading: matchesLoading } = useCompletedMatches(competitionFilter, { 
@@ -199,8 +200,8 @@ export default function Reports() {
         </CardContent>
       </Card>
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'matches' | 'scorers' | 'playing-time')} className="space-y-6 w-full">
-        <TabsList className="grid w-full grid-cols-3 h-auto">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-6 w-full">
+        <TabsList className={`grid w-full h-auto ${import.meta.env.MODE !== 'production' ? 'grid-cols-4' : 'grid-cols-3'}`}>
           <TabsTrigger value="matches" className="flex flex-col sm:flex-row items-center space-y-1 sm:space-y-0 sm:space-x-2 p-2 sm:p-3 text-xs sm:text-sm">
             <Calendar className="h-4 w-4" />
             <span>Matches</span>
@@ -213,6 +214,12 @@ export default function Reports() {
             <Clock className="h-4 w-4" />
             <span>Time</span>
           </TabsTrigger>
+          {import.meta.env.MODE !== 'production' && (
+            <TabsTrigger value="dev-time" className="flex flex-col sm:flex-row items-center space-y-1 sm:space-y-0 sm:space-x-2 p-2 sm:p-3 text-xs sm:text-sm">
+              <Clock className="h-4 w-4" />
+              <span>Dev: Time Debug</span>
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="matches" className="space-y-6">
@@ -448,6 +455,20 @@ export default function Reports() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {import.meta.env.MODE !== 'production' && (
+          <TabsContent value="dev-time" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Developer: Playing Time Debug</CardTitle>
+                <CardDescription>Inspect raw player time logs vs computed totals and export CSV.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <TimeDebugPanel />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
     </ResponsiveWrapper>
   );

@@ -33,6 +33,12 @@ const DialogContent = React.forwardRef<
 >(({ className, children, ...props }, ref) => {
   // Improved body scroll lock with counter to handle multiple dialogs
   React.useEffect(() => {
+    // Compute and set scrollbar width CSS var for proper width compensation
+    try {
+      const scrollBarWidth = window.innerWidth - document.documentElement.clientWidth;
+      document.documentElement.style.setProperty('--scrollbar-width', `${Math.max(0, scrollBarWidth)}px`);
+    } catch {}
+
     // Get or initialize counter
     const currentCount = parseInt(document.body.getAttribute('data-dialog-count') || '0', 10);
     const newCount = currentCount + 1;
@@ -59,6 +65,7 @@ const DialogContent = React.forwardRef<
         document.body.style.paddingRight = '';
         document.body.removeAttribute('data-original-overflow');
         document.body.removeAttribute('data-dialog-count');
+        try { document.documentElement.style.removeProperty('--scrollbar-width'); } catch {}
       }
     };
   }, []);
