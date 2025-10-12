@@ -6,7 +6,16 @@ alter table public.fixtures
 
 -- 2) Ensure ON CONFLICT works on match_events.client_event_id
 -- Drop any legacy partial unique index if present
- drop index if exists public.match_events_client_event_id_key;
+ do $$
+ begin
+   if exists (
+     select 1 from pg_indexes 
+     where schemaname = 'public' 
+       and indexname = 'match_events_client_event_id_key'
+   ) then
+     execute 'drop index public.match_events_client_event_id_key';
+   end if;
+ end $$;
 
 -- Add a proper UNIQUE CONSTRAINT (allows multiple NULLs)
  do $$
