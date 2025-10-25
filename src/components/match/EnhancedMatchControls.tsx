@@ -8,6 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { useEnhancedMatchTimer } from '@/hooks/useEnhancedMatchTimer';
 import { Play, Pause, Square, Plus, Timer, RefreshCw } from 'lucide-react';
 import { useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 interface EnhancedMatchControlsProps {
   fixtureId: string;
@@ -35,6 +37,7 @@ export function EnhancedMatchControls({ fixtureId, onTimerUpdate, forceRefresh }
       onTimerUpdate?.(getCurrentMinute(), getTotalMatchMinute(), currentPeriodNumber);
     }
   });
+  const { toast } = useToast();
 
   // Force refresh when control is taken
   useEffect(() => {
@@ -44,6 +47,22 @@ export function EnhancedMatchControls({ fixtureId, onTimerUpdate, forceRefresh }
   }, [forceRefresh, loadMatchState]);
 
   const handleStartNewPeriod = async () => {
+    // Require at least one starter (is_on_field=true) before starting a period
+    try {
+      const { data: onField } = await supabase
+        .from('player_match_status')
+        .select('player_id')
+        .eq('fixture_id', fixtureId)
+        .eq('is_on_field', true);
+      if (!onField || onField.length === 0) {
+        toast({
+          title: 'No starters set',
+          description: 'Select your starting players (on-field) before starting the period.',
+          variant: 'destructive'
+        });
+        return;
+      }
+    } catch {}
     await startNewPeriod();
   };
 

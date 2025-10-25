@@ -323,6 +323,27 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
 
       if (error) throw error;
 
+      // Close any open player_time_logs for this period to the planned cap
+      try {
+        const { data: periodRow } = await supabase
+          .from('match_periods')
+          .select('id, planned_duration_minutes')
+          .eq('id', timerState.currentPeriod.id)
+          .single();
+        if (periodRow) {
+          await supabase
+            .from('player_time_logs')
+            .update({
+              time_off_minute: periodRow.planned_duration_minutes,
+              is_active: false,
+            })
+            .eq('period_id', periodRow.id)
+            .is('time_off_minute', null);
+        }
+      } catch (e) {
+        console.warn('Failed to close open player_time_logs on period end:', e);
+      }
+
       setTimerState(prev => ({
         ...prev,
         isRunning: false,
@@ -349,6 +370,19 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
     }));
 
     try {
+      // Explicitly set fixture status to completed for consistency
+      try {
+        await supabase
+          .from('fixtures')
+          .update({
+            status: 'completed' as any,
+            match_status: 'completed',
+          })
+          .eq('id', fixtureId);
+      } catch (e) {
+        console.warn('Failed to explicitly set fixture completed:', e);
+      }
+
       // Refresh materialized views for reports
       try {
         await supabase.rpc('refresh_report_views');

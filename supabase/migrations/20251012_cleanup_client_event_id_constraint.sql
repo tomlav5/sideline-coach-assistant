@@ -1,11 +1,9 @@
+-- Cleanup migration to make client_event_id uniqueness idempotent
+-- Ensures legacy index is dropped only if not constraint-backed, and unique constraint exists
+
 begin;
 
--- 3a) Allow fixtures without known kickoff time
-alter table public.fixtures
-  add column if not exists kickoff_time_tbd boolean default false;
-
--- 3b) Ensure ON CONFLICT works on match_events.client_event_id
--- Drop the old standalone unique index only if the table-level constraint is not already present
+-- Drop standalone index only if the table-level constraint does not already exist
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -24,7 +22,7 @@ BEGIN
 END
 $$ LANGUAGE plpgsql;
 
--- Add a proper UNIQUE CONSTRAINT (allows multiple NULLs)
+-- Ensure the UNIQUE constraint exists
 DO $$
 BEGIN
   IF NOT EXISTS (
