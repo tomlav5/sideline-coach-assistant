@@ -240,6 +240,11 @@ export default function EnhancedMatchTracker() {
       const desiredActiveSet = new Set(starters);
       const squadIds = new Set(squadPlayers.map(p => p.id));
 
+      if (squadIds.size === 0) {
+        console.warn('[MatchTracker] No squad players resolved; skipping status init');
+        return;
+      }
+
       if (!statusRows || statusRows.length === 0) {
         // Initialize statuses based on selected squad (starters on field)
         console.log('[MatchTracker] Initializing player statuses', {
@@ -254,7 +259,9 @@ export default function EnhancedMatchTracker() {
           is_on_field: desiredActiveSet.has(p.id),
         }));
         
-        const { error: insertErr } = await supabase.from('player_match_status').insert(rows);
+        const { error: insertErr } = await supabase
+          .from('player_match_status')
+          .upsert(rows, { onConflict: 'fixture_id,player_id' });
         if (insertErr) throw insertErr;
       } else {
         // Heal/Sync: ensure statuses match the selected squad and starters
@@ -262,13 +269,16 @@ export default function EnhancedMatchTracker() {
         const missingIds = [...squadIds].filter(id => !existingById.has(id));
 
         if (missingIds.length > 0) {
-          const { error: insertMissingErr } = await supabase.from('player_match_status').insert(
-            missingIds.map(id => ({
-              fixture_id: fixtureId!,
-              player_id: id,
-              is_on_field: desiredActiveSet.has(id),
-            }))
-          );
+          const { error: insertMissingErr } = await supabase
+            .from('player_match_status')
+            .upsert(
+              missingIds.map(id => ({
+                fixture_id: fixtureId!,
+                player_id: id,
+                is_on_field: desiredActiveSet.has(id),
+              })),
+              { onConflict: 'fixture_id,player_id' }
+            );
           if (insertMissingErr) throw insertMissingErr;
         }
         // Reconcile active/inactive flags to reflect starters
@@ -301,9 +311,12 @@ export default function EnhancedMatchTracker() {
       }
 
       await refreshPlayerStatusLists();
-    } catch (e) {
+    } catch (e: any) {
       console.error('Error ensuring player statuses:', e);
-      toast.error('Failed to prepare player statuses');
+      const msg = e?.message || String(e);
+      // Common RLS hint: missing club membership in DEV
+      const hint = msg.includes('permission') || msg.includes('RLS') ? ' (check DEV club_members for your user)' : '';
+      toast.error(`Failed to prepare player statuses: ${msg}${hint}`);
     }
   };
   const refreshPlayerStatusLists = async () => {
