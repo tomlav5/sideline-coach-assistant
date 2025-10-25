@@ -391,6 +391,7 @@ export default function Reports() {
                     </thead>
                     <tbody>
                       {[...goalScorers]
+                        .filter(p => (p.assists || 0) > 0)
                         .sort((a, b) => (b.assists || 0) - (a.assists || 0))
                         .map((player) => (
                           <tr key={`assists-${player.player_id}`} className="border-b">

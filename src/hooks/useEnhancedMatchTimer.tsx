@@ -327,6 +327,27 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
 
       if (error) throw error;
 
+      // Close any open player_time_logs for this period to the planned cap
+      try {
+        const { data: periodRow } = await supabase
+          .from('match_periods')
+          .select('id, planned_duration_minutes')
+          .eq('id', timerState.currentPeriod.id)
+          .single();
+        if (periodRow) {
+          await supabase
+            .from('player_time_logs')
+            .update({
+              time_off_minute: periodRow.planned_duration_minutes,
+              is_active: false,
+            })
+            .eq('period_id', periodRow.id)
+            .is('time_off_minute', null);
+        }
+      } catch (e) {
+        console.warn('Failed to close open player_time_logs on period end:', e);
+      }
+
       setTimerState(prev => ({
         ...prev,
         isRunning: false,
@@ -355,38 +376,36 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
     }));
 
     try {
-      try {
-        await supabase
-          .from('fixtures')
-          .update({
-            status: 'completed' as any,
-            match_status: 'completed',
-            match_state: {
-              status: 'completed',
-              total_time_seconds: timerState.totalMatchTime,
-            },
-            current_period_id: null,
-            active_tracker_id: null,
-            tracking_started_at: null,
-            last_activity_at: null,
-          })
-          .eq('id', fixtureId);
-      } catch (persistError) {
-        console.error('Error persisting completed match state:', persistError);
-      }
+      // Explicitly set fixture status to completed for consistency
+      await supabase
+        .from('fixtures')
+        .update({
+          status: 'completed' as any,
+          match_status: 'completed',
+          match_state: {
+            status: 'completed',
+            total_time_seconds: timerState.totalMatchTime,
+          },
+          current_period_id: null,
+          active_tracker_id: null,
+          tracking_started_at: null,
+          last_activity_at: null,
+        })
+        .eq('id', fixtureId);
 
       // Refresh materialized views for reports
-      try {
-        await supabase.rpc('refresh_report_views');
-        
-        // Invalidate relevant query caches
-        queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
-        queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
-        queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
-        queryClient.invalidateQueries({ queryKey: ['competitions'] });
-      } catch (refreshError) {
-        console.error('Error refreshing report views:', refreshError);
-      }
+      await supabase.rpc('refresh_report_views');
+      
+      // Invalidate relevant query caches
+      queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
+      queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
+      queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
+      queryClient.invalidateQueries({ queryKey: ['competitions'] });
+    } catch (error) {
+      console.error('Error ending match:', error);
+    } finally {
+      isFinalizingRef.current = false;
+    }
 
       // Navigate to match report after successful completion
       if (typeof window !== 'undefined') {
@@ -394,11 +413,7 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
           window.location.href = `/match-report/${fixtureId}`;
         }, 1000);
       }
-    } catch (error) {
-      console.error('Error ending match:', error);
-    } finally {
-      isFinalizingRef.current = false;
-    }
+    
   };
 
   const getCurrentMinute = () => Math.floor(timerState.currentTime / 60);
