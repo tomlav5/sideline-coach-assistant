@@ -41,6 +41,7 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
 
   const intervalRef = useRef<NodeJS.Timeout>();
   const pauseStartRef = useRef<number>();
+  const isFinalizingRef = useRef<boolean>(false);
 
   // Load existing periods and state
   const loadMatchState = useCallback(async () => {
@@ -163,6 +164,9 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
 
   const saveMatchState = async () => {
     try {
+      if (isFinalizingRef.current) {
+        return;
+      }
       const { error } = await supabase
         .from('fixtures')
         .update({
@@ -328,7 +332,7 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
         isRunning: false,
         currentPeriod: undefined,
         currentTime: 0,
-        matchStatus: 'paused',
+        matchStatus: isFinalizingRef.current ? prev.matchStatus : 'paused',
       }));
       // Resync after ending a period to finalize totals
       loadMatchState();
@@ -338,6 +342,8 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
   };
 
   const endMatch = async () => {
+    // Guard against side-effect saves while finalizing
+    isFinalizingRef.current = true;
     if (timerState.currentPeriod) {
       await endCurrentPeriod();
     }
@@ -349,6 +355,26 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
     }));
 
     try {
+      try {
+        await supabase
+          .from('fixtures')
+          .update({
+            status: 'completed' as any,
+            match_status: 'completed',
+            match_state: {
+              status: 'completed',
+              total_time_seconds: timerState.totalMatchTime,
+            },
+            current_period_id: null,
+            active_tracker_id: null,
+            tracking_started_at: null,
+            last_activity_at: null,
+          })
+          .eq('id', fixtureId);
+      } catch (persistError) {
+        console.error('Error persisting completed match state:', persistError);
+      }
+
       // Refresh materialized views for reports
       try {
         await supabase.rpc('refresh_report_views');
@@ -370,6 +396,8 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
       }
     } catch (error) {
       console.error('Error ending match:', error);
+    } finally {
+      isFinalizingRef.current = false;
     }
   };
 
