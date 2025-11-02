@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader as AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useEnhancedMatchTimer } from '@/hooks/useEnhancedMatchTimer';
 import { Play, Pause, Square, Plus, Timer, RefreshCw } from 'lucide-react';
 import { useEffect } from 'react';
@@ -38,6 +39,7 @@ export function EnhancedMatchControls({ fixtureId, onTimerUpdate, forceRefresh }
     }
   });
   const { toast } = useToast();
+  const [endConfirmText, setEndConfirmText] = useState('');
 
   // Force refresh when control is taken
   useEffect(() => {
@@ -197,16 +199,37 @@ export function EnhancedMatchControls({ fixtureId, onTimerUpdate, forceRefresh }
             </Button>
           )}
 
-          {/* End Match Button */}
-          <Button
-            onClick={endMatch}
-            variant="destructive"
-            disabled={!canEndMatch}
-            className="w-full flex items-center justify-center gap-2"
-          >
-            <Square className="h-4 w-4" />
-            End Match
-          </Button>
+          {/* End Match Button with confirmation */}
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="destructive"
+                disabled={!canEndMatch}
+                className="w-full flex items-center justify-center gap-2"
+              >
+                <Square className="h-4 w-4" />
+                End Match
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>End Match?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will mark the match as completed, stop timing, close any open player logs, clear live tracking, and update reports. You can reopen later if needed.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <div className="space-y-2 py-2">
+                <Label htmlFor="end-confirm" className="text-sm">Type END to confirm:</Label>
+                <Input id="end-confirm" value={endConfirmText} onChange={(e) => setEndConfirmText(e.target.value)} placeholder="END" />
+              </div>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={endMatch} disabled={endConfirmText !== 'END'}>
+                  Confirm End Match
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
 
         {/* Instructions */}

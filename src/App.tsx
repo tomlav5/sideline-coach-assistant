@@ -1,4 +1,5 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
+import { scheduleMatchDataCleanup } from '@/utils/matchStorageCleanup';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -33,6 +34,15 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
+          {/** Global cleanup of stale match sessions */}
+          {(() => {
+            // Use an IIFE to call the cleanup scheduler once on mount
+            // without introducing additional components
+            if (typeof window !== 'undefined') {
+              scheduleMatchDataCleanup();
+            }
+            return null;
+          })()}
           <Routes>
             <Route path="/auth" element={
               <LazyLoader>

@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Calendar, Clock, MapPin, Home, Plane, Trophy, Users, Play, ArrowLeft } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
@@ -99,6 +100,30 @@ export default function FixtureDetail() {
                       !fixture.selected_squad_data.startingPlayerIds?.includes(p.id)) || []
       }
     });
+  };
+
+  const reopenMatch = async () => {
+    if (!fixtureId) return;
+    try {
+      const { error } = await supabase
+        .from('fixtures')
+        .update({
+          status: 'in_progress' as any,
+          match_status: 'in_progress',
+          current_period_id: null,
+          tracking_started_at: new Date().toISOString(),
+          last_activity_at: new Date().toISOString(),
+        })
+        .eq('id', fixtureId);
+
+      if (error) throw error;
+
+      toast({ title: 'Match reopened', description: 'You can now resume tracking.' });
+      navigate(`/match-day/${fixtureId}`);
+    } catch (error: any) {
+      console.error('Error reopening match:', error);
+      toast({ title: 'Error', description: error?.message || 'Failed to reopen match', variant: 'destructive' });
+    }
   };
 
   if (loading) {
@@ -281,6 +306,27 @@ export default function FixtureDetail() {
                     Select your squad before starting the match
                   </p>
                 )}
+              </div>
+            )}
+            {fixture.status === 'completed' && (
+              <div className="border-t pt-6">
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="secondary" className="w-full sm:w-auto">Reopen Match</Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Reopen this match?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will set the match back to in-progress so you can resume tracking. Existing periods and events will remain intact.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={reopenMatch}>Confirm Reopen</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             )}
           </CardContent>

@@ -135,6 +135,17 @@ export function useRealtimeMatchSync(fixtureId: string | undefined) {
           
           if (payload.eventType === 'UPDATE') {
             const newData = payload.new as any;
+            // If fixture completed, clear local tracker and localStorage
+            if (newData.match_status === 'completed' || newData.status === 'completed') {
+              try {
+                if (typeof window !== 'undefined') {
+                  localStorage.removeItem(`match_${fixtureId}`);
+                }
+              } catch {}
+              setMatchTracker(null);
+              toast({ title: 'Match completed', description: 'Live tracking session ended.' });
+              return;
+            }
             
             // Update tracker status based on database changes
             if (newData.active_tracker_id) {
@@ -223,12 +234,23 @@ export function useRealtimeMatchSync(fixtureId: string | undefined) {
       try {
         const { data: fixture, error } = await supabase
           .from('fixtures')
-          .select('active_tracker_id, tracking_started_at')
+          .select('active_tracker_id, tracking_started_at, match_status, status')
           .eq('id', fixtureId)
           .single();
 
         if (error) {
           console.error('Error fetching fixture status:', error);
+          return;
+        }
+
+        // Do not set local tracker if fixture is already completed
+        if ((fixture as any)?.match_status === 'completed' || (fixture as any)?.status === 'completed') {
+          try {
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem(`match_${fixtureId}`);
+            }
+          } catch {}
+          setMatchTracker(null);
           return;
         }
 

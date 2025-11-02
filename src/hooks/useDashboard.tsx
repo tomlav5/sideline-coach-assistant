@@ -111,7 +111,7 @@ export function useDashboardData() {
                 // Check if fixture exists first (lightweight check)
                 const { data: fixtureExists, error: existsError } = await supabase
                   .from('fixtures')
-                  .select('id')
+                  .select('id, match_status')
                   .eq('id', fixtureId)
                   .single();
 
@@ -143,8 +143,13 @@ export function useDashboardData() {
                     .single();
 
                   if (fixtureData) {
-                    activeMatch = fixtureData as unknown as ActiveMatch;
-                    break;
+                    // If the database is marked completed, clear any lingering localStorage entry
+                    if ((fixtureData as any).match_status === 'completed') {
+                      localStorage.removeItem(key);
+                    } else {
+                      activeMatch = fixtureData as unknown as ActiveMatch;
+                      break;
+                    }
                   } else {
                     // User doesn't have access to this fixture
                     localStorage.removeItem(key);
