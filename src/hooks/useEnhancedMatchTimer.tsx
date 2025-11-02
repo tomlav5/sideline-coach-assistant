@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
+import { useToast } from '@/hooks/use-toast';
 
 interface MatchPeriod {
   id: string;
@@ -31,6 +32,7 @@ interface UseEnhancedMatchTimerProps {
 
 export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMatchTimerProps) {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [timerState, setTimerState] = useState<TimerState>({
     periods: [],
     isRunning: false,
@@ -41,6 +43,7 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
 
   const intervalRef = useRef<NodeJS.Timeout>();
   const pauseStartRef = useRef<number>();
+  const isFinalizingRef = useRef<boolean>(false);
 
   // Load existing periods and state
   const loadMatchState = useCallback(async () => {
@@ -88,6 +91,7 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
       });
     } catch (error) {
       console.error('Error loading match state:', error);
+      toast({ title: 'Error', description: 'Failed to load match state', variant: 'destructive' });
     }
   }, [fixtureId]);
 
@@ -163,6 +167,9 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
 
   const saveMatchState = async () => {
     try {
+      if (isFinalizingRef.current) {
+        return;
+      }
       const { error } = await supabase
         .from('fixtures')
         .update({
@@ -182,6 +189,7 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
       onSaveState?.();
     } catch (error) {
       console.error('Error saving match state:', error);
+      toast({ title: 'Error', description: 'Failed to save match state', variant: 'destructive' });
     }
   };
 
@@ -233,6 +241,7 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
       loadMatchState();
     } catch (error) {
       console.error('Error starting new period:', error);
+      toast({ title: 'Error', description: 'Failed to start period', variant: 'destructive' });
     }
   };
 
@@ -266,6 +275,7 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
       loadMatchState();
     } catch (error) {
       console.error('Error pausing timer:', error);
+      toast({ title: 'Error', description: 'Failed to pause period', variant: 'destructive' });
     }
   };
 
@@ -305,6 +315,7 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
       loadMatchState();
     } catch (error) {
       console.error('Error resuming timer:', error);
+      toast({ title: 'Error', description: 'Failed to resume period', variant: 'destructive' });
     }
   };
 
@@ -349,16 +360,19 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
         isRunning: false,
         currentPeriod: undefined,
         currentTime: 0,
-        matchStatus: 'paused',
+        matchStatus: isFinalizingRef.current ? prev.matchStatus : 'paused',
       }));
       // Resync after ending a period to finalize totals
       loadMatchState();
     } catch (error) {
       console.error('Error ending period:', error);
+      toast({ title: 'Error', description: 'Failed to end period', variant: 'destructive' });
     }
   };
 
   const endMatch = async () => {
+    // Guard against side-effect saves while finalizing
+    isFinalizingRef.current = true;
     if (timerState.currentPeriod) {
       await endCurrentPeriod();
     }
@@ -371,30 +385,44 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
 
     try {
       // Explicitly set fixture status to completed for consistency
-      try {
-        await supabase
-          .from('fixtures')
-          .update({
-            status: 'completed' as any,
-            match_status: 'completed',
-          })
-          .eq('id', fixtureId);
-      } catch (e) {
-        console.warn('Failed to explicitly set fixture completed:', e);
-      }
+      await supabase
+        .from('fixtures')
+        .update({
+          status: 'completed' as any,
+          match_status: 'completed',
+          match_state: {
+            status: 'completed',
+            total_time_seconds: timerState.totalMatchTime,
+          },
+          current_period_id: null,
+          active_tracker_id: null,
+          tracking_started_at: null,
+          last_activity_at: null,
+        })
+        .eq('id', fixtureId);
 
       // Refresh materialized views for reports
-      try {
-        await supabase.rpc('refresh_report_views');
-        
-        // Invalidate relevant query caches
-        queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
-        queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
-        queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
-        queryClient.invalidateQueries({ queryKey: ['competitions'] });
-      } catch (refreshError) {
-        console.error('Error refreshing report views:', refreshError);
+      await supabase.rpc('refresh_report_views');
+      
+      // Invalidate relevant query caches
+      queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
+      queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
+      queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
+      queryClient.invalidateQueries({ queryKey: ['competitions'] });
+      toast({ title: 'Match completed', description: 'Match has been marked as completed.' });
+    } catch (error) {
+      console.error('Error ending match:', error);
+      toast({ title: 'Error', description: 'Failed to end match', variant: 'destructive' });
+    } finally {
+      isFinalizingRef.current = false;
+    }
+
+    // Clear any localStorage match session to avoid lingering "active" indicators
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(`match_${fixtureId}`);
       }
+    } catch {}
 
       // Navigate to match report after successful completion
       if (typeof window !== 'undefined') {
@@ -402,9 +430,7 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
           window.location.href = `/match-report/${fixtureId}`;
         }, 1000);
       }
-    } catch (error) {
-      console.error('Error ending match:', error);
-    }
+    
   };
 
   const getCurrentMinute = () => Math.floor(timerState.currentTime / 60);

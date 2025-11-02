@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ArrowLeft, Trophy, Target, Clock, Users, Calendar, MapPin } from 'lucide-react';
@@ -29,6 +30,15 @@ interface MatchEvent {
     last_name: string;
     jersey_number?: number;
   };
+}
+
+interface MatchPeriod {
+  id: string;
+  period_number: number;
+  planned_duration_minutes: number;
+  actual_start_time?: string;
+  actual_end_time?: string;
+  is_active: boolean;
 }
 
 interface PlayerTime {
@@ -70,6 +80,7 @@ export default function MatchReport() {
   const [fixture, setFixture] = useState<FixtureDetails | null>(null);
   const [events, setEvents] = useState<MatchEvent[]>([]);
   const [playerTimes, setPlayerTimes] = useState<PlayerTime[]>([]);
+  const [periods, setPeriods] = useState<MatchPeriod[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -142,6 +153,16 @@ export default function MatchReport() {
 
       if (eventsError) throw eventsError;
       setEvents((eventsData || []) as unknown as MatchEvent[]);
+
+      // Fetch match periods for grouping
+      const { data: periodsData, error: periodsError } = await supabase
+        .from('match_periods')
+        .select('id, period_number, planned_duration_minutes, actual_start_time, actual_end_time, is_active')
+        .eq('fixture_id', fixtureId)
+        .order('period_number', { ascending: true });
+
+      if (periodsError) throw periodsError;
+      setPeriods((periodsData || []) as unknown as MatchPeriod[]);
 
       // Fetch player times and calculate totals correctly
       const { data: playerTimesData, error: playerTimesError } = await supabase
@@ -236,14 +257,18 @@ export default function MatchReport() {
     return `${number}${name}`;
   };
 
-  const getEventsByHalf = (half: string) => {
-    // For legacy support, we'll group events by first/second half
-    // Based on minute thresholds
-    if (half === 'first') {
-      return events.filter(e => e.total_match_minute <= (fixture?.half_length || 25));
-    } else {
-      return events.filter(e => e.total_match_minute > (fixture?.half_length || 25));
-    }
+  const getEventsByPeriod = () => {
+    const byId: Record<string, MatchEvent[]> = {};
+    events.forEach(e => {
+      const pid = e.period_id || 'unassigned';
+      if (!byId[pid]) byId[pid] = [];
+      byId[pid].push(e);
+    });
+    // Sort events per period by minute ascending
+    Object.keys(byId).forEach(pid => {
+      byId[pid].sort((a, b) => a.total_match_minute - b.total_match_minute);
+    });
+    return byId;
   };
 
   const getBackNavigation = () => {
@@ -263,6 +288,33 @@ export default function MatchReport() {
   };
 
   const isLiveMatch = fixture?.status !== 'completed' && fixture?.active_tracker_id;
+
+  const reopenMatch = async () => {
+    if (!fixtureId) return;
+    try {
+      // Update fixture back to in_progress; do not alter completed periods
+      const { error } = await supabase
+        .from('fixtures')
+        .update({
+          status: 'in_progress' as any,
+          match_status: 'in_progress',
+          current_period_id: null,
+          // Note: do not force active_tracker_id here; user can claim control
+          tracking_started_at: new Date().toISOString(),
+          last_activity_at: new Date().toISOString(),
+        })
+        .eq('id', fixtureId);
+
+      if (error) throw error;
+
+      // Navigate to tracker to resume
+      toast({ title: 'Match reopened', description: 'You can now resume tracking.' });
+      navigate(`/match-day/${fixtureId}`);
+    } catch (error: any) {
+      console.error('Error reopening match:', error);
+      toast({ title: 'Error', description: error?.message || 'Failed to reopen match', variant: 'destructive' });
+    }
+  };
 
   if (loading) {
     return (
@@ -312,6 +364,27 @@ export default function MatchReport() {
             {format(new Date(fixture.scheduled_date), 'EEEE, MMMM do, yyyy')}
           </p>
         </div>
+        {fixture.status === 'completed' && (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="secondary">
+                Reopen Match
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Reopen this match?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will set the match back to in-progress so you can resume tracking. Existing periods and events will remain intact. You can start a new period to continue.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={reopenMatch}>Confirm Reopen</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
       </div>
 
       {/* Match Header */}
@@ -369,73 +442,85 @@ export default function MatchReport() {
               <p className="text-muted-foreground text-center py-4">No events recorded</p>
             ) : (
               <div className="space-y-4">
-                {/* First Half */}
-                {getEventsByHalf('first').length > 0 && (
-                  <div>
-                    <h4 className="font-medium text-sm mb-2">First Half</h4>
-                    <div className="space-y-2">
-                      {getEventsByHalf('first').map((event) => (
-                        <div key={event.id} className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono font-bold text-xs bg-primary text-primary-foreground px-2 py-1 rounded">
-                              {event.total_match_minute}'
-                            </span>
-                            <Target className="h-3 w-3" />
-                            <span className={event.is_our_team ? 'text-green-600' : 'text-red-600'}>
-                              {event.event_type === 'goal' ? 'Goal' : 'Assist'}
-                              {event.is_penalty ? ' (Penalty)' : ''}
-                            </span>
-                          </div>
-                          <div className="text-right">
-                            {event.players && event.is_our_team ? (
-                              <span className="font-medium">
-                                {getPlayerName(event.players)}
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground">
-                                {event.is_our_team ? 'Unknown Player' : 'Opposition'}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Second Half */}
-                {getEventsByHalf('second').length > 0 && (
-                  <div>
-                    <h4 className="font-medium text-sm mb-2">Second Half</h4>
-                    <div className="space-y-2">
-                      {getEventsByHalf('second').map((event) => (
-                        <div key={event.id} className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono font-bold text-xs bg-primary text-primary-foreground px-2 py-1 rounded">
-                              {event.total_match_minute}'
-                            </span>
-                            <Target className="h-3 w-3" />
-                            <span className={event.is_our_team ? 'text-green-600' : 'text-red-600'}>
-                              {event.event_type === 'goal' ? 'Goal' : 'Assist'}
-                              {event.is_penalty ? ' (Penalty)' : ''}
-                            </span>
-                          </div>
-                          <div className="text-right">
-                            {event.players && event.is_our_team ? (
-                              <span className="font-medium">
-                                {getPlayerName(event.players)}
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground">
-                                {event.is_our_team ? 'Unknown Player' : 'Opposition'}
-                              </span>
-                            )}
+                {/* Period Sections */}
+                {(() => {
+                  const byPeriod = getEventsByPeriod();
+                  const orderedPeriods = [...periods];
+                  // If there are unassigned events, show them first
+                  const unassigned = byPeriod['unassigned'] || [];
+                  return (
+                    <div className="space-y-4">
+                      {unassigned.length > 0 && (
+                        <div>
+                          <h4 className="font-medium text-sm mb-2">Unassigned Period</h4>
+                          <div className="space-y-2">
+                            {unassigned.map((event) => (
+                              <div key={event.id} className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono font-bold text-xs bg-primary text-primary-foreground px-2 py-1 rounded">
+                                    {event.total_match_minute}'
+                                  </span>
+                                  <Target className="h-3 w-3" />
+                                  <span className={event.is_our_team ? 'text-green-600' : 'text-red-600'}>
+                                    {event.event_type === 'goal' ? 'Goal' : 'Assist'}
+                                    {event.is_penalty ? ' (Penalty)' : ''}
+                                  </span>
+                                </div>
+                                <div className="text-right">
+                                  {event.players && event.is_our_team ? (
+                                    <span className="font-medium">
+                                      {getPlayerName(event.players)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-muted-foreground">
+                                      {event.is_our_team ? 'Unknown Player' : 'Opposition'}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         </div>
-                      ))}
+                      )}
+                      {orderedPeriods.map((p) => {
+                        const list = byPeriod[p.id] || [];
+                        if (list.length === 0) return null;
+                        return (
+                          <div key={p.id}>
+                            <h4 className="font-medium text-sm mb-2">Period P{p.period_number}</h4>
+                            <div className="space-y-2">
+                              {list.map((event) => (
+                                <div key={event.id} className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono font-bold text-xs bg-primary text-primary-foreground px-2 py-1 rounded">
+                                      {event.total_match_minute}'
+                                    </span>
+                                    <Target className="h-3 w-3" />
+                                    <span className={event.is_our_team ? 'text-green-600' : 'text-red-600'}>
+                                      {event.event_type === 'goal' ? 'Goal' : 'Assist'}
+                                      {event.is_penalty ? ' (Penalty)' : ''}
+                                    </span>
+                                  </div>
+                                  <div className="text-right">
+                                    {event.players && event.is_our_team ? (
+                                      <span className="font-medium">
+                                        {getPlayerName(event.players)}
+                                      </span>
+                                    ) : (
+                                      <span className="text-muted-foreground">
+                                        {event.is_our_team ? 'Unknown Player' : 'Opposition'}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             )}
           </CardContent>

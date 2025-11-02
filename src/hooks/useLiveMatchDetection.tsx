@@ -113,11 +113,15 @@ export function useLiveMatchDetection() {
               // Verify the fixture exists and user has access via team -> club membership
               const { data: fixtureExists } = await supabase
                 .from('fixtures')
-                .select('id, team_id')
+                .select('id, team_id, match_status')
                 .eq('id', fixtureId)
                 .single();
 
               if (fixtureExists && teamIds.includes(fixtureExists.team_id)) {
+                if ((fixtureExists as any).match_status === 'completed') {
+                  localStorage.removeItem(key);
+                  continue;
+                }
                 if (!latestResumableMatch || timestamp > latestResumableMatch.timestamp) {
                   latestResumableMatch = { id: fixtureId, timestamp };
                 }
