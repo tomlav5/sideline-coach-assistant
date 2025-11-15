@@ -20,7 +20,6 @@ interface ClubMember {
   profile?: {
     first_name: string | null;
     last_name: string | null;
-    email: string | null;
   } | null;
 }
 
@@ -86,18 +85,25 @@ export function UserManagement({ clubId, currentUserRole }: UserManagementProps)
     try {
       setInviting(true);
       
-      // Check if user exists with this email
-      const { data: existingUser, error: userError } = await supabase
-        .from('profiles')
-        .select('user_id')
-        .eq('email', inviteEmail.trim())
-        .single();
+      // Use secure server-side function to lookup user by email
+      const { data: foundUserId, error: userError } = await supabase
+        .rpc('find_user_by_email' as any, { lookup_email: inviteEmail.trim() }) as { data: string | null; error: any };
 
-      if (userError && userError.code !== 'PGRST116') {
-        throw userError;
+      if (userError) {
+        // Check if it's an authorization error
+        if (userError.message?.includes('Unauthorized')) {
+          toast({
+            title: "Unauthorized",
+            description: "Only club admins can invite users.",
+            variant: "destructive",
+          });
+        } else {
+          throw userError;
+        }
+        return;
       }
 
-      if (!existingUser) {
+      if (!foundUserId) {
         toast({
           title: "User not found",
           description: "No user found with this email address. They need to sign up first.",
@@ -111,7 +117,7 @@ export function UserManagement({ clubId, currentUserRole }: UserManagementProps)
         .from('club_members')
         .select('id')
         .eq('club_id', clubId)
-        .eq('user_id', existingUser.user_id)
+        .eq('user_id', foundUserId)
         .single();
 
       if (existingMember) {
@@ -128,7 +134,7 @@ export function UserManagement({ clubId, currentUserRole }: UserManagementProps)
         .from('club_members')
         .insert([{
           club_id: clubId,
-          user_id: existingUser.user_id,
+          user_id: foundUserId,
           role: inviteRole,
         }]);
 
@@ -306,8 +312,8 @@ export function UserManagement({ clubId, currentUserRole }: UserManagementProps)
                 <div className="flex items-center space-x-3">
                   <RoleIcon className="h-5 w-5 text-muted-foreground" />
                   <div>
-                    <p className="font-medium">{memberName || member.profile?.email}</p>
-                    <p className="text-sm text-muted-foreground">{member.profile?.email}</p>
+                    <p className="font-medium">{memberName || 'Unknown User'}</p>
+                    <p className="text-sm text-muted-foreground">User ID: {member.user_id.slice(0, 8)}...</p>
                   </div>
                 </div>
                 
