@@ -155,7 +155,7 @@ const Index = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-muted/20">
+    <div className="bg-gradient-to-br from-background to-muted/20 min-h-full">
       <div className="container mx-auto px-4 py-6 sm:py-8 max-w-6xl">
         {/* Welcome Header */}
         <div className="text-center mb-8">

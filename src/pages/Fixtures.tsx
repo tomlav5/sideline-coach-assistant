@@ -592,7 +592,7 @@ export default function Fixtures() {
 
   if (loading) {
     return (
-      <div className="container mx-auto p-3 sm:p-4 space-y-4 sm:space-y-6 max-w-full overflow-hidden">
+      <div className="container mx-auto p-3 sm:p-4 space-y-4 sm:space-y-6 max-w-full">
         <div className="flex justify-between items-center">
           <Skeleton className="h-8 w-32" />
           <Skeleton className="h-10 w-32" />
@@ -607,7 +607,7 @@ export default function Fixtures() {
   }
 
   return (
-    <div className="container mx-auto p-3 sm:p-4 space-y-4 sm:space-y-6 max-w-full overflow-hidden">
+    <div className="container mx-auto p-3 sm:p-4 space-y-4 sm:space-y-6 max-w-full">
       {/* Live Match Banner */}
       {liveMatchData?.hasLiveMatch && liveMatchData.liveMatchId && (
         <Card className="border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950">
