@@ -86,6 +86,7 @@ export type Database = {
           half_length: number
           id: string
           is_retrospective: boolean
+          kickoff_time_tbd: boolean | null
           last_activity_at: string | null
           location: string | null
           match_state: Json | null
@@ -110,6 +111,7 @@ export type Database = {
           half_length?: number
           id?: string
           is_retrospective?: boolean
+          kickoff_time_tbd?: boolean | null
           last_activity_at?: string | null
           location?: string | null
           match_state?: Json | null
@@ -134,6 +136,7 @@ export type Database = {
           half_length?: number
           id?: string
           is_retrospective?: boolean
+          kickoff_time_tbd?: boolean | null
           last_activity_at?: string | null
           location?: string | null
           match_state?: Json | null
@@ -173,6 +176,7 @@ export type Database = {
       match_events: {
         Row: {
           assist_player_id: string | null
+          client_event_id: string | null
           created_at: string
           event_type: string
           fixture_id: string
@@ -190,6 +194,7 @@ export type Database = {
         }
         Insert: {
           assist_player_id?: string | null
+          client_event_id?: string | null
           created_at?: string
           event_type: string
           fixture_id: string
@@ -207,6 +212,7 @@ export type Database = {
         }
         Update: {
           assist_player_id?: string | null
+          client_event_id?: string | null
           created_at?: string
           event_type?: string
           fixture_id?: string
@@ -576,12 +582,9 @@ export type Database = {
         Args: { fixture_id_param: string }
         Returns: Json
       }
-      club_has_no_members: {
-        Args: { club_id_param: string }
-        Returns: boolean
-      }
+      club_has_no_members: { Args: { club_id_param: string }; Returns: boolean }
       get_competitions: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           competition_name: string
           competition_type: string
@@ -589,7 +592,7 @@ export type Database = {
         }[]
       }
       get_completed_matches: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           club_name: string
           competition_name: string
@@ -606,7 +609,7 @@ export type Database = {
         }[]
       }
       get_fixtures_with_scores_secure: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           active_tracker_id: string
           club_name: string
@@ -635,7 +638,7 @@ export type Database = {
         }[]
       }
       get_goal_scorers: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           assists: number
           club_name: string
@@ -648,12 +651,24 @@ export type Database = {
         }[]
       }
       get_player_playing_time: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           avg_minutes_per_match: number
           club_name: string
           first_name: string
-          jersey_number: number
+          last_name: string
+          matches_played: number
+          player_id: string
+          team_name: string
+          total_minutes_played: number
+        }[]
+      }
+      get_player_playing_time_v2: {
+        Args: never
+        Returns: {
+          avg_minutes_per_match: number
+          club_name: string
+          first_name: string
           last_name: string
           matches_played: number
           player_id: string
@@ -662,7 +677,7 @@ export type Database = {
         }[]
       }
       get_players_with_teams_secure: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           club_id: string
           club_name: string
@@ -676,7 +691,7 @@ export type Database = {
         }[]
       }
       get_teams_with_stats_secure: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           club_id: string
           club_name: string
@@ -689,7 +704,7 @@ export type Database = {
         }[]
       }
       get_user_dashboard_stats: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           total_clubs: number
           total_players: number
@@ -698,20 +713,14 @@ export type Database = {
           user_id: string
         }[]
       }
-      refresh_report_views: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      refresh_report_views: { Args: never; Returns: undefined }
       release_match_tracking: {
         Args: { fixture_id_param: string }
         Returns: boolean
       }
-      restart_match: {
-        Args: { fixture_id_param: string }
-        Returns: boolean
-      }
+      restart_match: { Args: { fixture_id_param: string }; Returns: boolean }
       test_auth_context: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           auth_role: string
           current_auth_uid: string
@@ -719,7 +728,7 @@ export type Database = {
         }[]
       }
       test_current_user: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           auth_uid: string
           jwt_claims: Json
