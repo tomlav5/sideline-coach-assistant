@@ -355,22 +355,35 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
 
       if (error) throw error;
 
-      // Close any open player_time_logs for this period to the planned cap
+      // Close any open player_time_logs for this period using actual duration
       try {
         const { data: periodRow } = await supabase
           .from('match_periods')
-          .select('id, planned_duration_minutes')
+          .select('id, planned_duration_minutes, actual_start_time, actual_end_time, total_paused_seconds')
           .eq('id', timerState.currentPeriod.id)
           .single();
+        
         if (periodRow) {
+          // Calculate actual period duration in minutes
+          let actualDurationMinutes = periodRow.planned_duration_minutes;
+          
+          if (periodRow.actual_start_time && periodRow.actual_end_time) {
+            const startTime = new Date(periodRow.actual_start_time).getTime();
+            const endTime = new Date(periodRow.actual_end_time).getTime();
+            const pausedSeconds = periodRow.total_paused_seconds || 0;
+            const elapsedSeconds = Math.floor((endTime - startTime) / 1000) - pausedSeconds;
+            actualDurationMinutes = Math.floor(elapsedSeconds / 60);
+          }
+          
+          // Close all active logs to actual duration
           await supabase
             .from('player_time_logs')
             .update({
-              time_off_minute: periodRow.planned_duration_minutes,
+              time_off_minute: actualDurationMinutes,
               is_active: false,
             })
             .eq('period_id', periodRow.id)
-            .is('time_off_minute', null);
+            .eq('is_active', true);  // Only update active logs
         }
       } catch (e) {
         console.warn('Failed to close open player_time_logs on period end:', e);

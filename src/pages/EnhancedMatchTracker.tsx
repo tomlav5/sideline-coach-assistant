@@ -399,16 +399,27 @@ export default function EnhancedMatchTracker() {
               .single();
 
             if (prevPeriod) {
-              // Set time_off_minute to full period length where still active and no time_off
+              // Calculate actual period duration
+              let actualDurationMinutes = prevPeriod.planned_duration_minutes;
+              
+              if (prevPeriod.actual_start_time && prevPeriod.actual_end_time) {
+                const startTime = new Date(prevPeriod.actual_start_time).getTime();
+                const endTime = new Date(prevPeriod.actual_end_time).getTime();
+                const pausedSeconds = prevPeriod.total_paused_seconds || 0;
+                const elapsedSeconds = Math.floor((endTime - startTime) / 1000) - pausedSeconds;
+                actualDurationMinutes = Math.floor(elapsedSeconds / 60);
+              }
+              
+              // Set time_off_minute to actual period duration for all active logs
               await supabase
                 .from('player_time_logs')
                 .update({
-                  time_off_minute: prevPeriod.planned_duration_minutes,
+                  time_off_minute: actualDurationMinutes,
                   is_active: false,
                 })
                 .eq('fixture_id', fixtureId)
                 .eq('period_id', prevPeriod.id)
-                .is('time_off_minute', null);
+                .eq('is_active', true);  // Only update active logs
             }
           }
 
