@@ -45,6 +45,23 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
   const pauseStartRef = useRef<number>();
   const isFinalizingRef = useRef<boolean>(false);
 
+  // Map internal match status to valid database enum values
+  const mapMatchStatusToDbEnum = (status: TimerState['matchStatus']): string => {
+    switch (status) {
+      case 'not_started':
+        return 'scheduled';
+      case 'paused':
+        // Period is paused but match is still in progress
+        return 'in_progress';
+      case 'in_progress':
+        return 'in_progress';
+      case 'completed':
+        return 'completed';
+      default:
+        return 'scheduled';
+    }
+  };
+
   // Load existing periods and state
   const loadMatchState = useCallback(async () => {
     try {
@@ -170,18 +187,22 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
       if (isFinalizingRef.current) {
         return;
       }
+      
+      // Map internal status to valid database enum
+      const dbStatus = mapMatchStatusToDbEnum(timerState.matchStatus);
+      
       const { error } = await supabase
         .from('fixtures')
         .update({
           // Keep a JSON snapshot for quick client resume
           match_state: {
-            status: timerState.matchStatus,
+            status: timerState.matchStatus, // Keep internal state in JSON
             total_time_seconds: timerState.totalMatchTime,
           },
           current_period_id: timerState.currentPeriod?.id || null,
           // Ensure DB status reflects current state for other screens/hooks
-          status: timerState.matchStatus as any,
-          match_status: timerState.matchStatus,
+          status: dbStatus as any,
+          match_status: dbStatus,
         })
         .eq('id', fixtureId);
 
