@@ -265,7 +265,7 @@ export default function Reports() {
                   No completed matches found
                 </p>
               ) : (
-                <div className="space-y-3 max-h-[calc(100vh-300px)] overflow-y-auto pr-1 -mr-1">
+                <div className="space-y-3">
                   {completedMatches.map((match) => {
                     const { result, color } = getMatchResult(match.our_score, match.opponent_score);
                     return (
@@ -343,7 +343,7 @@ export default function Reports() {
               {goalScorers.length === 0 ? (
                 <p className="text-muted-foreground text-center py-8">No goal scorers found</p>
               ) : (
-                <div className="overflow-x-auto max-h-[calc(100vh-320px)] overflow-y-auto pr-1 -mr-1">
+                <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr className="border-b text-left">
@@ -380,7 +380,7 @@ export default function Reports() {
               {goalScorers.length === 0 ? (
                 <p className="text-muted-foreground text-center py-8">No assists found</p>
               ) : (
-                <div className="overflow-x-auto max-h-[calc(100vh-320px)] overflow-y-auto pr-1 -mr-1">
+                <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr className="border-b text-left">
@@ -422,7 +422,7 @@ export default function Reports() {
                   No playing time data found
                 </p>
               ) : (
-                <div className="overflow-x-auto max-h-[calc(100vh-320px)] overflow-y-auto pr-1 -mr-1">
+                <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr className="border-b text-left">
