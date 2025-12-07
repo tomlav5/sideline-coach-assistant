@@ -29,6 +29,7 @@ import { useRealtimeMatchSync } from '@/hooks/useRealtimeMatchSync';
 import { useWakeLock } from '@/hooks/useWakeLock';
 import { useUndoStack } from '@/hooks/useUndoStack';
 import { useEditMatchData } from '@/hooks/useEditMatchData';
+import { generateUUID } from '@/lib/uuid';
 
 interface Player {
   id: string;
@@ -242,9 +243,7 @@ export default function EnhancedMatchTracker() {
       }
 
       // Generate unique client event ID
-      const clientEventId = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
-        ? (crypto as any).randomUUID()
-        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const clientEventId = generateUUID();
 
       // Create goal event
       const { data: newEvent, error } = await supabase
@@ -1030,9 +1029,7 @@ export default function EnhancedMatchTracker() {
 
               // Persist a substitution event (idempotent via client_event_id)
               try {
-                const clientEventId = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
-                  ? (crypto as any).randomUUID()
-                  : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+                const clientEventId = generateUUID();
                 const { error: subEventErr } = await supabase
                   .from('match_events')
                   .upsert({
