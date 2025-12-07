@@ -7,10 +7,11 @@ import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowLeft, Trophy, Target, Clock, Users, Calendar, MapPin } from 'lucide-react';
+import { ArrowLeft, Trophy, Target, Clock, Users, Calendar, MapPin, Edit } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { ResponsiveWrapper } from '@/components/ui/responsive-wrapper';
+import { EditMatchDialog } from '@/components/match/EditMatchDialog';
 
 interface MatchEvent {
   id: string;
@@ -80,8 +81,11 @@ export default function MatchReport() {
   const [fixture, setFixture] = useState<FixtureDetails | null>(null);
   const [events, setEvents] = useState<MatchEvent[]>([]);
   const [playerTimes, setPlayerTimes] = useState<PlayerTime[]>([]);
+  const [rawPlayerTimes, setRawPlayerTimes] = useState<any[]>([]); // Raw data for editing
   const [periods, setPeriods] = useState<MatchPeriod[]>([]);
+  const [players, setPlayers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showEditDialog, setShowEditDialog] = useState(false);
 
   useEffect(() => {
     if (fixtureId) {
@@ -107,6 +111,7 @@ export default function MatchReport() {
           half_length,
           status,
           active_tracker_id,
+          team_id,
           teams!fk_fixtures_team_id (name)
         `)
         .eq('id', fixtureId)
@@ -132,11 +137,14 @@ export default function MatchReport() {
         .select(`
           id,
           event_type,
+          minute_in_period,
           total_match_minute,
           period_id,
           is_our_team,
           is_penalty,
           player_id,
+          assist_player_id,
+          notes,
           players!fk_match_events_player_id (
             first_name,
             last_name,
@@ -146,6 +154,9 @@ export default function MatchReport() {
             first_name,
             last_name,
             jersey_number
+          ),
+          match_periods!fk_match_events_period_id (
+            period_number
           )
         `)
         .eq('fixture_id', fixtureId)
@@ -168,6 +179,7 @@ export default function MatchReport() {
       const { data: playerTimesData, error: playerTimesError } = await supabase
         .from('player_time_logs')
         .select(`
+          id,
           player_id,
           time_on_minute,
           time_off_minute,
@@ -178,12 +190,19 @@ export default function MatchReport() {
             first_name,
             last_name,
             jersey_number
+          ),
+          match_periods!fk_player_time_logs_period_id (
+            period_number,
+            planned_duration_minutes
           )
         `)
         .eq('fixture_id', fixtureId)
         .order('is_starter', { ascending: false });
 
       if (playerTimesError) throw playerTimesError;
+      
+      // Store raw data for editing
+      setRawPlayerTimes(playerTimesData || []);
       
       // Group player times by player_id and calculate actual totals
       const playerTimeMap = new Map<string, PlayerTime>();
@@ -211,6 +230,26 @@ export default function MatchReport() {
         if (a.is_starter !== b.is_starter) return a.is_starter ? -1 : 1;
         return b.total_minutes - a.total_minutes;
       }));
+
+      // Fetch players for the team (needed for editing)
+      if (fixtureData && (fixtureData as any).team_id) {
+        const { data: playersData, error: playersError } = await supabase
+          .from('team_players')
+          .select(`
+            players!fk_team_players_player_id (
+              id,
+              first_name,
+              last_name,
+              jersey_number
+            )
+          `)
+          .eq('team_id', (fixtureData as any).team_id)
+          .order('players(jersey_number)', { ascending: true });
+
+        if (!playersError && playersData) {
+          setPlayers(playersData.map(tp => (tp as any).players).filter(Boolean));
+        }
+      }
 
     } catch (error: any) {
       console.error('Error fetching match report:', error);
@@ -364,27 +403,37 @@ export default function MatchReport() {
             {format(new Date(fixture.scheduled_date), 'EEEE, MMMM do, yyyy')}
           </p>
         </div>
-        {fixture.status === 'completed' && (
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="secondary">
-                Reopen Match
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Reopen this match?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will set the match back to in-progress so you can resume tracking. Existing periods and events will remain intact. You can start a new period to continue.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={reopenMatch}>Confirm Reopen</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        )}
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => setShowEditDialog(true)}
+            className="flex items-center gap-2"
+          >
+            <Edit className="h-4 w-4" />
+            Edit Match Data
+          </Button>
+          {fixture.status === 'completed' && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="secondary">
+                  Reopen Match
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Reopen this match?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will set the match back to in-progress so you can resume tracking. Existing periods and events will remain intact. You can start a new period to continue.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={reopenMatch}>Confirm Reopen</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+        </div>
       </div>
 
       {/* Match Header */}
@@ -606,6 +655,18 @@ export default function MatchReport() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Edit Match Data Dialog */}
+      <EditMatchDialog
+        open={showEditDialog}
+        onOpenChange={setShowEditDialog}
+        fixtureId={fixtureId!}
+        events={events as any}
+        playerTimes={rawPlayerTimes}
+        periods={periods}
+        players={players}
+        onUpdate={fetchMatchReport}
+      />
     </ResponsiveWrapper>
   );
 }
