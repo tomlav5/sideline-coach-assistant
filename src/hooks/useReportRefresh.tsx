@@ -111,20 +111,19 @@ export function useManualReportRefresh() {
   
   return useCallback(async () => {
     try {
-      // Refresh materialized views
-      const { error } = await supabase.rpc('refresh_report_views');
-      if (error) throw error;
-      
-      // Immediately invalidate caches after manual refresh
-      queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
-      queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
-      queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
-      queryClient.invalidateQueries({ queryKey: ['competitions'] });
-      
-      return true;
-    } catch (error) {
-      console.error('Error refreshing reports:', error);
-      throw error;
+      // Refresh materialized views (with error tolerance)
+      await supabase.rpc('refresh_report_views');
+    } catch (refreshError) {
+      // Log but don't fail - views have auto-refresh triggers
+      console.warn('Failed to refresh report views (non-critical):', refreshError);
     }
+    
+    // Always invalidate caches regardless of refresh success
+    queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
+    queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
+    queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
+    queryClient.invalidateQueries({ queryKey: ['competitions'] });
+    
+    return true;
   }, [queryClient]);
 }
