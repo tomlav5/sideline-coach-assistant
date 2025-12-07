@@ -30,6 +30,11 @@ import { useWakeLock } from '@/hooks/useWakeLock';
 import { useUndoStack } from '@/hooks/useUndoStack';
 import { useEditMatchData } from '@/hooks/useEditMatchData';
 import { generateUUID } from '@/lib/uuid';
+import { useOptimisticUpdate } from '@/hooks/useOptimisticUpdate';
+import { useSmartSuggestions } from '@/hooks/useSmartSuggestions';
+import { useMatchTrackerShortcuts } from '@/hooks/useKeyboardShortcuts';
+import { SmartSuggestionBadge } from '@/components/match/SmartSuggestionBadge';
+import { MatchTrackerSkeleton } from '@/components/ui/skeleton-loader';
 
 interface Player {
   id: string;
@@ -73,6 +78,9 @@ export default function EnhancedMatchTracker() {
   // Edit capabilities for undo functionality
   const { deleteEvent } = useEditMatchData();
   
+  // Optimistic updates for instant feedback
+  const optimisticUpdate = useOptimisticUpdate();
+  
   const [fixture, setFixture] = useState<any>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [events, setEvents] = useState<MatchEvent[]>([]);
@@ -85,6 +93,9 @@ export default function EnhancedMatchTracker() {
   const [totalMatchMinute, setTotalMatchMinute] = useState(0);
   const [currentPeriodNumber, setCurrentPeriodNumber] = useState(0);
   const [loading, setLoading] = useState(true);
+  
+  // Smart suggestions based on match context (after state declarations)
+  const smartSuggestions = useSmartSuggestions(players, events as any, currentPeriodNumber);
 
   // Substitution state
   const [subDialogOpen, setSubDialogOpen] = useState(false);
@@ -640,12 +651,25 @@ export default function EnhancedMatchTracker() {
   const ourGoals = events.filter(e => e.event_type === 'goal' && e.is_our_team).length;
   const opponentGoals = events.filter(e => e.event_type === 'goal' && !e.is_our_team).length;
 
+  // Keyboard shortcuts for quick actions
+  useMatchTrackerShortcuts({
+    onRecordGoal: () => {
+      if (matchTracker?.isActiveTracker || fixture?.status !== 'in_progress') {
+        setShowEventDialog(true);
+      }
+    },
+    onSubstitution: async () => {
+      if (matchTracker?.isActiveTracker || fixture?.status !== 'in_progress') {
+        await refreshPlayerStatusLists();
+        setSubDialogOpen(true);
+      }
+    },
+    onOtherEvent: () => setShowEventDialog(true),
+    onUndo: () => canUndo && performUndo(),
+  });
+
   if (loading) {
-    return (
-      <div className="container mx-auto p-4">
-        <div className="text-center">Loading match data...</div>
-      </div>
-    );
+    return <MatchTrackerSkeleton />;
   }
 
   if (!fixture) {
