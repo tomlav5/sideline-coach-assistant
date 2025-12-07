@@ -27,12 +27,14 @@ import { toast } from 'sonner';
 import { Clock, Users, Target, History, ArrowUpDown, RotateCcw } from 'lucide-react';
 import { useRealtimeMatchSync } from '@/hooks/useRealtimeMatchSync';
 import { useWakeLock } from '@/hooks/useWakeLock';
+import { usePlayerTimers } from '@/hooks/usePlayerTimers';
 import { useUndoStack } from '@/hooks/useUndoStack';
 import { useEditMatchData } from '@/hooks/useEditMatchData';
 import { generateUUID } from '@/lib/uuid';
 import { useOptimisticUpdate } from '@/hooks/useOptimisticUpdate';
 import { useSmartSuggestions } from '@/hooks/useSmartSuggestions';
 import { useMatchTrackerShortcuts } from '@/hooks/useKeyboardShortcuts';
+import { ActivePlayerCard } from '@/components/match/ActivePlayerCard';
 import { SmartSuggestionBadge } from '@/components/match/SmartSuggestionBadge';
 import { MatchTrackerSkeleton } from '@/components/ui/skeleton-loader';
 
@@ -455,6 +457,14 @@ export default function EnhancedMatchTracker() {
   };
   const currentPeriod = periods.find(p => p.is_active) || (periods.length > 0 ? periods[periods.length - 1] : null);
 
+  // Real-time player timers
+  const isMatchRunning = fixture?.status === 'in_progress' && currentPeriod?.is_active;
+  const { getPlayerTime, isPlayerActive, reloadTimes } = usePlayerTimers({
+    fixtureId: fixtureId!,
+    currentPeriodId: currentPeriod?.id || null,
+    isTimerRunning: isMatchRunning || false,
+  });
+
   // Ensure we initialize/close player_time_logs across period changes
   const [prevPeriodNumber, setPrevPeriodNumber] = useState<number>(0);
 
@@ -476,16 +486,27 @@ export default function EnhancedMatchTracker() {
               .single();
 
             if (prevPeriod) {
-              // Set time_off_minute to full period length where still active and no time_off
+              // Calculate actual period duration
+              let actualDurationMinutes = prevPeriod.planned_duration_minutes;
+              
+              if (prevPeriod.actual_start_time && prevPeriod.actual_end_time) {
+                const startTime = new Date(prevPeriod.actual_start_time).getTime();
+                const endTime = new Date(prevPeriod.actual_end_time).getTime();
+                const pausedSeconds = prevPeriod.total_paused_seconds || 0;
+                const elapsedSeconds = Math.floor((endTime - startTime) / 1000) - pausedSeconds;
+                actualDurationMinutes = Math.floor(elapsedSeconds / 60);
+              }
+              
+              // Set time_off_minute to actual period duration for all active logs
               await supabase
                 .from('player_time_logs')
                 .update({
-                  time_off_minute: prevPeriod.planned_duration_minutes,
+                  time_off_minute: actualDurationMinutes,
                   is_active: false,
                 })
                 .eq('fixture_id', fixtureId)
                 .eq('period_id', prevPeriod.id)
-                .is('time_off_minute', null);
+                .eq('is_active', true);  // Only update active logs
             }
           }
 
@@ -507,17 +528,30 @@ export default function EnhancedMatchTracker() {
 
               if (onFieldPlayers && onFieldPlayers.length > 0) {
                 for (const row of onFieldPlayers) {
-                  await supabase
+                  // Check if an active log already exists for this player in this period
+                  const { data: existingLog } = await supabase
                     .from('player_time_logs')
-                    .upsert({
-                      fixture_id: fixtureId!,
-                      player_id: row.player_id,
-                      period_id: nextPeriod.id,
-                      time_on_minute: 0,
-                      is_starter: true,
-                      is_active: true,
-                      total_period_minutes: 0,
-                    }, { onConflict: 'fixture_id,player_id,period_id' });
+                    .select('id, is_active')
+                    .eq('fixture_id', fixtureId!)
+                    .eq('player_id', row.player_id)
+                    .eq('period_id', nextPeriod.id)
+                    .eq('is_active', true)
+                    .maybeSingle();
+                  
+                  // Only insert if no active log exists (allows multiple intervals per period)
+                  if (!existingLog) {
+                    await supabase
+                      .from('player_time_logs')
+                      .insert({
+                        fixture_id: fixtureId!,
+                        player_id: row.player_id,
+                        period_id: nextPeriod.id,
+                        time_on_minute: 0,
+                        is_starter: true,
+                        is_active: true,
+                        total_period_minutes: 0,
+                      });
+                  }
                 }
               }
             }
@@ -794,6 +828,30 @@ export default function EnhancedMatchTracker() {
         </Button>
       </div>
 
+      {/* Active Players with Real-Time Timers */}
+      {activePlayersList.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Users className="h-5 w-5 text-green-600" />
+              Players On Field ({activePlayersList.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {activePlayersList.map((player) => (
+                <ActivePlayerCard
+                  key={player.id}
+                  player={player}
+                  playingMinutes={getPlayerTime(player.id)}
+                  isActive={isPlayerActive(player.id)}
+                />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Recent Substitutions (UI only) */}
       {substitutions.length > 0 && (
         <Card>
@@ -1016,7 +1074,7 @@ export default function EnhancedMatchTracker() {
                   });
               }
 
-              // Finalize time log for player going OUT
+              // Finalize time log for player going OUT (only update active log)
               await supabase
                 .from('player_time_logs')
                 .update({
@@ -1025,18 +1083,21 @@ export default function EnhancedMatchTracker() {
                 })
                 .eq('fixture_id', fixtureId)
                 .eq('player_id', playerOut)
-                .eq('period_id', currentPeriod.id);
+                .eq('period_id', currentPeriod.id)
+                .eq('is_active', true);  // Only close the currently active interval
 
-              // Create/initialize time log for player coming IN (Phase 1: one interval per period)
-              const { data: inRow } = await supabase
+              // Create time log for player coming IN (supports multiple intervals per period)
+              const { data: activeInLog } = await supabase
                 .from('player_time_logs')
-                .select('player_id, time_off_minute')
+                .select('id, is_active')
                 .eq('fixture_id', fixtureId)
                 .eq('player_id', playerIn)
                 .eq('period_id', currentPeriod.id)
+                .eq('is_active', true)
                 .maybeSingle();
 
-              if (!inRow) {
+              // Only insert if no active log exists (player might have closed logs from earlier subs)
+              if (!activeInLog) {
                 await supabase
                   .from('player_time_logs')
                   .insert({
@@ -1047,8 +1108,6 @@ export default function EnhancedMatchTracker() {
                     is_starter: false,
                     is_active: true,
                   });
-              } else if (inRow && inRow.time_off_minute == null) {
-                // If a row exists and is open, do nothing (already on field)
               }
 
               // Persist a substitution event (idempotent via client_event_id)
@@ -1088,6 +1147,7 @@ export default function EnhancedMatchTracker() {
             setPlayerIn('');
             await refreshPlayerStatusLists();
             await loadEvents(); // Refresh events list to show the substitution
+            reloadTimes(); // Refresh player timers to reflect new on-field players
           } catch (e) {
             console.error('Error making substitution:', e);
             toast.error('Failed to make substitution');

@@ -265,29 +265,37 @@ export default function Reports() {
                   No completed matches found
                 </p>
               ) : (
-                <div className="space-y-3 max-h-[calc(100vh-300px)] overflow-y-auto pr-1 -mr-1">
+                <div className="space-y-2 sm:space-y-3">
                   {completedMatches.map((match) => {
                     const { result, color } = getMatchResult(match.our_score, match.opponent_score);
                     return (
-                      <div key={match.id} className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
-                        <div className="flex items-center space-x-4">
-                          <div className={`w-8 h-8 rounded-full ${color} text-white flex items-center justify-center font-bold text-sm`}>
+                      <div key={match.id} className="flex items-center justify-between p-3 sm:p-4 bg-muted/50 rounded-lg gap-2">
+                        <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
+                          <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full ${color} text-white flex items-center justify-center font-bold text-xs sm:text-sm flex-shrink-0`}>
                             {result}
                           </div>
-                          <div className="flex-1">
-                            <div className="flex items-center space-x-2 mb-1">
-                              <span className="font-medium">{match.team_name}</span>
-                              <span className="text-lg font-mono">{match.our_score} - {match.opponent_score}</span>
-                              <span className="font-medium">{match.opponent_name}</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2 mb-1">
+                              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                                <span className="font-medium text-sm sm:text-base truncate max-w-[80px] sm:max-w-none">{match.team_name}</span>
+                                <span className="text-base sm:text-lg font-mono font-semibold whitespace-nowrap text-primary">{match.our_score} - {match.opponent_score}</span>
+                                <span className="font-medium text-sm sm:text-base truncate max-w-[80px] sm:max-w-none">{match.opponent_name}</span>
+                              </div>
                             </div>
-                            <div className="text-sm text-muted-foreground">
-                              {format(new Date(match.scheduled_date), 'dd/MM/yyyy HH:mm')} • {match.location}
+                            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs sm:text-sm text-muted-foreground">
+                              <span className="whitespace-nowrap">{format(new Date(match.scheduled_date), 'dd MMM yyyy')}</span>
+                              {match.location && (
+                                <>
+                                  <span className="hidden sm:inline">•</span>
+                                  <span className="truncate max-w-[100px] sm:max-w-none">{match.location}</span>
+                                </>
+                              )}
                             </div>
                           </div>
                         </div>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0">
                               <MoreVertical className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
@@ -315,7 +323,7 @@ export default function Reports() {
                                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                                   <AlertDialogAction
                                     onClick={() => deleteMatch(match.id)}
-                                    className="bg-red-600 hover:bg-red-700"
+                                    className="bg-destructive hover:bg-destructive/90"
                                   >
                                     Delete Match
                                   </AlertDialogAction>
@@ -336,20 +344,20 @@ export default function Reports() {
         <TabsContent value="scorers" className="space-y-6">
           {/* Goals Table */}
           <Card>
-            <CardHeader>
-              <CardTitle>Top Goal Scorers</CardTitle>
+            <CardHeader className="pb-3 sm:pb-6">
+              <CardTitle className="text-lg sm:text-xl">Top Goal Scorers</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
               {goalScorers.length === 0 ? (
                 <p className="text-muted-foreground text-center py-8">No goal scorers found</p>
               ) : (
-                <div className="overflow-x-auto max-h-[calc(100vh-320px)] overflow-y-auto pr-1 -mr-1">
-                  <table className="w-full">
+                <div className="overflow-x-auto -mx-3 sm:mx-0">
+                  <table className="w-full min-w-[280px]">
                     <thead>
                       <tr className="border-b text-left">
-                        <th className="pb-2 font-medium">Player</th>
-                        <th className="pb-2 font-medium">Team</th>
-                        <th className="pb-2 font-medium text-center">Goals</th>
+                        <th className="pb-2 pl-3 sm:pl-0 font-medium text-xs sm:text-sm">Player</th>
+                        <th className="pb-2 font-medium text-xs sm:text-sm hidden sm:table-cell">Team</th>
+                        <th className="pb-2 pr-3 sm:pr-0 font-medium text-center text-xs sm:text-sm">Goals</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -357,10 +365,13 @@ export default function Reports() {
                         .sort((a, b) => (b.goals || 0) - (a.goals || 0))
                         .map((player) => (
                           <tr key={`goals-${player.player_id}`} className="border-b">
-                            <td className="py-2 font-medium">{player.player_name}</td>
-                            <td className="py-2 text-muted-foreground">{player.team_name}</td>
-                            <td className="py-2 text-center">
-                              <Badge variant="secondary">{player.goals}</Badge>
+                            <td className="py-2.5 pl-3 sm:pl-0">
+                              <div className="font-medium text-sm">{player.player_name}</div>
+                              <div className="text-xs text-muted-foreground sm:hidden">{player.team_name}</div>
+                            </td>
+                            <td className="py-2.5 text-muted-foreground text-sm hidden sm:table-cell">{player.team_name}</td>
+                            <td className="py-2.5 pr-3 sm:pr-0 text-center">
+                              <Badge variant="secondary" className="text-xs sm:text-sm px-2 sm:px-2.5">{player.goals}</Badge>
                             </td>
                           </tr>
                         ))}
@@ -373,20 +384,20 @@ export default function Reports() {
 
           {/* Assists Table */}
           <Card>
-            <CardHeader>
-              <CardTitle>Top Assist Providers</CardTitle>
+            <CardHeader className="pb-3 sm:pb-6">
+              <CardTitle className="text-lg sm:text-xl">Top Assist Providers</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
               {goalScorers.length === 0 ? (
                 <p className="text-muted-foreground text-center py-8">No assists found</p>
               ) : (
-                <div className="overflow-x-auto max-h-[calc(100vh-320px)] overflow-y-auto pr-1 -mr-1">
-                  <table className="w-full">
+                <div className="overflow-x-auto -mx-3 sm:mx-0">
+                  <table className="w-full min-w-[280px]">
                     <thead>
                       <tr className="border-b text-left">
-                        <th className="pb-2 font-medium">Player</th>
-                        <th className="pb-2 font-medium">Team</th>
-                        <th className="pb-2 font-medium text-center">Assists</th>
+                        <th className="pb-2 pl-3 sm:pl-0 font-medium text-xs sm:text-sm">Player</th>
+                        <th className="pb-2 font-medium text-xs sm:text-sm hidden sm:table-cell">Team</th>
+                        <th className="pb-2 pr-3 sm:pr-0 font-medium text-center text-xs sm:text-sm">Assists</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -395,10 +406,13 @@ export default function Reports() {
                         .sort((a, b) => (b.assists || 0) - (a.assists || 0))
                         .map((player) => (
                           <tr key={`assists-${player.player_id}`} className="border-b">
-                            <td className="py-2 font-medium">{player.player_name}</td>
-                            <td className="py-2 text-muted-foreground">{player.team_name}</td>
-                            <td className="py-2 text-center">
-                              <Badge variant="outline">{player.assists}</Badge>
+                            <td className="py-2.5 pl-3 sm:pl-0">
+                              <div className="font-medium text-sm">{player.player_name}</div>
+                              <div className="text-xs text-muted-foreground sm:hidden">{player.team_name}</div>
+                            </td>
+                            <td className="py-2.5 text-muted-foreground text-sm hidden sm:table-cell">{player.team_name}</td>
+                            <td className="py-2.5 pr-3 sm:pr-0 text-center">
+                              <Badge variant="outline" className="text-xs sm:text-sm px-2 sm:px-2.5">{player.assists}</Badge>
                             </td>
                           </tr>
                         ))}
@@ -422,7 +436,7 @@ export default function Reports() {
                   No playing time data found
                 </p>
               ) : (
-                <div className="overflow-x-auto max-h-[calc(100vh-320px)] overflow-y-auto pr-1 -mr-1">
+                <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr className="border-b text-left">
