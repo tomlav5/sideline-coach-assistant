@@ -27,29 +27,38 @@ const MatchItem = memo(({ match, getMatchResult, onDelete, style }: MatchItemPro
   const { result, color } = getMatchResult(match.our_score, match.opponent_score);
 
   return (
-    <div style={style} className="px-4">
-      <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
-        <div className="flex items-center space-x-4">
-          <div className={`w-8 h-8 rounded-full ${color} text-white flex items-center justify-center font-bold text-sm`}>
+    <div style={style} className="px-2 sm:px-4">
+      <div className="flex items-center justify-between p-3 sm:p-4 bg-muted/50 rounded-lg gap-2">
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
+          {/* Result badge */}
+          <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full ${color} text-white flex items-center justify-center font-bold text-xs sm:text-sm flex-shrink-0`}>
             {result}
           </div>
-          <div className="flex-1">
-            <div className="flex items-center space-x-2 mb-1">
-              <span className="font-medium">{match.team_name}</span>
-              <span className="text-lg font-mono">{match.our_score} - {match.opponent_score}</span>
-              <span className="font-medium">{match.opponent_name}</span>
+          
+          {/* Match info */}
+          <div className="min-w-0 flex-1">
+            {/* Score display - stacked on mobile, inline on desktop */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2 mb-1">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                <span className="font-medium text-sm sm:text-base truncate max-w-[80px] sm:max-w-none">{match.team_name}</span>
+                <span className="text-base sm:text-lg font-mono font-semibold whitespace-nowrap text-primary">{match.our_score} - {match.opponent_score}</span>
+                <span className="font-medium text-sm sm:text-base truncate max-w-[80px] sm:max-w-none">{match.opponent_name}</span>
+              </div>
             </div>
-            <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-              <span>{format(new Date(match.scheduled_date), 'PPP')}</span>
-              <span>•</span>
-              <span>{match.location}</span>
-              {match.competition_name && (
+            
+            {/* Match details - simplified on mobile */}
+            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs sm:text-sm text-muted-foreground">
+              <span className="whitespace-nowrap">{format(new Date(match.scheduled_date), 'dd MMM yyyy')}</span>
+              {match.location && (
                 <>
-                  <span>•</span>
-                  <Badge variant="secondary" className="text-xs">
-                    {match.competition_name}
-                  </Badge>
+                  <span className="hidden sm:inline">•</span>
+                  <span className="truncate max-w-[100px] sm:max-w-none">{match.location}</span>
                 </>
+              )}
+              {match.competition_name && (
+                <Badge variant="secondary" className="text-[10px] sm:text-xs px-1.5 py-0 h-5">
+                  {match.competition_name}
+                </Badge>
               )}
             </div>
           </div>
