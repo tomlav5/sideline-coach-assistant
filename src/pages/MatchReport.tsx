@@ -344,30 +344,33 @@ export default function MatchReport() {
   const { result, color, text } = getMatchResult(ourGoals, opponentGoals);
 
   return (
-    <ResponsiveWrapper className="space-y-6 max-w-full">
-      <div className="flex items-center space-x-4">
-        <Button variant="outline" onClick={getBackNavigation()}>
+    <ResponsiveWrapper className="space-y-4 sm:space-y-6 max-w-full">
+      {/* Header - stacked on mobile */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+        <Button variant="outline" size="sm" onClick={getBackNavigation()} className="w-fit">
           <ArrowLeft className="h-4 w-4 mr-2" />
-          {getBackLabel()}
+          <span className="text-sm">{getBackLabel()}</span>
         </Button>
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl sm:text-3xl font-bold">Match Report</h1>
+        
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold">Match Report</h1>
             {isLiveMatch && (
-              <div className="flex items-center gap-2 px-3 py-1 bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-200 rounded-full text-sm font-medium border border-red-200 dark:border-red-800">
-                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                LIVE MATCH
+              <div className="flex items-center gap-1.5 px-2 py-0.5 sm:px-3 sm:py-1 bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-200 rounded-full text-xs sm:text-sm font-medium border border-red-200 dark:border-red-800">
+                <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-red-500 rounded-full animate-pulse"></div>
+                LIVE
               </div>
             )}
           </div>
-          <p className="text-muted-foreground">
-            {format(new Date(fixture.scheduled_date), 'EEEE, MMMM do, yyyy')}
+          <p className="text-xs sm:text-sm text-muted-foreground truncate">
+            {format(new Date(fixture.scheduled_date), 'EEE, MMM do, yyyy')}
           </p>
         </div>
+        
         {fixture.status === 'completed' && (
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="secondary">
+              <Button variant="secondary" size="sm" className="w-fit">
                 Reopen Match
               </Button>
             </AlertDialogTrigger>
@@ -375,7 +378,7 @@ export default function MatchReport() {
               <AlertDialogHeader>
                 <AlertDialogTitle>Reopen this match?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will set the match back to in-progress so you can resume tracking. Existing periods and events will remain intact. You can start a new period to continue.
+                  This will set the match back to in-progress so you can resume tracking. Existing periods and events will remain intact.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -389,91 +392,93 @@ export default function MatchReport() {
 
       {/* Match Header */}
       <Card>
-        <CardContent className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-            <div className="text-center">
-              <h2 className="text-xl font-bold">{fixture.teams.name}</h2>
-              <span className="text-2xl font-mono">{ourGoals}</span>
+        <CardContent className="p-4 sm:p-6">
+          {/* Score display - mobile optimized */}
+          <div className="flex items-center justify-center gap-3 sm:gap-6 mb-4">
+            <div className="text-center flex-1 min-w-0">
+              <h2 className="text-sm sm:text-lg md:text-xl font-bold truncate">{fixture.teams.name}</h2>
+              <span className="text-2xl sm:text-3xl font-mono font-bold text-primary">{ourGoals}</span>
             </div>
-            <div className="text-center">
-              <Badge className={`${color} text-white text-lg px-4 py-2`}>
+            
+            <div className="flex flex-col items-center flex-shrink-0">
+              <Badge className={`${color} text-white text-sm sm:text-lg px-3 sm:px-4 py-1 sm:py-2`}>
                 {text}
               </Badge>
-              <div className="mt-2 text-sm text-muted-foreground">
-                Final Score: {ourGoals} - {opponentGoals}
+              <div className="mt-1 text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
+                {ourGoals} - {opponentGoals}
               </div>
             </div>
-            <div className="text-center">
-              <h2 className="text-xl font-bold">{fixture.opponent_name}</h2>
-              <span className="text-2xl font-mono">{opponentGoals}</span>
+            
+            <div className="text-center flex-1 min-w-0">
+              <h2 className="text-sm sm:text-lg md:text-xl font-bold truncate">{fixture.opponent_name}</h2>
+              <span className="text-2xl sm:text-3xl font-mono font-bold text-primary">{opponentGoals}</span>
             </div>
           </div>
 
-          <Separator className="my-4" />
+          <Separator className="my-3 sm:my-4" />
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              <span>{format(new Date(fixture.scheduled_date), 'dd/MM/yyyy HH:mm')}</span>
+          {/* Match details - wrap on mobile */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs sm:text-sm">
+            <div className="flex items-center gap-1.5">
+              <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground flex-shrink-0" />
+              <span className="whitespace-nowrap">{format(new Date(fixture.scheduled_date), 'dd MMM yyyy')}</span>
             </div>
-            <div className="flex items-center gap-2">
-              <MapPin className="h-4 w-4 text-muted-foreground" />
-              <span>{fixture.location || 'TBC'}</span>
+            <div className="flex items-center gap-1.5">
+              <MapPin className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground flex-shrink-0" />
+              <span className="truncate max-w-[120px] sm:max-w-none">{fixture.location || 'TBC'}</span>
             </div>
-            <div className="flex items-center gap-2">
-              <Trophy className="h-4 w-4 text-muted-foreground" />
-              <span>{fixture.competition_name || fixture.competition_type}</span>
+            <div className="flex items-center gap-1.5">
+              <Trophy className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground flex-shrink-0" />
+              <span className="truncate max-w-[120px] sm:max-w-none">{fixture.competition_name || fixture.competition_type}</span>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Match Events */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Target className="h-5 w-5" />
+          <CardHeader className="pb-3 sm:pb-6">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <Target className="h-4 w-4 sm:h-5 sm:w-5" />
               Match Events
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-3 sm:p-6 pt-0">
             {events.length === 0 ? (
-              <p className="text-muted-foreground text-center py-4">No events recorded</p>
+              <p className="text-muted-foreground text-center py-4 text-sm">No events recorded</p>
             ) : (
-              <div className="space-y-4">
-                {/* Period Sections */}
+              <div className="space-y-3 sm:space-y-4">
                 {(() => {
                   const byPeriod = getEventsByPeriod();
                   const orderedPeriods = [...periods];
-                  // If there are unassigned events, show them first
                   const unassigned = byPeriod['unassigned'] || [];
                   return (
-                    <div className="space-y-4">
+                    <div className="space-y-3 sm:space-y-4">
                       {unassigned.length > 0 && (
                         <div>
-                          <h4 className="font-medium text-sm mb-2">Unassigned Period</h4>
-                          <div className="space-y-2">
+                          <h4 className="font-medium text-xs sm:text-sm mb-2">Unassigned Period</h4>
+                          <div className="space-y-1.5 sm:space-y-2">
                             {unassigned.map((event) => (
-                              <div key={event.id} className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-mono font-bold text-xs bg-primary text-primary-foreground px-2 py-1 rounded">
+                              <div key={event.id} className="flex items-center justify-between p-2 bg-muted/50 rounded text-xs sm:text-sm gap-2">
+                                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                                  <span className="font-mono font-bold text-[10px] sm:text-xs bg-primary text-primary-foreground px-1.5 sm:px-2 py-0.5 sm:py-1 rounded flex-shrink-0">
                                     {event.total_match_minute}'
                                   </span>
-                                  <Target className="h-3 w-3" />
-                                  <span className={event.is_our_team ? 'text-green-600' : 'text-red-600'}>
+                                  <Target className="h-3 w-3 flex-shrink-0 hidden sm:block" />
+                                  <span className={`truncate ${event.is_our_team ? 'text-green-600' : 'text-red-600'}`}>
                                     {event.event_type === 'goal' ? 'Goal' : 'Assist'}
-                                    {event.is_penalty ? ' (Penalty)' : ''}
+                                    {event.is_penalty ? ' (P)' : ''}
                                   </span>
                                 </div>
-                                <div className="text-right">
+                                <div className="text-right flex-shrink-0 max-w-[45%]">
                                   {event.players && event.is_our_team ? (
-                                    <span className="font-medium">
+                                    <span className="font-medium truncate block text-xs sm:text-sm">
                                       {getPlayerName(event.players)}
                                     </span>
                                   ) : (
-                                    <span className="text-muted-foreground">
-                                      {event.is_our_team ? 'Unknown Player' : 'Opposition'}
+                                    <span className="text-muted-foreground text-xs sm:text-sm">
+                                      {event.is_our_team ? 'Unknown' : 'Opposition'}
                                     </span>
                                   )}
                                 </div>
@@ -487,28 +492,28 @@ export default function MatchReport() {
                         if (list.length === 0) return null;
                         return (
                           <div key={p.id}>
-                            <h4 className="font-medium text-sm mb-2">Period P{p.period_number}</h4>
-                            <div className="space-y-2">
+                            <h4 className="font-medium text-xs sm:text-sm mb-2">Period {p.period_number}</h4>
+                            <div className="space-y-1.5 sm:space-y-2">
                               {list.map((event) => (
-                                <div key={event.id} className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-mono font-bold text-xs bg-primary text-primary-foreground px-2 py-1 rounded">
+                                <div key={event.id} className="flex items-center justify-between p-2 bg-muted/50 rounded text-xs sm:text-sm gap-2">
+                                  <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                                    <span className="font-mono font-bold text-[10px] sm:text-xs bg-primary text-primary-foreground px-1.5 sm:px-2 py-0.5 sm:py-1 rounded flex-shrink-0">
                                       {event.total_match_minute}'
                                     </span>
-                                    <Target className="h-3 w-3" />
-                                    <span className={event.is_our_team ? 'text-green-600' : 'text-red-600'}>
+                                    <Target className="h-3 w-3 flex-shrink-0 hidden sm:block" />
+                                    <span className={`truncate ${event.is_our_team ? 'text-green-600' : 'text-red-600'}`}>
                                       {event.event_type === 'goal' ? 'Goal' : 'Assist'}
-                                      {event.is_penalty ? ' (Penalty)' : ''}
+                                      {event.is_penalty ? ' (P)' : ''}
                                     </span>
                                   </div>
-                                  <div className="text-right">
+                                  <div className="text-right flex-shrink-0 max-w-[45%]">
                                     {event.players && event.is_our_team ? (
-                                      <span className="font-medium">
+                                      <span className="font-medium truncate block text-xs sm:text-sm">
                                         {getPlayerName(event.players)}
                                       </span>
                                     ) : (
-                                      <span className="text-muted-foreground">
-                                        {event.is_our_team ? 'Unknown Player' : 'Opposition'}
+                                      <span className="text-muted-foreground text-xs sm:text-sm">
+                                        {event.is_our_team ? 'Unknown' : 'Opposition'}
                                       </span>
                                     )}
                                   </div>
@@ -528,41 +533,41 @@ export default function MatchReport() {
 
         {/* Playing Time */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5" />
+          <CardHeader className="pb-3 sm:pb-6">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <Clock className="h-4 w-4 sm:h-5 sm:w-5" />
               Playing Time
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <ScrollArea className="h-96">
+          <CardContent className="p-3 sm:p-6 pt-0">
+            <ScrollArea className="h-80 sm:h-96">
               {playerTimes.length === 0 ? (
-                <p className="text-muted-foreground text-center py-4">No player time data available</p>
+                <p className="text-muted-foreground text-center py-4 text-sm">No player time data available</p>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2 sm:space-y-3">
                   {playerTimes.map((playerTime) => (
-                    <div key={playerTime.player_id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                      <div className="flex items-center gap-3">
+                    <div key={playerTime.player_id} className="flex items-center justify-between p-2.5 sm:p-3 bg-muted/50 rounded-lg gap-2">
+                      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                         {playerTime.players.jersey_number && (
-                          <Badge variant="outline" className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-mono">
+                          <Badge variant="outline" className="w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-[10px] sm:text-xs font-mono flex-shrink-0 p-0">
                             {playerTime.players.jersey_number}
                           </Badge>
                         )}
-                        <div>
-                          <div className="font-medium">
+                        <div className="min-w-0">
+                          <div className="font-medium text-sm sm:text-base truncate">
                             {playerTime.players.first_name} {playerTime.players.last_name}
                           </div>
-                          <div className="text-sm text-muted-foreground">
-                            {playerTime.is_starter ? 'Starter' : 'Substitute'}
+                          <div className="text-xs text-muted-foreground">
+                            {playerTime.is_starter ? 'Starter' : 'Sub'}
                           </div>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className="font-bold text-lg">{playerTime.total_minutes} min</div>
+                      <div className="text-right flex-shrink-0">
+                        <div className="font-bold text-base sm:text-lg">{playerTime.total_minutes}m</div>
                         {playerTime.time_on !== null && (
-                          <div className="text-xs text-muted-foreground">
+                          <div className="text-[10px] sm:text-xs text-muted-foreground whitespace-nowrap">
                             {playerTime.time_on !== null && `On: ${playerTime.time_on}'`}
-                            {playerTime.time_off !== null && ` • Off: ${playerTime.time_off}'`}
+                            {playerTime.time_off !== null && ` Off: ${playerTime.time_off}'`}
                           </div>
                         )}
                       </div>
@@ -577,31 +582,31 @@ export default function MatchReport() {
 
       {/* Summary Stats */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
+        <CardHeader className="pb-3 sm:pb-6">
+          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <Users className="h-4 w-4 sm:h-5 sm:w-5" />
             Match Summary
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-            <div>
-              <div className="text-2xl font-bold text-green-600">{ourGoals}</div>
-              <div className="text-sm text-muted-foreground">Our Goals</div>
+        <CardContent className="p-3 sm:p-6 pt-0">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 text-center">
+            <div className="p-2 sm:p-3 bg-muted/50 rounded-lg">
+              <div className="text-xl sm:text-2xl font-bold text-green-600">{ourGoals}</div>
+              <div className="text-[10px] sm:text-sm text-muted-foreground">Our Goals</div>
             </div>
-            <div>
-              <div className="text-2xl font-bold text-red-600">{opponentGoals}</div>
-              <div className="text-sm text-muted-foreground">Opposition Goals</div>
+            <div className="p-2 sm:p-3 bg-muted/50 rounded-lg">
+              <div className="text-xl sm:text-2xl font-bold text-red-600">{opponentGoals}</div>
+              <div className="text-[10px] sm:text-sm text-muted-foreground">Opposition</div>
             </div>
-            <div>
-              <div className="text-2xl font-bold">
+            <div className="p-2 sm:p-3 bg-muted/50 rounded-lg">
+              <div className="text-xl sm:text-2xl font-bold">
                 {events.filter(e => e.is_our_team && e.event_type === 'assist').length}
               </div>
-              <div className="text-sm text-muted-foreground">Our Assists</div>
+              <div className="text-[10px] sm:text-sm text-muted-foreground">Assists</div>
             </div>
-            <div>
-              <div className="text-2xl font-bold">{playerTimes.filter(p => p.is_starter).length}</div>
-              <div className="text-sm text-muted-foreground">Starting Players</div>
+            <div className="p-2 sm:p-3 bg-muted/50 rounded-lg">
+              <div className="text-xl sm:text-2xl font-bold">{playerTimes.filter(p => p.is_starter).length}</div>
+              <div className="text-[10px] sm:text-sm text-muted-foreground">Starters</div>
             </div>
           </div>
         </CardContent>
