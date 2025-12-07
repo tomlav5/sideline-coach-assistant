@@ -8,6 +8,8 @@ import { SubstitutionDialog } from '@/components/match/SubstitutionDialog';
 import { MatchLockingBanner } from '@/components/match/MatchLockingBanner';
 import { QuickGoalButton } from '@/components/match/QuickGoalButton';
 import { UndoButton } from '@/components/match/UndoButton';
+import { FixedMatchHeader } from '@/components/match/FixedMatchHeader';
+import { BottomActionBar } from '@/components/match/BottomActionBar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -655,48 +657,29 @@ export default function EnhancedMatchTracker() {
     );
   }
 
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   return (
-    <div className="container mx-auto p-3 sm:p-4 space-y-4 sm:space-y-6 max-w-4xl">
-      {/* Match Header - Centered and Mobile-Optimized */}
-      <Card>
-        <CardContent className="p-4 sm:p-6">
-          <div className="text-center space-y-4">
-            {/* Team Names and Score */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4">
-              <h1 className="text-lg sm:text-xl font-semibold truncate max-w-full">
-                {fixture.teams?.name}
-              </h1>
-              <div className="text-sm text-muted-foreground">vs</div>
-              <h1 className="text-lg sm:text-xl font-semibold truncate max-w-full">
-                {fixture.opponent_name}
-              </h1>
-            </div>
-            
-            {/* Score Display - Prominent and Centered */}
-            <div className="flex items-center justify-center">
-              <Badge variant="outline" className="text-3xl sm:text-4xl font-bold px-4 py-2">
-                {ourGoals} - {opponentGoals}
-              </Badge>
-            </div>
-            
-            {/* Match Stats */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 pt-2">
-              <div className="flex items-center justify-center gap-2 text-sm">
-                <Clock className="h-4 w-4 text-muted-foreground" />
-                <span>Total Time: {Math.floor(totalMatchMinute)} minutes</span>
-              </div>
-              <div className="flex items-center justify-center gap-2 text-sm">
-                <Users className="h-4 w-4 text-muted-foreground" />
-                <span>{players.length} players available</span>
-              </div>
-              <div className="flex items-center justify-center gap-2 text-sm">
-                <Target className="h-4 w-4 text-muted-foreground" />
-                <span>{events.length} events recorded</span>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+    <div className="min-h-screen flex flex-col">
+      {/* Fixed Header with Score and Timer */}
+      <FixedMatchHeader
+        teamName={fixture.teams?.name || 'Team'}
+        opponentName={fixture.opponent_name || 'Opponent'}
+        ourScore={ourGoals}
+        opponentScore={opponentGoals}
+        currentTime={formatTime(currentMinute * 60)}
+        totalTime={formatTime(totalMatchMinute * 60)}
+        periodNumber={currentPeriodNumber}
+        matchStatus={fixture.status || 'scheduled'}
+      />
+
+      {/* Scrollable Content Area */}
+      <div className="flex-1 overflow-y-auto pb-24">
+        <div className="container mx-auto p-3 sm:p-4 space-y-4 max-w-4xl">
 
       {/* Match Locking Banner */}
       <MatchLockingBanner
@@ -1139,6 +1122,27 @@ export default function EnhancedMatchTracker() {
         remainingSeconds={remainingSeconds}
         description={currentAction?.description}
         onUndo={performUndo}
+      />
+
+        </div>
+      </div>
+
+      {/* Bottom Action Bar - Fixed */}
+      <BottomActionBar
+        onQuickGoal={() => {
+          // Open quick goal dialog
+          const onFieldPlayers = activePlayersList.length > 0 ? activePlayersList : players;
+          if (onFieldPlayers.length > 0) {
+            // Trigger QuickGoalButton via state
+            setShowEventDialog(true);
+          }
+        }}
+        onSubstitution={async () => {
+          await refreshPlayerStatusLists();
+          setSubDialogOpen(true);
+        }}
+        onOtherEvent={() => setShowEventDialog(true)}
+        disabled={!matchTracker?.isActiveTracker && (fixture?.status === 'in_progress' || fixture?.status === 'live')}
       />
     </div>
   );
