@@ -6,6 +6,8 @@ import { EnhancedEventDialog } from '@/components/match/EnhancedEventDialog';
 import { RetrospectiveMatchDialog } from '@/components/fixtures/RetrospectiveMatchDialog';
 import { SubstitutionDialog } from '@/components/match/SubstitutionDialog';
 import { MatchLockingBanner } from '@/components/match/MatchLockingBanner';
+import { QuickGoalButton } from '@/components/match/QuickGoalButton';
+import { UndoButton } from '@/components/match/UndoButton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +25,8 @@ import { toast } from 'sonner';
 import { Clock, Users, Target, History, ArrowUpDown, RotateCcw } from 'lucide-react';
 import { useRealtimeMatchSync } from '@/hooks/useRealtimeMatchSync';
 import { useWakeLock } from '@/hooks/useWakeLock';
+import { useUndoStack } from '@/hooks/useUndoStack';
+import { useEditMatchData } from '@/hooks/useEditMatchData';
 
 interface Player {
   id: string;
@@ -59,6 +63,12 @@ export default function EnhancedMatchTracker() {
   const { fixtureId } = useParams<{ fixtureId: string }>();
   const navigate = useNavigate();
   const { isSupported: wakeLockSupported, requestWakeLock, releaseWakeLock } = useWakeLock();
+  
+  // Undo system for quick reversal of actions
+  const { canUndo, isUndoing, currentAction, remainingSeconds, pushUndo, performUndo } = useUndoStack();
+  
+  // Edit capabilities for undo functionality
+  const { deleteEvent } = useEditMatchData();
   
   const [fixture, setFixture] = useState<any>(null);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -210,6 +220,71 @@ export default function EnhancedMatchTracker() {
       setEvents(eventsData || []);
     } catch (error) {
       console.error('Error loading events:', error);
+    }
+  };
+
+  // Quick goal recording - one-tap for fast goal entry
+  const handleQuickGoal = async (playerId: string) => {
+    try {
+      // Get current period
+      const { data: activePeriod } = await supabase
+        .from('match_periods')
+        .select('*')
+        .eq('fixture_id', fixtureId)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (!activePeriod) {
+        toast.error('No active period - start a period first');
+        return;
+      }
+
+      // Generate unique client event ID
+      const clientEventId = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+        ? (crypto as any).randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+      // Create goal event
+      const { data: newEvent, error } = await supabase
+        .from('match_events')
+        .insert({
+          fixture_id: fixtureId,
+          period_id: activePeriod.id,
+          event_type: 'goal',
+          player_id: playerId,
+          minute_in_period: currentMinute,
+          total_match_minute: totalMatchMinute,
+          is_our_team: true,
+          is_penalty: false,
+          is_retrospective: false,
+          client_event_id: clientEventId,
+        })
+        .select('id, player_id')
+        .single();
+
+      if (error) throw error;
+
+      // Add to undo stack
+      const player = players.find(p => p.id === playerId);
+      const playerName = player ? `${player.first_name} ${player.last_name}` : 'Unknown';
+      
+      pushUndo({
+        type: 'event',
+        description: `Goal by ${playerName}`,
+        undo: async () => {
+          await deleteEvent(newEvent.id);
+          await loadEvents();
+        },
+      });
+
+      // Reload events
+      await loadEvents();
+      
+      toast.success(`⚽ Goal recorded for ${playerName}!`);
+    } catch (error: any) {
+      console.error('Error recording quick goal:', error);
+      toast.error(error?.message || 'Failed to record goal');
+      throw error;
     }
   };
 
@@ -639,50 +714,65 @@ export default function EnhancedMatchTracker() {
         forceRefresh={matchTracker?.isActiveTracker}
       />
 
-      {/* Action Buttons - placed beneath timer controls */}
-      <div className="flex flex-col sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-3">
-        <Button
-          onClick={() => setShowEventDialog(true)}
-          className="flex items-center justify-center gap-2 w-full min-h-[44px]"
+      {/* Quick Action Buttons - Large, Thumb-Friendly */}
+      <div className="space-y-4">
+        {/* Quick Goal Button - Primary Action */}
+        <QuickGoalButton
+          players={activePlayersList.length > 0 ? activePlayersList : players}
+          onGoalScored={handleQuickGoal}
           disabled={!matchTracker?.isActiveTracker && (fixture?.status === 'in_progress' || fixture?.status === 'live')}
-        >
-          <Target className="h-4 w-4" />
-          Record Event
-        </Button>
-        
-        <Button
-          onClick={() => setShowRetrospectiveDialog(true)}
-          variant="outline"
-          className="flex items-center justify-center gap-2 w-full min-h-[44px]"
-          disabled={!matchTracker?.isActiveTracker && (fixture?.status === 'in_progress' || fixture?.status === 'live')}
-        >
-          <History className="h-4 w-4" />
-          Record Event Manually
-        </Button>
+        />
 
-        <Button
-          onClick={async () => {
-            // Ensure player statuses are current before opening dialog
-            await refreshPlayerStatusLists();
-            setSubDialogOpen(true);
-          }}
-          variant="secondary"
-          className="flex items-center justify-center gap-2 w-full min-h-[44px]"
-          disabled={!matchTracker?.isActiveTracker && (fixture?.status === 'in_progress' || fixture?.status === 'live')}
-        >
-          <ArrowUpDown className="h-4 w-4" />
-          Substitution
-        </Button>
+        {/* Secondary Actions - Grouped */}
+        <div className="grid grid-cols-2 gap-3">
+          <Button
+            onClick={() => setShowEventDialog(true)}
+            variant="outline"
+            className="flex items-center justify-center gap-2 h-14 text-base"
+            disabled={!matchTracker?.isActiveTracker && (fixture?.status === 'in_progress' || fixture?.status === 'live')}
+          >
+            <Target className="h-5 w-5" />
+            Other Event
+          </Button>
 
-        <Button
-          onClick={() => navigate(`/match-report/${fixtureId}`, { 
-            state: { from: 'match-tracker' } 
-          })}
-          variant="outline"
-          className="flex items-center justify-center gap-2 w-full min-h-[44px]"
-        >
-          View Report
-        </Button>
+          <Button
+            onClick={async () => {
+              await refreshPlayerStatusLists();
+              setSubDialogOpen(true);
+            }}
+            variant="outline"
+            className="flex items-center justify-center gap-2 h-14 text-base border-yellow-600 text-yellow-700 hover:bg-yellow-50 dark:border-yellow-500 dark:text-yellow-400 dark:hover:bg-yellow-950"
+            disabled={!matchTracker?.isActiveTracker && (fixture?.status === 'in_progress' || fixture?.status === 'live')}
+          >
+            <ArrowUpDown className="h-5 w-5" />
+            Substitution
+          </Button>
+        </div>
+
+        {/* Tertiary Actions */}
+        <div className="flex gap-3">
+          <Button
+            onClick={() => setShowRetrospectiveDialog(true)}
+            variant="ghost"
+            size="sm"
+            className="flex-1 h-10"
+            disabled={!matchTracker?.isActiveTracker && (fixture?.status === 'in_progress' || fixture?.status === 'live')}
+          >
+            <History className="h-4 w-4 mr-2" />
+            Manual Entry
+          </Button>
+
+          <Button
+            onClick={() => navigate(`/match-report/${fixtureId}`, { 
+              state: { from: 'match-tracker' } 
+            })}
+            variant="ghost"
+            size="sm"
+            className="flex-1 h-10"
+          >
+            View Report
+          </Button>
+        </div>
       </div>
 
       {/* Match Management Buttons - Centered */}
@@ -1041,6 +1131,15 @@ export default function EnhancedMatchTracker() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Undo Button - Floating */}
+      <UndoButton
+        canUndo={canUndo}
+        isUndoing={isUndoing}
+        remainingSeconds={remainingSeconds}
+        description={currentAction?.description}
+        onUndo={performUndo}
+      />
     </div>
   );
 }

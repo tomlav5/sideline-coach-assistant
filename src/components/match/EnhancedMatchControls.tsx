@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader as AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useEnhancedMatchTimer } from '@/hooks/useEnhancedMatchTimer';
-import { Play, Pause, Square, Plus, Timer, RefreshCw } from 'lucide-react';
+import { Play, Pause, Square, Plus, Timer, RefreshCw, AlertTriangle } from 'lucide-react';
 import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -141,14 +141,13 @@ export function EnhancedMatchControls({ fixtureId, onTimerUpdate, forceRefresh }
 
         {/* Control Buttons */}
         <div className="space-y-2">
-          {/* Start Period / Pause Period Button */}
+          {/* Start Period Button - Large, Green, Safe */}
           {canStartPeriod && (
             <Button
               onClick={handleStartNewPeriod}
-              className="w-full flex items-center justify-center gap-2"
-              size="lg"
+              className="w-full flex items-center justify-center gap-2 h-14 text-base font-semibold bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800"
             >
-              <Play className="h-4 w-4" />
+              <Play className="h-5 w-5" />
               Start Period
             </Button>
           )}
@@ -157,10 +156,9 @@ export function EnhancedMatchControls({ fixtureId, onTimerUpdate, forceRefresh }
             <Button
               onClick={pauseTimer}
               variant="secondary"
-              className="w-full flex items-center justify-center gap-2"
-              size="lg"
+              className="w-full flex items-center justify-center gap-2 h-12 text-base"
             >
-              <Pause className="h-4 w-4" />
+              <Pause className="h-5 w-5" />
               Pause Period
             </Button>
           )}
@@ -168,10 +166,9 @@ export function EnhancedMatchControls({ fixtureId, onTimerUpdate, forceRefresh }
           {canResumePeriod && (
             <Button
               onClick={resumeTimer}
-              className="w-full flex items-center justify-center gap-2"
-              size="lg"
+              className="w-full flex items-center justify-center gap-2 h-14 text-base font-semibold bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800"
             >
-              <Play className="h-4 w-4" />
+              <Play className="h-5 w-5" />
               Resume Period
             </Button>
           )}
@@ -187,27 +184,44 @@ export function EnhancedMatchControls({ fixtureId, onTimerUpdate, forceRefresh }
             Refresh Timer State
           </Button>
 
-          {/* End Period Button */}
+          {/* End Period Button - Yellow, Requires Confirmation */}
           {canEndPeriod && (
-            <Button
-              onClick={endCurrentPeriod}
-              variant="outline"
-              className="w-full flex items-center justify-center gap-2"
-            >
-              <Square className="h-4 w-4" />
-              End Period
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-full flex items-center justify-center gap-2 h-12 border-yellow-600 text-yellow-700 hover:bg-yellow-50 dark:border-yellow-500 dark:text-yellow-400 dark:hover:bg-yellow-950"
+                >
+                  <AlertTriangle className="h-5 w-5" />
+                  End Period
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>End Current Period?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will stop the timer and close the current period. Player times will be recorded. You can start a new period afterward.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={endCurrentPeriod}>
+                    Yes, End Period
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           )}
 
-          {/* End Match Button with confirmation */}
+          {/* End Match Button - Red, Destructive, Strong Confirmation */}
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button
                 variant="destructive"
                 disabled={!canEndMatch}
-                className="w-full flex items-center justify-center gap-2"
+                className="w-full flex items-center justify-center gap-2 h-12 text-base font-semibold mt-2"
               >
-                <Square className="h-4 w-4" />
+                <Square className="h-5 w-5" />
                 End Match
               </Button>
             </AlertDialogTrigger>
