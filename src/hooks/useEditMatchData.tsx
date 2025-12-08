@@ -9,18 +9,21 @@ export function useEditMatchData() {
 
   // Refresh all reports after any edit
   const refreshReports = async () => {
-    try {
-      await supabase.rpc('refresh_report_views');
-      
-      // Invalidate relevant query caches
-      queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
-      queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
-      queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
-      queryClient.invalidateQueries({ queryKey: ['competitions'] });
-      queryClient.invalidateQueries({ queryKey: ['match-report'] });
-    } catch (error) {
-      console.error('Error refreshing report views:', error);
-    }
+    // HOTFIX: Disabled - analytics schema and materialized views don't exist
+    // TODO: Re-enable after Phase 2 database migration
+    // try {
+    //   await supabase.rpc('refresh_report_views');
+    // } catch (error) {
+    //   console.error('Error refreshing report views:', error);
+    // }
+    console.log('Skipping view refresh - analytics schema not yet created');
+    
+    // Invalidate relevant query caches
+    queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
+    queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
+    queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
+    queryClient.invalidateQueries({ queryKey: ['competitions'] });
+    queryClient.invalidateQueries({ queryKey: ['match-report'] });
   };
 
   // ==================== EVENTS ====================

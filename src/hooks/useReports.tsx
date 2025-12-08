@@ -216,11 +216,13 @@ export function useCompetitions(options?: { enabled?: boolean }) {
 // Hook to refresh materialized views when data changes
 export function useRefreshReports() {
   return async () => {
-    try {
-      await supabase.rpc('refresh_report_views');
-    } catch (error) {
-      // Log but don't throw - views have auto-refresh triggers
-      console.warn('Failed to refresh report views (non-critical):', error);
-    }
+    // HOTFIX: Disabled - analytics schema and materialized views don't exist
+    // TODO: Re-enable after Phase 2 database migration
+    // try {
+    //   await supabase.rpc('refresh_report_views');
+    // } catch (error) {
+    //   console.warn('Failed to refresh report views (non-critical):', error);
+    // }
+    console.log('Skipping view refresh - analytics schema not yet created');
   };
 }

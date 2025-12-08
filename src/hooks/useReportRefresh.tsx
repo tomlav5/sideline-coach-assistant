@@ -17,23 +17,20 @@ export function useReportRefresh() {
     }
     
     debounceTimeoutRef.current = setTimeout(async () => {
-      try {
-        // Refresh materialized views first
-        await supabase.rpc('refresh_report_views');
-        
-        // Then invalidate specific query keys
-        queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
-        queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
-        queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
-        queryClient.invalidateQueries({ queryKey: ['competitions'] });
-      } catch (error) {
-        console.error('Error refreshing report views:', error);
-        // Still invalidate cache even if refresh fails
-        queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
-        queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
-        queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
-        queryClient.invalidateQueries({ queryKey: ['competitions'] });
-      }
+      // HOTFIX: Disabled - analytics schema and materialized views don't exist
+      // TODO: Re-enable after Phase 2 database migration
+      // try {
+      //   await supabase.rpc('refresh_report_views');
+      // } catch (error) {
+      //   console.error('Error refreshing report views:', error);
+      // }
+      console.log('Skipping view refresh - analytics schema not yet created');
+      
+      // Invalidate query caches
+      queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
+      queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
+      queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
+      queryClient.invalidateQueries({ queryKey: ['competitions'] });
     }, 2000); // 2 second debounce
   }, [queryClient]);
 
@@ -110,15 +107,16 @@ export function useManualReportRefresh() {
   const queryClient = useQueryClient();
   
   return useCallback(async () => {
-    try {
-      // Refresh materialized views (with error tolerance)
-      await supabase.rpc('refresh_report_views');
-    } catch (refreshError) {
-      // Log but don't fail - views have auto-refresh triggers
-      console.warn('Failed to refresh report views (non-critical):', refreshError);
-    }
+    // HOTFIX: Disabled - analytics schema and materialized views don't exist
+    // TODO: Re-enable after Phase 2 database migration
+    // try {
+    //   await supabase.rpc('refresh_report_views');
+    // } catch (refreshError) {
+    //   console.warn('Failed to refresh report views (non-critical):', refreshError);
+    // }
+    console.log('Skipping manual view refresh - analytics schema not yet created');
     
-    // Always invalidate caches regardless of refresh success
+    // Always invalidate caches
     queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
     queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
     queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });

@@ -171,18 +171,20 @@ export function useRetrospectiveMatch() {
         if (timeLogsError) throw timeLogsError;
       }
 
-      // Refresh materialized views for reports
-      try {
-        await supabase.rpc('refresh_report_views');
-        
-        // Invalidate relevant query caches
-        queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
-        queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
-        queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
-        queryClient.invalidateQueries({ queryKey: ['competitions'] });
-      } catch (refreshError) {
-        console.error('Error refreshing report views:', refreshError);
-      }
+      // HOTFIX: Disabled - analytics schema and materialized views don't exist
+      // TODO: Re-enable after Phase 2 database migration
+      // try {
+      //   await supabase.rpc('refresh_report_views');
+      // } catch (refreshError) {
+      //   console.error('Error refreshing report views:', refreshError);
+      // }
+      console.log('Skipping view refresh - analytics schema not yet created');
+      
+      // Invalidate relevant query caches
+      queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
+      queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
+      queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
+      queryClient.invalidateQueries({ queryKey: ['competitions'] });
 
       toast.success('Retrospective match data saved successfully');
       return true;
