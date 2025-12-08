@@ -9,18 +9,19 @@ export function useEditMatchData() {
 
   // Refresh all reports after any edit
   const refreshReports = async () => {
+    // Phase 2: Re-enabled with analytics infrastructure
     try {
       await supabase.rpc('refresh_report_views');
-      
-      // Invalidate relevant query caches
-      queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
-      queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
-      queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
-      queryClient.invalidateQueries({ queryKey: ['competitions'] });
-      queryClient.invalidateQueries({ queryKey: ['match-report'] });
     } catch (error) {
-      console.error('Error refreshing report views:', error);
+      console.warn('Error refreshing report views (non-critical):', error);
     }
+    
+    // Invalidate relevant query caches
+    queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
+    queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
+    queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
+    queryClient.invalidateQueries({ queryKey: ['competitions'] });
+    queryClient.invalidateQueries({ queryKey: ['match-report'] });
   };
 
   // ==================== EVENTS ====================

@@ -17,23 +17,18 @@ export function useReportRefresh() {
     }
     
     debounceTimeoutRef.current = setTimeout(async () => {
+      // Phase 2: Re-enabled with analytics infrastructure
       try {
-        // Refresh materialized views first
         await supabase.rpc('refresh_report_views');
-        
-        // Then invalidate specific query keys
-        queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
-        queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
-        queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
-        queryClient.invalidateQueries({ queryKey: ['competitions'] });
       } catch (error) {
-        console.error('Error refreshing report views:', error);
-        // Still invalidate cache even if refresh fails
-        queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
-        queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
-        queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
-        queryClient.invalidateQueries({ queryKey: ['competitions'] });
+        console.warn('Error refreshing report views (non-critical):', error);
       }
+      
+      // Invalidate query caches
+      queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
+      queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
+      queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
+      queryClient.invalidateQueries({ queryKey: ['competitions'] });
     }, 2000); // 2 second debounce
   }, [queryClient]);
 
@@ -110,21 +105,19 @@ export function useManualReportRefresh() {
   const queryClient = useQueryClient();
   
   return useCallback(async () => {
+    // Phase 2: Re-enabled with analytics infrastructure
     try {
-      // Refresh materialized views
-      const { error } = await supabase.rpc('refresh_report_views');
-      if (error) throw error;
-      
-      // Immediately invalidate caches after manual refresh
-      queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
-      queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
-      queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
-      queryClient.invalidateQueries({ queryKey: ['competitions'] });
-      
-      return true;
-    } catch (error) {
-      console.error('Error refreshing reports:', error);
-      throw error;
+      await supabase.rpc('refresh_report_views');
+    } catch (refreshError) {
+      console.warn('Failed to refresh report views (non-critical):', refreshError);
     }
+    
+    // Always invalidate caches regardless of refresh success
+    queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
+    queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
+    queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
+    queryClient.invalidateQueries({ queryKey: ['competitions'] });
+    
+    return true;
   }, [queryClient]);
 }

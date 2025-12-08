@@ -155,7 +155,7 @@ export default function MatchReport() {
             last_name,
             jersey_number
           ),
-          match_periods!fk_match_events_period_id (
+          match_periods!match_events_period_id_fkey (
             period_number
           )
         `)

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
+import { generateUUID } from '@/lib/uuid';
 
 interface RetrospectiveMatchData {
   fixture_id: string;
@@ -52,23 +53,39 @@ export function useRetrospectiveMatch() {
 
       if (fixtureError) throw fixtureError;
 
-      // Create periods
-      const periodsToInsert = data.periods.map(period => ({
-        fixture_id: data.fixture_id,
-        period_number: period.period_number,
-        planned_duration_minutes: period.duration_minutes,
-        actual_start_time: new Date().toISOString(), // Placeholder
-        actual_end_time: new Date().toISOString(), // Placeholder
-        is_active: false,
-        total_paused_seconds: 0,
-      }));
-
-      const { data: insertedPeriods, error: periodsError } = await supabase
+      // Check for existing periods first to avoid duplicate key errors
+      const { data: existingPeriods } = await supabase
         .from('match_periods')
-        .insert(periodsToInsert)
-        .select();
+        .select('id, period_number')
+        .eq('fixture_id', data.fixture_id);
 
-      if (periodsError) throw periodsError;
+      const existingPeriodNumbers = new Set(existingPeriods?.map(p => p.period_number) || []);
+
+      // Only insert periods that don't already exist
+      const periodsToInsert = data.periods
+        .filter(period => !existingPeriodNumbers.has(period.period_number))
+        .map(period => ({
+          fixture_id: data.fixture_id,
+          period_number: period.period_number,
+          planned_duration_minutes: period.duration_minutes,
+          actual_start_time: new Date().toISOString(), // Placeholder
+          actual_end_time: new Date().toISOString(), // Placeholder
+          is_active: false,
+          total_paused_seconds: 0,
+        }));
+
+      let insertedPeriods = existingPeriods || [];
+
+      // Only insert if there are new periods to add
+      if (periodsToInsert.length > 0) {
+        const { data: newPeriods, error: periodsError } = await supabase
+          .from('match_periods')
+          .insert(periodsToInsert)
+          .select();
+
+        if (periodsError) throw periodsError;
+        insertedPeriods = [...existingPeriods || [], ...newPeriods || []];
+      }
 
       // Create events with calculated total match minutes (idempotent via client_event_id)
       let totalMinutes = 0;
@@ -87,9 +104,7 @@ export function useRetrospectiveMatch() {
         
         const totalMatchMinute = previousPeriodsTime + event.minute_in_period;
 
-        const clientEventId = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
-          ? (crypto as any).randomUUID()
-          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const clientEventId = generateUUID();
 
         eventsToInsert.push({
           fixture_id: data.fixture_id,
@@ -156,18 +171,18 @@ export function useRetrospectiveMatch() {
         if (timeLogsError) throw timeLogsError;
       }
 
-      // Refresh materialized views for reports
+      // Phase 2: Re-enabled with analytics infrastructure
       try {
         await supabase.rpc('refresh_report_views');
-        
-        // Invalidate relevant query caches
-        queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
-        queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
-        queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
-        queryClient.invalidateQueries({ queryKey: ['competitions'] });
       } catch (refreshError) {
-        console.error('Error refreshing report views:', refreshError);
+        console.warn('Error refreshing report views (non-critical):', refreshError);
       }
+      
+      // Invalidate relevant query caches
+      queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
+      queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
+      queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
+      queryClient.invalidateQueries({ queryKey: ['competitions'] });
 
       toast.success('Retrospective match data saved successfully');
       return true;

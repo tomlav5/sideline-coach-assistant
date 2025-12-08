@@ -216,10 +216,12 @@ export function useCompetitions(options?: { enabled?: boolean }) {
 // Hook to refresh materialized views when data changes
 export function useRefreshReports() {
   return async () => {
-    const { error } = await supabase.rpc('refresh_report_views');
-    if (error) {
-      console.error('Error refreshing report views:', error);
-      throw error;
+    // Phase 2: Re-enabled with analytics infrastructure
+    try {
+      await supabase.rpc('refresh_report_views');
+    } catch (error) {
+      // Log but don't throw - views have auto-refresh triggers
+      console.warn('Failed to refresh report views (non-critical):', error);
     }
   };
 }

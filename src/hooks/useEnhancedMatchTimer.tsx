@@ -435,8 +435,14 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
         })
         .eq('id', fixtureId);
 
-      // Refresh materialized views for reports
-      await supabase.rpc('refresh_report_views');
+      // Refresh materialized views for reports (Phase 2: Re-enabled with analytics infrastructure)
+      try {
+        await supabase.rpc('refresh_report_views');
+      } catch (refreshError: any) {
+        // Log but don't fail the match completion if view refresh fails
+        console.warn('Failed to refresh report views (non-critical):', refreshError);
+        // Views will be refreshed by triggers or next manual refresh
+      }
       
       // Invalidate relevant query caches
       queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
@@ -444,9 +450,16 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
       queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
       queryClient.invalidateQueries({ queryKey: ['competitions'] });
       toast({ title: 'Match completed', description: 'Match has been marked as completed.' });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error ending match:', error);
-      toast({ title: 'Error', description: 'Failed to end match', variant: 'destructive' });
+      const errorMessage = error?.message || 'Failed to end match';
+      toast({ 
+        title: 'Error', 
+        description: errorMessage.includes('relationship') 
+          ? 'Match completed but report update failed. Reports will update automatically.' 
+          : errorMessage, 
+        variant: 'destructive' 
+      });
     } finally {
       isFinalizingRef.current = false;
     }

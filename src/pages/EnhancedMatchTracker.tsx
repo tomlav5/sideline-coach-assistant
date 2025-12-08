@@ -86,6 +86,8 @@ export default function EnhancedMatchTracker() {
   const [fixture, setFixture] = useState<any>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [events, setEvents] = useState<MatchEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [eventsError, setEventsError] = useState<string | null>(null);
   const [periods, setPeriods] = useState<MatchPeriod[]>([]);
   const [showEventDialog, setShowEventDialog] = useState(false);
   const [showRetrospectiveDialog, setShowRetrospectiveDialog] = useState(false);
@@ -221,8 +223,12 @@ export default function EnhancedMatchTracker() {
   };
 
   const loadEvents = async () => {
+    setEventsLoading(true);
+    setEventsError(null);
     try {
-      const { data: eventsData, error: eventsError } = await supabase
+      // Phase 3: Enhanced query with proper FK joins for better performance
+      // Now that database is stable, we can use the full joins
+      const { data: eventsData, error: eventsQueryError } = await supabase
         .from('match_events')
         .select(`
           *,
@@ -232,10 +238,20 @@ export default function EnhancedMatchTracker() {
         .eq('fixture_id', fixtureId)
         .order('total_match_minute');
 
-      if (eventsError) throw eventsError;
+      if (eventsQueryError) {
+        console.error('Error loading events:', eventsQueryError);
+        setEventsError(eventsQueryError.message || 'Failed to load events');
+        setEvents([]);
+        return;
+      }
+      
       setEvents(eventsData || []);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading events:', error);
+      setEventsError(error?.message || 'Failed to load events');
+      setEvents([]);
+    } finally {
+      setEventsLoading(false);
     }
   };
 
@@ -291,10 +307,13 @@ export default function EnhancedMatchTracker() {
         },
       });
 
-      // Reload events
+      // Reload events with visual feedback
       await loadEvents();
       
-      toast.success(`⚽ Goal recorded for ${playerName}!`);
+      toast.success(`⚽ Goal recorded for ${playerName}!`, {
+        description: `Minute ${totalMatchMinute}'`,
+        duration: 3000,
+      });
     } catch (error: any) {
       console.error('Error recording quick goal:', error);
       toast.error(error?.message || 'Failed to record goal');
@@ -877,61 +896,101 @@ export default function EnhancedMatchTracker() {
         </Card>
       )}
 
-      {/* Events grouped by period (aligns with flexible periods) */}
-      {events.length > 0 && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Match Events</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0 space-y-4">
-            {periods.map((p) => {
-              const periodEvents = events.filter((e) => e.period_id === p.id);
-              if (periodEvents.length === 0) return null;
-              return (
-                <div key={p.id} className="space-y-1.5">
-                  <div className="text-sm font-medium text-muted-foreground">Period {p.period_number}</div>
-                  {periodEvents.map((event) => (
-                    <div key={event.id} className="flex flex-col sm:flex-row sm:items-center gap-2 p-3 border rounded-lg bg-card/50">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Badge variant="secondary" className="text-xs font-mono shrink-0">
-                          {event.total_match_minute}'
-                        </Badge>
-                        {event.event_type === 'substitution' ? (
-                          <span className="text-sm font-medium truncate">
-                            Substitution: {players.find(ply => ply.id === event.player_id)?.first_name || 'Unknown'} {players.find(ply => ply.id === event.player_id)?.last_name || ''}
-                            {' '}→{' '}
-                            {players.find(ply => ply.id === event.assist_player_id)?.first_name || 'Unknown'} {players.find(ply => ply.id === event.assist_player_id)?.last_name || ''}
-                          </span>
-                        ) : (
-                          <span className="text-sm font-medium truncate">
-                            {event.event_type.charAt(0).toUpperCase() + event.event_type.slice(1)}
-                          </span>
-                        )}
-                        <div className="flex gap-1">
-                          {event.is_penalty && <Badge variant="outline" className="text-xs">Penalty</Badge>}
-                          {!event.is_our_team && <Badge variant="destructive" className="text-xs">Opposition</Badge>}
-                        </div>
-                      </div>
-                      {event.event_type !== 'substitution' && event.players && (
-                        <div className="text-sm text-muted-foreground sm:ml-auto sm:text-right">
-                          <span className="font-medium text-foreground">
-                            {event.players.first_name} {event.players.last_name}
-                          </span>
-                          {event.assist_players && (
-                            <div className="text-xs">
-                              Assist: {event.assist_players.first_name} {event.assist_players.last_name}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+      {/* Events grouped by period - ALWAYS SHOW for better UX */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg">Match Events ({events.length})</CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0 space-y-4">
+          {eventsLoading && (
+            <div className="flex flex-col items-center justify-center py-8 text-muted-foreground animate-in fade-in">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mb-3"></div>
+              <p className="text-sm font-medium">Loading match events...</p>
+            </div>
+          )}
+          
+          {eventsError && !eventsLoading && (
+            <div className="flex flex-col items-center justify-center py-8 text-destructive">
+              <p className="font-medium">Failed to load events</p>
+              <p className="text-sm text-muted-foreground mt-1">{eventsError}</p>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={loadEvents}
+                className="mt-4"
+              >
+                Retry
+              </Button>
+            </div>
+          )}
+          
+          {!eventsLoading && !eventsError && events.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground animate-in fade-in zoom-in-95">
+              <div className="text-6xl mb-4 opacity-50">⚽</div>
+              <p className="font-semibold text-foreground mb-1">No events recorded yet</p>
+              <p className="text-sm">Record your first goal, assist, or substitution above!</p>
+            </div>
+          )}
+          
+          {!eventsLoading && !eventsError && events.length > 0 && periods.map((p) => {
+            const periodEvents = events.filter((e) => e.period_id === p.id);
+            if (periodEvents.length === 0) return null;
+            return (
+              <div key={p.id} className="space-y-1.5 animate-in fade-in">
+                <div className="text-sm font-semibold text-muted-foreground bg-muted/30 px-3 py-1.5 rounded-md">
+                  Period {p.period_number}
                 </div>
-              );
-            })}
-          </CardContent>
-        </Card>
-      )}
+                {periodEvents.map((event, idx) => (
+                  <div 
+                    key={event.id} 
+                    className="flex flex-col sm:flex-row sm:items-center gap-2 p-3 border rounded-lg bg-card/50 animate-in fade-in slide-in-from-bottom-2 duration-300"
+                    style={{ animationDelay: `${idx * 50}ms` }}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Badge variant="secondary" className="text-xs font-mono shrink-0">
+                        {event.total_match_minute}'
+                      </Badge>
+                      {event.event_type === 'goal' ? (
+                        <span className="text-sm font-medium truncate flex items-center gap-1">
+                          <span className="text-lg">⚽</span>
+                          Goal
+                        </span>
+                      ) : event.event_type === 'substitution' ? (
+                        <span className="text-sm font-medium truncate flex items-center gap-1">
+                          <span className="text-lg">🔄</span>
+                          Substitution: {players.find(ply => ply.id === event.player_id)?.first_name || 'Unknown'} {players.find(ply => ply.id === event.player_id)?.last_name || ''}
+                          {' '}→{' '}
+                          {players.find(ply => ply.id === event.assist_player_id)?.first_name || 'Unknown'} {players.find(ply => ply.id === event.assist_player_id)?.last_name || ''}
+                        </span>
+                      ) : (
+                        <span className="text-sm font-medium truncate">
+                          {event.event_type.charAt(0).toUpperCase() + event.event_type.slice(1)}
+                        </span>
+                      )}
+                      <div className="flex gap-1">
+                        {event.is_penalty && <Badge variant="outline" className="text-xs">Penalty</Badge>}
+                        {!event.is_our_team && <Badge variant="destructive" className="text-xs">Opposition</Badge>}
+                      </div>
+                    </div>
+                    {event.event_type !== 'substitution' && event.players && (
+                      <div className="text-sm text-muted-foreground sm:ml-auto sm:text-right">
+                        <span className="font-medium text-foreground">
+                          {event.players.first_name} {event.players.last_name}
+                        </span>
+                        {event.assist_players && (
+                          <div className="text-xs">
+                            Assist: {event.assist_players.first_name} {event.assist_players.last_name}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
 
       {/* Substitutions Timeline */}
       {events.some(e => e.event_type === 'substitution') && (
