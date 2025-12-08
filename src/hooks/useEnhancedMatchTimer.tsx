@@ -435,14 +435,14 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
         })
         .eq('id', fixtureId);
 
-      // HOTFIX: Disabled - analytics schema and materialized views don't exist in database
-      // TODO: Re-enable after Phase 2 database migration creates analytics infrastructure
-      // try {
-      //   await supabase.rpc('refresh_report_views');
-      // } catch (refreshError: any) {
-      //   console.warn('Failed to refresh report views (non-critical):', refreshError);
-      // }
-      console.log('Skipping view refresh - analytics schema not yet created');
+      // Refresh materialized views for reports (Phase 2: Re-enabled with analytics infrastructure)
+      try {
+        await supabase.rpc('refresh_report_views');
+      } catch (refreshError: any) {
+        // Log but don't fail the match completion if view refresh fails
+        console.warn('Failed to refresh report views (non-critical):', refreshError);
+        // Views will be refreshed by triggers or next manual refresh
+      }
       
       // Invalidate relevant query caches
       queryClient.invalidateQueries({ queryKey: ['completed-matches'] });

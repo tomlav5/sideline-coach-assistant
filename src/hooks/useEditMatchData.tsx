@@ -9,14 +9,12 @@ export function useEditMatchData() {
 
   // Refresh all reports after any edit
   const refreshReports = async () => {
-    // HOTFIX: Disabled - analytics schema and materialized views don't exist
-    // TODO: Re-enable after Phase 2 database migration
-    // try {
-    //   await supabase.rpc('refresh_report_views');
-    // } catch (error) {
-    //   console.error('Error refreshing report views:', error);
-    // }
-    console.log('Skipping view refresh - analytics schema not yet created');
+    // Phase 2: Re-enabled with analytics infrastructure
+    try {
+      await supabase.rpc('refresh_report_views');
+    } catch (error) {
+      console.warn('Error refreshing report views (non-critical):', error);
+    }
     
     // Invalidate relevant query caches
     queryClient.invalidateQueries({ queryKey: ['completed-matches'] });

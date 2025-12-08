@@ -171,14 +171,12 @@ export function useRetrospectiveMatch() {
         if (timeLogsError) throw timeLogsError;
       }
 
-      // HOTFIX: Disabled - analytics schema and materialized views don't exist
-      // TODO: Re-enable after Phase 2 database migration
-      // try {
-      //   await supabase.rpc('refresh_report_views');
-      // } catch (refreshError) {
-      //   console.error('Error refreshing report views:', refreshError);
-      // }
-      console.log('Skipping view refresh - analytics schema not yet created');
+      // Phase 2: Re-enabled with analytics infrastructure
+      try {
+        await supabase.rpc('refresh_report_views');
+      } catch (refreshError) {
+        console.warn('Error refreshing report views (non-critical):', refreshError);
+      }
       
       // Invalidate relevant query caches
       queryClient.invalidateQueries({ queryKey: ['completed-matches'] });

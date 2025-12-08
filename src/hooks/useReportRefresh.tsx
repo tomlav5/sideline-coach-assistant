@@ -17,14 +17,12 @@ export function useReportRefresh() {
     }
     
     debounceTimeoutRef.current = setTimeout(async () => {
-      // HOTFIX: Disabled - analytics schema and materialized views don't exist
-      // TODO: Re-enable after Phase 2 database migration
-      // try {
-      //   await supabase.rpc('refresh_report_views');
-      // } catch (error) {
-      //   console.error('Error refreshing report views:', error);
-      // }
-      console.log('Skipping view refresh - analytics schema not yet created');
+      // Phase 2: Re-enabled with analytics infrastructure
+      try {
+        await supabase.rpc('refresh_report_views');
+      } catch (error) {
+        console.warn('Error refreshing report views (non-critical):', error);
+      }
       
       // Invalidate query caches
       queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
@@ -107,16 +105,14 @@ export function useManualReportRefresh() {
   const queryClient = useQueryClient();
   
   return useCallback(async () => {
-    // HOTFIX: Disabled - analytics schema and materialized views don't exist
-    // TODO: Re-enable after Phase 2 database migration
-    // try {
-    //   await supabase.rpc('refresh_report_views');
-    // } catch (refreshError) {
-    //   console.warn('Failed to refresh report views (non-critical):', refreshError);
-    // }
-    console.log('Skipping manual view refresh - analytics schema not yet created');
+    // Phase 2: Re-enabled with analytics infrastructure
+    try {
+      await supabase.rpc('refresh_report_views');
+    } catch (refreshError) {
+      console.warn('Failed to refresh report views (non-critical):', refreshError);
+    }
     
-    // Always invalidate caches
+    // Always invalidate caches regardless of refresh success
     queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
     queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
     queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
