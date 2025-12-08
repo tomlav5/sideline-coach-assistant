@@ -226,11 +226,15 @@ export default function EnhancedMatchTracker() {
     setEventsLoading(true);
     setEventsError(null);
     try {
-      // HOTFIX: Simplified query - just get events, then join player data manually
-      // This avoids potential FK naming issues and is more reliable
+      // Phase 3: Enhanced query with proper FK joins for better performance
+      // Now that database is stable, we can use the full joins
       const { data: eventsData, error: eventsQueryError } = await supabase
         .from('match_events')
-        .select('*')
+        .select(`
+          *,
+          players!fk_match_events_player_id(id, first_name, last_name, jersey_number),
+          assist_players:players!fk_match_events_assist_player_id(id, first_name, last_name, jersey_number)
+        `)
         .eq('fixture_id', fixtureId)
         .order('total_match_minute');
 
@@ -241,14 +245,7 @@ export default function EnhancedMatchTracker() {
         return;
       }
       
-      // Manually attach player data from already-loaded players state
-      const enrichedEvents = (eventsData || []).map(event => ({
-        ...event,
-        players: players.find(p => p.id === event.player_id),
-        assist_players: players.find(p => p.id === event.assist_player_id)
-      }));
-      
-      setEvents(enrichedEvents as MatchEvent[]);
+      setEvents(eventsData || []);
     } catch (error: any) {
       console.error('Error loading events:', error);
       setEventsError(error?.message || 'Failed to load events');
@@ -310,10 +307,13 @@ export default function EnhancedMatchTracker() {
         },
       });
 
-      // Reload events
+      // Reload events with visual feedback
       await loadEvents();
       
-      toast.success(`⚽ Goal recorded for ${playerName}!`);
+      toast.success(`⚽ Goal recorded for ${playerName}!`, {
+        description: `Minute ${totalMatchMinute}'`,
+        duration: 3000,
+      });
     } catch (error: any) {
       console.error('Error recording quick goal:', error);
       toast.error(error?.message || 'Failed to record goal');
@@ -903,9 +903,9 @@ export default function EnhancedMatchTracker() {
         </CardHeader>
         <CardContent className="pt-0 space-y-4">
           {eventsLoading && (
-            <div className="flex items-center justify-center py-8 text-muted-foreground">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mr-3"></div>
-              Loading events...
+            <div className="flex flex-col items-center justify-center py-8 text-muted-foreground animate-in fade-in">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mb-3"></div>
+              <p className="text-sm font-medium">Loading match events...</p>
             </div>
           )}
           
@@ -925,9 +925,10 @@ export default function EnhancedMatchTracker() {
           )}
           
           {!eventsLoading && !eventsError && events.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-              <p className="font-medium">No events recorded yet</p>
-              <p className="text-sm mt-1">Record your first event using the buttons above!</p>
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground animate-in fade-in zoom-in-95">
+              <div className="text-6xl mb-4 opacity-50">⚽</div>
+              <p className="font-semibold text-foreground mb-1">No events recorded yet</p>
+              <p className="text-sm">Record your first goal, assist, or substitution above!</p>
             </div>
           )}
           
@@ -935,16 +936,28 @@ export default function EnhancedMatchTracker() {
             const periodEvents = events.filter((e) => e.period_id === p.id);
             if (periodEvents.length === 0) return null;
             return (
-              <div key={p.id} className="space-y-1.5">
-                <div className="text-sm font-medium text-muted-foreground">Period {p.period_number}</div>
-                {periodEvents.map((event) => (
-                  <div key={event.id} className="flex flex-col sm:flex-row sm:items-center gap-2 p-3 border rounded-lg bg-card/50">
+              <div key={p.id} className="space-y-1.5 animate-in fade-in">
+                <div className="text-sm font-semibold text-muted-foreground bg-muted/30 px-3 py-1.5 rounded-md">
+                  Period {p.period_number}
+                </div>
+                {periodEvents.map((event, idx) => (
+                  <div 
+                    key={event.id} 
+                    className="flex flex-col sm:flex-row sm:items-center gap-2 p-3 border rounded-lg bg-card/50 animate-in fade-in slide-in-from-bottom-2 duration-300"
+                    style={{ animationDelay: `${idx * 50}ms` }}
+                  >
                     <div className="flex items-center gap-2 min-w-0">
                       <Badge variant="secondary" className="text-xs font-mono shrink-0">
                         {event.total_match_minute}'
                       </Badge>
-                      {event.event_type === 'substitution' ? (
-                        <span className="text-sm font-medium truncate">
+                      {event.event_type === 'goal' ? (
+                        <span className="text-sm font-medium truncate flex items-center gap-1">
+                          <span className="text-lg">⚽</span>
+                          Goal
+                        </span>
+                      ) : event.event_type === 'substitution' ? (
+                        <span className="text-sm font-medium truncate flex items-center gap-1">
+                          <span className="text-lg">🔄</span>
                           Substitution: {players.find(ply => ply.id === event.player_id)?.first_name || 'Unknown'} {players.find(ply => ply.id === event.player_id)?.last_name || ''}
                           {' '}→{' '}
                           {players.find(ply => ply.id === event.assist_player_id)?.first_name || 'Unknown'} {players.find(ply => ply.id === event.assist_player_id)?.last_name || ''}
