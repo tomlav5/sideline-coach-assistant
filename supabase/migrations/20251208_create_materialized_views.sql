@@ -56,14 +56,13 @@ COMMENT ON MATERIALIZED VIEW analytics.mv_completed_matches IS 'Pre-aggregated v
 -- 2. Goal Scorers View
 -- =====================================================
 -- Aggregates player statistics for goals and assists
+-- NOTE: Players belong to clubs directly (no team_id on players table)
 CREATE MATERIALIZED VIEW analytics.mv_goal_scorers AS
 SELECT 
   p.id AS player_id,
   p.first_name,
   p.last_name,
   p.jersey_number,
-  t.id AS team_id,
-  t.name AS team_name,
   c.id AS club_id,
   c.name AS club_name,
   -- Count goals
@@ -73,11 +72,10 @@ SELECT
   -- Count assists
   COUNT(DISTINCT CASE WHEN me.event_type = 'goal' AND me.assist_player_id = p.id THEN me.id END) AS assists
 FROM players p
-JOIN teams t ON p.team_id = t.id
-JOIN clubs c ON t.club_id = c.id
+JOIN clubs c ON p.club_id = c.id
 LEFT JOIN match_events me ON (me.player_id = p.id OR me.assist_player_id = p.id)
 LEFT JOIN fixtures f ON me.fixture_id = f.id AND f.status = 'completed'
-GROUP BY p.id, p.first_name, p.last_name, p.jersey_number, t.id, t.name, c.id, c.name
+GROUP BY p.id, p.first_name, p.last_name, p.jersey_number, c.id, c.name
 HAVING COUNT(DISTINCT CASE WHEN me.event_type = 'goal' AND (me.player_id = p.id OR me.assist_player_id = p.id) THEN me.id END) > 0;
 
 -- Create unique index
@@ -85,7 +83,6 @@ CREATE UNIQUE INDEX mv_goal_scorers_player_id_idx ON analytics.mv_goal_scorers (
 
 -- Create additional indexes
 CREATE INDEX mv_goal_scorers_club_id_idx ON analytics.mv_goal_scorers (club_id);
-CREATE INDEX mv_goal_scorers_team_id_idx ON analytics.mv_goal_scorers (team_id);
 CREATE INDEX mv_goal_scorers_goals_idx ON analytics.mv_goal_scorers (goals DESC);
 
 COMMENT ON MATERIALIZED VIEW analytics.mv_goal_scorers IS 'Pre-aggregated player statistics for goals and assists. Only includes players with at least one goal or assist.';
@@ -94,14 +91,13 @@ COMMENT ON MATERIALIZED VIEW analytics.mv_goal_scorers IS 'Pre-aggregated player
 -- 3. Player Playing Time View
 -- =====================================================
 -- Aggregates player playing time across matches
+-- NOTE: Players belong to clubs directly (no team_id on players table)
 CREATE MATERIALIZED VIEW analytics.mv_player_playing_time AS
 SELECT 
   p.id AS player_id,
   p.first_name,
   p.last_name,
   p.jersey_number,
-  t.id AS team_id,
-  t.name AS team_name,
   c.id AS club_id,
   c.name AS club_name,
   -- Count matches played
@@ -124,20 +120,18 @@ SELECT
     1
   ) AS avg_minutes_per_match
 FROM players p
-JOIN teams t ON p.team_id = t.id
-JOIN clubs c ON t.club_id = c.id
+JOIN clubs c ON p.club_id = c.id
 LEFT JOIN player_time_logs ptl ON ptl.player_id = p.id
 LEFT JOIN match_periods mp ON ptl.period_id = mp.id
 LEFT JOIN fixtures f ON ptl.fixture_id = f.id AND f.status = 'completed'
 WHERE ptl.id IS NOT NULL
-GROUP BY p.id, p.first_name, p.last_name, p.jersey_number, t.id, t.name, c.id, c.name;
+GROUP BY p.id, p.first_name, p.last_name, p.jersey_number, c.id, c.name;
 
 -- Create unique index
 CREATE UNIQUE INDEX mv_player_playing_time_player_id_idx ON analytics.mv_player_playing_time (player_id);
 
 -- Create additional indexes
 CREATE INDEX mv_player_playing_time_club_id_idx ON analytics.mv_player_playing_time (club_id);
-CREATE INDEX mv_player_playing_time_team_id_idx ON analytics.mv_player_playing_time (team_id);
 CREATE INDEX mv_player_playing_time_total_minutes_idx ON analytics.mv_player_playing_time (total_minutes_played DESC);
 
 COMMENT ON MATERIALIZED VIEW analytics.mv_player_playing_time IS 'Pre-aggregated player playing time statistics across all completed matches.';
