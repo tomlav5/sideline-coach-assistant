@@ -191,7 +191,7 @@ export default function MatchReport() {
             last_name,
             jersey_number
           ),
-          match_periods!fk_player_time_logs_period_id (
+          match_periods!player_time_logs_period_id_fkey (
             period_number,
             planned_duration_minutes
           )
