@@ -583,6 +583,7 @@ export type Database = {
         Returns: Json
       }
       club_has_no_members: { Args: { club_id_param: string }; Returns: boolean }
+      find_user_by_email: { Args: { lookup_email: string }; Returns: string }
       get_competitions: {
         Args: never
         Returns: {

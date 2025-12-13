@@ -85,9 +85,9 @@ export function UserManagement({ clubId, currentUserRole }: UserManagementProps)
     try {
       setInviting(true);
       
-      // Use secure server-side function to lookup user by email
+      // Use secure server-side function to lookup user by email (admin-only)
       const { data: foundUserId, error: userError } = await supabase
-        .rpc('find_user_by_email' as any, { lookup_email: inviteEmail.trim() }) as { data: string | null; error: any };
+        .rpc('find_user_by_email', { lookup_email: inviteEmail.trim() });
 
       if (userError) {
         // Check if it's an authorization error
