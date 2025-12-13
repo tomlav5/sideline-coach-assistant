@@ -22,6 +22,7 @@ import { CreateFixtureDialog } from '@/components/fixtures/CreateFixtureDialog';
 import { EditFixtureDialog } from '@/components/fixtures/EditFixtureDialog';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLiveMatchDetection } from '@/hooks/useLiveMatchDetection';
+import { useToast } from '@/hooks/use-toast';
 
 interface Team {
   id: string;
@@ -71,6 +72,7 @@ const STATUS_COLORS = {
 export default function Fixtures() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data: liveMatchData } = useLiveMatchDetection();
   const { data: teams = [], isLoading: teamsLoading } = useTeams();
@@ -144,12 +146,29 @@ export default function Fixtures() {
   };
 
   const createFixture = async () => {
-    if (!newFixture.team_id || !newFixture.opponent_name.trim() || !selectedDate) {
-      return;
+    // Collect missing fields
+    const missingFields: string[] = [];
+    
+    if (!newFixture.team_id) {
+      missingFields.push('Team');
     }
-
-    // Validate competition name for tournaments
+    if (!newFixture.opponent_name.trim()) {
+      missingFields.push('Opponent');
+    }
+    if (!selectedDate) {
+      missingFields.push('Match Date');
+    }
     if (newFixture.competition_type === 'tournament' && !newFixture.competition_name.trim()) {
+      missingFields.push('Tournament Name');
+    }
+    
+    // Show toast if any fields are missing
+    if (missingFields.length > 0) {
+      toast({
+        title: "Missing Required Fields",
+        description: `Please complete the following fields: ${missingFields.join(', ')}`,
+        variant: "destructive",
+      });
       return;
     }
 
@@ -218,7 +237,33 @@ export default function Fixtures() {
   };
 
   const updateFixture = async () => {
-    if (!editingFixture || !newFixture.team_id || !newFixture.opponent_name.trim() || !selectedDate) {
+    if (!editingFixture) {
+      return;
+    }
+
+    // Collect missing fields
+    const missingFields: string[] = [];
+    
+    if (!newFixture.team_id) {
+      missingFields.push('Team');
+    }
+    if (!newFixture.opponent_name.trim()) {
+      missingFields.push('Opponent');
+    }
+    if (!selectedDate) {
+      missingFields.push('Match Date');
+    }
+    if (newFixture.competition_type === 'tournament' && !newFixture.competition_name.trim()) {
+      missingFields.push('Tournament Name');
+    }
+    
+    // Show toast if any fields are missing
+    if (missingFields.length > 0) {
+      toast({
+        title: "Missing Required Fields",
+        description: `Please complete the following fields: ${missingFields.join(', ')}`,
+        variant: "destructive",
+      });
       return;
     }
 

@@ -24,7 +24,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Clock, Users, Target, History, ArrowUpDown, RotateCcw } from 'lucide-react';
+import { Clock, Users, Target, History, ArrowUpDown, RotateCcw, Goal } from 'lucide-react';
 import { useRealtimeMatchSync } from '@/hooks/useRealtimeMatchSync';
 import { useWakeLock } from '@/hooks/useWakeLock';
 import { usePlayerTimers } from '@/hooks/usePlayerTimers';
@@ -90,6 +90,7 @@ export default function EnhancedMatchTracker() {
   const [eventsError, setEventsError] = useState<string | null>(null);
   const [periods, setPeriods] = useState<MatchPeriod[]>([]);
   const [showEventDialog, setShowEventDialog] = useState(false);
+  const [showGoalDialog, setShowGoalDialog] = useState(false);
   const [showRetrospectiveDialog, setShowRetrospectiveDialog] = useState(false);
   const [showRestartConfirm, setShowRestartConfirm] = useState(false);
   const [isRestarting, setIsRestarting] = useState(false);
@@ -255,8 +256,8 @@ export default function EnhancedMatchTracker() {
     }
   };
 
-  // Quick goal recording - one-tap for fast goal entry
-  const handleQuickGoal = async (playerId: string) => {
+  // Quick goal handler with optimistic updates and assist tracking
+  const handleQuickGoal = async (playerId: string, isOurTeam: boolean = true, assistPlayerId?: string) => {
     try {
       // Get current period
       const { data: activePeriod } = await supabase
@@ -282,9 +283,10 @@ export default function EnhancedMatchTracker() {
           period_id: activePeriod.id,
           event_type: 'goal',
           player_id: playerId,
+          assist_player_id: assistPlayerId || null,
           minute_in_period: currentMinute,
           total_match_minute: totalMatchMinute,
-          is_our_team: true,
+          is_our_team: isOurTeam,
           is_penalty: false,
           is_retrospective: false,
           client_event_id: clientEventId,
@@ -297,10 +299,16 @@ export default function EnhancedMatchTracker() {
       // Add to undo stack
       const player = players.find(p => p.id === playerId);
       const playerName = player ? `${player.first_name} ${player.last_name}` : 'Unknown';
+      const assistPlayer = assistPlayerId ? players.find(p => p.id === assistPlayerId) : null;
+      const assistName = assistPlayer ? `${assistPlayer.first_name} ${assistPlayer.last_name}` : null;
+      
+      const goalDescription = isOurTeam 
+        ? `Goal by ${playerName}${assistName ? ` (assist: ${assistName})` : ''}` 
+        : `Opponent goal`;
       
       pushUndo({
         type: 'event',
-        description: `Goal by ${playerName}`,
+        description: goalDescription,
         undo: async () => {
           await deleteEvent(newEvent.id);
           await loadEvents();
@@ -310,7 +318,11 @@ export default function EnhancedMatchTracker() {
       // Reload events with visual feedback
       await loadEvents();
       
-      toast.success(`⚽ Goal recorded for ${playerName}!`, {
+      const toastMessage = isOurTeam
+        ? `Goal recorded for ${playerName}!${assistName ? ` Assist: ${assistName}` : ''}`
+        : `Opponent goal recorded`;
+      
+      toast.success(toastMessage, {
         description: `Minute ${totalMatchMinute}'`,
         duration: 3000,
       });
@@ -775,38 +787,6 @@ export default function EnhancedMatchTracker() {
 
       {/* Quick Action Buttons - Large, Thumb-Friendly */}
       <div className="space-y-4">
-        {/* Quick Goal Button - Primary Action */}
-        <QuickGoalButton
-          players={activePlayersList.length > 0 ? activePlayersList : players}
-          onGoalScored={handleQuickGoal}
-          disabled={!matchTracker?.isActiveTracker && (fixture?.status === 'in_progress' || fixture?.status === 'live')}
-        />
-
-        {/* Secondary Actions - Grouped */}
-        <div className="grid grid-cols-2 gap-3">
-          <Button
-            onClick={() => setShowEventDialog(true)}
-            variant="outline"
-            className="flex items-center justify-center gap-2 h-14 text-base"
-            disabled={!matchTracker?.isActiveTracker && (fixture?.status === 'in_progress' || fixture?.status === 'live')}
-          >
-            <Target className="h-5 w-5" />
-            Other Event
-          </Button>
-
-          <Button
-            onClick={async () => {
-              await refreshPlayerStatusLists();
-              setSubDialogOpen(true);
-            }}
-            variant="outline"
-            className="flex items-center justify-center gap-2 h-14 text-base border-yellow-600 text-yellow-700 hover:bg-yellow-50 dark:border-yellow-500 dark:text-yellow-400 dark:hover:bg-yellow-950"
-            disabled={!matchTracker?.isActiveTracker && (fixture?.status === 'in_progress' || fixture?.status === 'live')}
-          >
-            <ArrowUpDown className="h-5 w-5" />
-            Substitution
-          </Button>
-        </div>
 
         {/* Tertiary Actions */}
         <div className="flex gap-3">
@@ -926,9 +906,9 @@ export default function EnhancedMatchTracker() {
           
           {!eventsLoading && !eventsError && events.length === 0 && (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground animate-in fade-in zoom-in-95">
-              <div className="text-6xl mb-4 opacity-50">⚽</div>
+              <Goal className="h-16 w-16 mb-4 opacity-50" />
               <p className="font-semibold text-foreground mb-1">No events recorded yet</p>
-              <p className="text-sm">Record your first goal, assist, or substitution above!</p>
+              <p className="text-sm">Record your first goal, assist, or substitution using the buttons below!</p>
             </div>
           )}
           
@@ -952,7 +932,7 @@ export default function EnhancedMatchTracker() {
                       </Badge>
                       {event.event_type === 'goal' ? (
                         <span className="text-sm font-medium truncate flex items-center gap-1">
-                          <span className="text-lg">⚽</span>
+                          <Goal className="h-4 w-4" />
                           Goal
                         </span>
                       ) : event.event_type === 'substitution' ? (
@@ -1269,20 +1249,21 @@ export default function EnhancedMatchTracker() {
 
       {/* Bottom Action Bar - Fixed */}
       <BottomActionBar
-        onQuickGoal={() => {
-          // Open quick goal dialog
-          const onFieldPlayers = activePlayersList.length > 0 ? activePlayersList : players;
-          if (onFieldPlayers.length > 0) {
-            // Trigger QuickGoalButton via state
-            setShowEventDialog(true);
-          }
-        }}
+        onQuickGoal={() => setShowGoalDialog(true)}
         onSubstitution={async () => {
           await refreshPlayerStatusLists();
           setSubDialogOpen(true);
         }}
         onOtherEvent={() => setShowEventDialog(true)}
         disabled={!matchTracker?.isActiveTracker && (fixture?.status === 'in_progress' || fixture?.status === 'live')}
+      />
+
+      {/* Goal Dialog */}
+      <QuickGoalButton
+        players={activePlayersList.length > 0 ? activePlayersList : players}
+        onGoalScored={handleQuickGoal}
+        open={showGoalDialog}
+        onOpenChange={setShowGoalDialog}
       />
     </div>
   );

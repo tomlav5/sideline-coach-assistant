@@ -9,7 +9,7 @@ interface UndoAction {
   timestamp: number;
 }
 
-const UNDO_WINDOW_MS = 30000; // 30 seconds
+const UNDO_WINDOW_MS = 5000; // 5 seconds
 
 export function useUndoStack() {
   const [undoStack, setUndoStack] = useState<UndoAction[]>([]);
