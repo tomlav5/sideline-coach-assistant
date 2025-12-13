@@ -17,19 +17,22 @@ interface Player {
 
 interface QuickGoalButtonProps {
   players: Player[];
-  onGoalScored: (playerId: string) => Promise<void>;
-  disabled?: boolean;
+  onGoalScored: (playerId: string, isOurTeam: boolean, assistPlayerId?: string) => Promise<void>;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
 const RECENT_SCORERS_KEY = 'sideline-recent-scorers';
 const MAX_RECENT_SCORERS = 5;
 
-export function QuickGoalButton({ players, onGoalScored, disabled }: QuickGoalButtonProps) {
+export function QuickGoalButton({ players, onGoalScored, open, onOpenChange }: QuickGoalButtonProps) {
   const isMobile = useIsMobile();
-  const [open, setOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [recentScorers, setRecentScorers] = useState<string[]>([]);
+  const [isOurTeam, setIsOurTeam] = useState(true);
+  const [selectedScorer, setSelectedScorer] = useState<string | null>(null);
+  const [showAssistSelect, setShowAssistSelect] = useState(false);
 
   // Load recent scorers from localStorage
   useEffect(() => {
@@ -54,18 +57,38 @@ export function QuickGoalButton({ players, onGoalScored, disabled }: QuickGoalBu
     }
   };
 
-  const handleGoalScored = async (playerId: string) => {
+  const handleScorerSelected = (playerId: string) => {
+    setSelectedScorer(playerId);
+    if (isOurTeam) {
+      // Show assist selection for our team goals
+      setShowAssistSelect(true);
+    } else {
+      // Opponent goals don't track assists
+      handleGoalScored(playerId, null);
+    }
+  };
+
+  const handleGoalScored = async (scorerId: string, assistId: string | null) => {
     setIsLoading(true);
     try {
-      await onGoalScored(playerId);
-      addRecentScorer(playerId);
-      setOpen(false);
-      setSearchTerm('');
+      await onGoalScored(scorerId, isOurTeam, assistId || undefined);
+      if (isOurTeam) {
+        addRecentScorer(scorerId);
+      }
+      resetDialog();
     } catch (error) {
       // Error handled by parent
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const resetDialog = () => {
+    onOpenChange(false);
+    setSearchTerm('');
+    setIsOurTeam(true);
+    setSelectedScorer(null);
+    setShowAssistSelect(false);
   };
 
   // Filter players based on search
@@ -84,17 +107,94 @@ export function QuickGoalButton({ players, onGoalScored, disabled }: QuickGoalBu
     return `${number} ${player.first_name} ${player.last_name}`.trim();
   };
 
+  // Filter out the scorer from assist selection
+  const assistPlayers = players.filter(p => p.id !== selectedScorer);
+  const filteredAssistPlayers = assistPlayers.filter(p =>
+    `${p.first_name} ${p.last_name}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    p.jersey_number?.toString().includes(searchTerm)
+  );
+
+  const assistContent = (
+    <div className="space-y-4">
+      <div className="relative">
+        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search for assist provider..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-9"
+          autoFocus={!isMobile}
+        />
+      </div>
+
+      <ScrollArea className="h-[300px]">
+        <div className="space-y-1">
+          <Button
+            onClick={() => handleGoalScored(selectedScorer!, null)}
+            disabled={isLoading}
+            variant="outline"
+            className="w-full h-12 justify-start mb-3 border-dashed"
+          >
+            No Assist
+          </Button>
+          {filteredAssistPlayers.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              No players found
+            </p>
+          ) : (
+            filteredAssistPlayers.map(player => (
+              <Button
+                key={player.id}
+                onClick={() => handleGoalScored(selectedScorer!, player.id)}
+                disabled={isLoading}
+                variant="ghost"
+                className="w-full h-12 justify-start font-normal"
+              >
+                {player.jersey_number && (
+                  <Badge variant="outline" className="mr-2">
+                    #{player.jersey_number}
+                  </Badge>
+                )}
+                {player.first_name} {player.last_name}
+              </Button>
+            ))
+          )}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+
   const content = (
     <div className="space-y-4">
-      {/* Recent Scorers - Quick Tap */}
-      {recentScorerPlayers.length > 0 && (
+      {/* Team Toggle */}
+      <div className="flex gap-2 p-1 bg-muted rounded-lg">
+        <Button
+          onClick={() => setIsOurTeam(true)}
+          variant={isOurTeam ? "default" : "ghost"}
+          className="flex-1"
+          size="sm"
+        >
+          Our Goal
+        </Button>
+        <Button
+          onClick={() => setIsOurTeam(false)}
+          variant={!isOurTeam ? "default" : "ghost"}
+          className="flex-1"
+          size="sm"
+        >
+          Opponent Goal
+        </Button>
+      </div>
+
+      {/* Recent Scorers - Quick Tap (only for our team) */}
+      {isOurTeam && recentScorerPlayers.length > 0 && (
         <div>
           <p className="text-sm font-medium mb-2">Recent Scorers (Quick Tap)</p>
           <div className="grid grid-cols-1 gap-2">
             {recentScorerPlayers.map(player => (
               <Button
                 key={player.id}
-                onClick={() => handleGoalScored(player.id)}
+                onClick={() => handleScorerSelected(player.id)}
                 disabled={isLoading}
                 size="lg"
                 variant="outline"
@@ -133,7 +233,7 @@ export function QuickGoalButton({ players, onGoalScored, disabled }: QuickGoalBu
             filteredPlayers.map(player => (
               <Button
                 key={player.id}
-                onClick={() => handleGoalScored(player.id)}
+                onClick={() => handleScorerSelected(player.id)}
                 disabled={isLoading}
                 variant="ghost"
                 className="w-full h-12 justify-start font-normal hover:bg-green-50 dark:hover:bg-green-950"
@@ -154,36 +254,25 @@ export function QuickGoalButton({ players, onGoalScored, disabled }: QuickGoalBu
 
   return (
     <>
-      {/* Large Goal Button */}
-      <Button
-        onClick={() => setOpen(true)}
-        disabled={disabled || players.length === 0}
-        size="lg"
-        className="w-full h-16 text-lg font-bold bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800"
-      >
-        <Goal className="h-6 w-6 mr-3" />
-        ⚽ GOAL
-      </Button>
-
       {/* Player Selection Dialog/Sheet */}
       {isMobile ? (
-        <Sheet open={open} onOpenChange={setOpen}>
+        <Sheet open={open} onOpenChange={(open) => !open && resetDialog()}>
           <SheetContent side="bottom" className="h-[85dvh] p-4">
             <SheetHeader>
-              <SheetTitle>Who Scored?</SheetTitle>
+              <SheetTitle>{showAssistSelect ? 'Who Assisted?' : 'Who Scored?'}</SheetTitle>
             </SheetHeader>
             <div className="mt-4">
-              {content}
+              {showAssistSelect ? assistContent : content}
             </div>
           </SheetContent>
         </Sheet>
       ) : (
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(open) => !open && resetDialog()}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>Who Scored?</DialogTitle>
+              <DialogTitle>{showAssistSelect ? 'Who Assisted?' : 'Who Scored?'}</DialogTitle>
             </DialogHeader>
-            {content}
+            {showAssistSelect ? assistContent : content}
           </DialogContent>
         </Dialog>
       )}

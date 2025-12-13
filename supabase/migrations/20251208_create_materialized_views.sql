@@ -10,11 +10,14 @@
 -- 1. Completed Matches View
 -- =====================================================
 -- Aggregates match results with goal counts
+-- NOTE: Columns match get_completed_matches() RPC function expectations
 CREATE MATERIALIZED VIEW analytics.mv_completed_matches AS
 SELECT 
-  f.id AS fixture_id,
+  f.id AS id,  -- Match RPC expectation (not fixture_id)
   f.scheduled_date,
   f.opponent_name,
+  f.location,  -- Required by RPC
+  f.fixture_type,  -- Required by RPC
   f.competition_type,
   f.competition_name,
   t.name AS team_name,
@@ -44,7 +47,7 @@ JOIN clubs c ON t.club_id = c.id
 WHERE f.status = 'completed';
 
 -- Create unique index for efficient refresh
-CREATE UNIQUE INDEX mv_completed_matches_fixture_id_idx ON analytics.mv_completed_matches (fixture_id);
+CREATE UNIQUE INDEX mv_completed_matches_id_idx ON analytics.mv_completed_matches (id);
 
 -- Create additional indexes for common queries
 CREATE INDEX mv_completed_matches_club_id_idx ON analytics.mv_completed_matches (club_id);
