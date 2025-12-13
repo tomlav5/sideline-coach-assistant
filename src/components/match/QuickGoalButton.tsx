@@ -59,12 +59,20 @@ export function QuickGoalButton({ players, onGoalScored, open, onOpenChange }: Q
 
   const handleScorerSelected = (playerId: string) => {
     setSelectedScorer(playerId);
-    if (isOurTeam) {
-      // Show assist selection for our team goals
-      setShowAssistSelect(true);
-    } else {
-      // Opponent goals don't track assists
-      handleGoalScored(playerId, null);
+    // Show assist selection for our team goals
+    setShowAssistSelect(true);
+  };
+
+  const handleOpponentGoal = async () => {
+    setIsLoading(true);
+    try {
+      // Opponent goals don't require player selection
+      await onGoalScored('', false, undefined);
+      resetDialog();
+    } catch (error) {
+      // Error handled by parent
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -127,13 +135,13 @@ export function QuickGoalButton({ players, onGoalScored, open, onOpenChange }: Q
         />
       </div>
 
-      <ScrollArea className="h-[300px]">
-        <div className="space-y-1">
+      <ScrollArea className="h-[300px] border rounded-lg bg-muted/30">
+        <div className="space-y-1 p-3">
           <Button
             onClick={() => handleGoalScored(selectedScorer!, null)}
             disabled={isLoading}
             variant="outline"
-            className="w-full h-12 justify-start mb-3 border-dashed"
+            className="w-full h-12 justify-start mb-3 border-dashed bg-background"
           >
             No Assist
           </Button>
@@ -148,7 +156,7 @@ export function QuickGoalButton({ players, onGoalScored, open, onOpenChange }: Q
                 onClick={() => handleGoalScored(selectedScorer!, player.id)}
                 disabled={isLoading}
                 variant="ghost"
-                className="w-full h-12 justify-start font-normal"
+                className="w-full h-12 justify-start font-normal bg-background hover:bg-accent"
               >
                 {player.jersey_number && (
                   <Badge variant="outline" className="mr-2">
@@ -186,69 +194,91 @@ export function QuickGoalButton({ players, onGoalScored, open, onOpenChange }: Q
         </Button>
       </div>
 
-      {/* Recent Scorers - Quick Tap (only for our team) */}
-      {isOurTeam && recentScorerPlayers.length > 0 && (
-        <div>
-          <p className="text-sm font-medium mb-2">Recent Scorers (Quick Tap)</p>
-          <div className="grid grid-cols-1 gap-2">
-            {recentScorerPlayers.map(player => (
-              <Button
-                key={player.id}
-                onClick={() => handleScorerSelected(player.id)}
-                disabled={isLoading}
-                size="lg"
-                variant="outline"
-                className="h-14 text-left justify-start font-medium hover:bg-green-50 dark:hover:bg-green-950 hover:border-green-500"
-              >
-                <Goal className="h-5 w-5 mr-3 text-green-600" />
-                <span className="flex-1">{getPlayerDisplay(player)}</span>
-                <Check className="h-4 w-4 text-green-600" />
-              </Button>
-            ))}
-          </div>
+      {/* Opponent Goal - Simple Confirmation */}
+      {!isOurTeam ? (
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground text-center">
+            Record a goal for the opposing team
+          </p>
+          <Button
+            onClick={handleOpponentGoal}
+            disabled={isLoading}
+            size="lg"
+            className="w-full h-16 text-lg font-semibold bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
+          >
+            <Goal className="h-6 w-6 mr-3" />
+            Confirm Opponent Goal
+          </Button>
         </div>
-      )}
-
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search player name or number..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-9"
-          autoFocus={!isMobile}
-        />
-      </div>
-
-      {/* All Players */}
-      <ScrollArea className="h-[300px]">
-        <div className="space-y-1">
-          <p className="text-sm font-medium mb-2">All Players</p>
-          {filteredPlayers.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">
-              No players found
-            </p>
-          ) : (
-            filteredPlayers.map(player => (
-              <Button
-                key={player.id}
-                onClick={() => handleScorerSelected(player.id)}
-                disabled={isLoading}
-                variant="ghost"
-                className="w-full h-12 justify-start font-normal hover:bg-green-50 dark:hover:bg-green-950"
-              >
-                {player.jersey_number && (
-                  <Badge variant="outline" className="mr-2">
-                    #{player.jersey_number}
-                  </Badge>
-                )}
-                {player.first_name} {player.last_name}
-              </Button>
-            ))
+      ) : (
+        <>
+          {/* Recent Scorers - Quick Tap (only for our team) */}
+          {recentScorerPlayers.length > 0 && (
+            <div>
+              <p className="text-sm font-medium mb-2">Recent Scorers (Quick Tap)</p>
+              <div className="grid grid-cols-1 gap-2">
+                {recentScorerPlayers.map(player => (
+                  <Button
+                    key={player.id}
+                    onClick={() => handleScorerSelected(player.id)}
+                    disabled={isLoading}
+                    size="lg"
+                    variant="outline"
+                    className="h-14 text-left justify-start font-medium hover:bg-green-50 dark:hover:bg-green-950 hover:border-green-500"
+                  >
+                    <Goal className="h-5 w-5 mr-3 text-green-600" />
+                    <span className="flex-1">{getPlayerDisplay(player)}</span>
+                    <Check className="h-4 w-4 text-green-600" />
+                  </Button>
+                ))}
+              </div>
+            </div>
           )}
-        </div>
-      </ScrollArea>
+
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search player name or number..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9"
+              autoFocus={!isMobile}
+            />
+          </div>
+
+          {/* All Players */}
+          <div>
+            <p className="text-sm font-medium mb-2">All Players</p>
+            <ScrollArea className="h-[300px] border rounded-lg bg-muted/30">
+              <div className="space-y-1 p-3">
+                {filteredPlayers.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">
+                    No players found
+                  </p>
+                ) : (
+                  filteredPlayers.map(player => (
+                    <Button
+                      key={player.id}
+                      onClick={() => handleScorerSelected(player.id)}
+                      disabled={isLoading}
+                      variant="ghost"
+                      className="w-full h-12 justify-start font-normal bg-background hover:bg-accent"
+                    >
+                      {player.jersey_number && (
+                        <Badge variant="outline" className="mr-2">
+                          #{player.jersey_number}
+                        </Badge>
+                      )}
+                      {player.first_name} {player.last_name}
+                    </Button>
+                  ))
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+        </>
+      )}
     </div>
   );
 

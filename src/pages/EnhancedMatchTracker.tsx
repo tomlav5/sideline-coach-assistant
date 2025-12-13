@@ -282,7 +282,7 @@ export default function EnhancedMatchTracker() {
           fixture_id: fixtureId,
           period_id: activePeriod.id,
           event_type: 'goal',
-          player_id: playerId,
+          player_id: playerId || null, // Null for opponent goals
           assist_player_id: assistPlayerId || null,
           minute_in_period: currentMinute,
           total_match_minute: totalMatchMinute,
