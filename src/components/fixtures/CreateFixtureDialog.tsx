@@ -74,7 +74,7 @@ export function CreateFixtureDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="dialog-standard">
+      <DialogContent className="dialog-standard max-w-lg">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle>Create New Fixture</DialogTitle>
           <DialogDescription>
@@ -91,7 +91,9 @@ export function CreateFixtureDialog({
               <SelectContent>
                 {teams.map((team) => (
                   <SelectItem key={team.id} value={team.id}>
-                    {team.name} ({team.club.name})
+                    <span className="truncate">
+                      {team.name} ({team.club.name})
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>

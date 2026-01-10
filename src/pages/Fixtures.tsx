@@ -83,6 +83,8 @@ export default function Fixtures() {
   const [editingFixture, setEditingFixture] = useState<Fixture | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [selectedTime, setSelectedTime] = useState('');
+  const [createCalendarOpen, setCreateCalendarOpen] = useState(false);
+  const [editCalendarOpen, setEditCalendarOpen] = useState(false);
   
   // Date filtering state
   const [dateFilterOpen, setDateFilterOpen] = useState(false);
@@ -805,7 +807,7 @@ export default function Fixtures() {
           </Dialog>
 
           <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-            <DialogContent className="dialog-standard">
+            <DialogContent className="dialog-standard max-w-lg">
               <DialogHeader>
                 <DialogTitle>Create New Fixture</DialogTitle>
                 <DialogDescription>
@@ -822,7 +824,9 @@ export default function Fixtures() {
                     <SelectContent>
                       {teams.map((team) => (
                         <SelectItem key={team.id} value={team.id}>
-                          {team.name} ({team.club.name})
+                          <span className="truncate">
+                            {team.name} ({team.club.name})
+                          </span>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -861,7 +865,7 @@ export default function Fixtures() {
                 
                 <div>
                   <Label>Match Date</Label>
-                  <Popover>
+                  <Popover open={createCalendarOpen} onOpenChange={setCreateCalendarOpen}>
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
@@ -878,7 +882,10 @@ export default function Fixtures() {
                       <CalendarComponent
                         mode="single"
                         selected={selectedDate}
-                        onSelect={setSelectedDate}
+                        onSelect={(date) => {
+                          setSelectedDate(date);
+                          setCreateCalendarOpen(false);
+                        }}
                         initialFocus
                         className="p-3 pointer-events-auto"
                       />
@@ -959,7 +966,7 @@ export default function Fixtures() {
 
           {/* Edit Dialog */}
           <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-            <DialogContent className="dialog-standard">
+            <DialogContent className="dialog-standard max-w-lg">
               <DialogHeader>
                 <DialogTitle>Edit Fixture</DialogTitle>
                 <DialogDescription>
@@ -976,7 +983,9 @@ export default function Fixtures() {
                     <SelectContent>
                       {teams.map((team) => (
                         <SelectItem key={team.id} value={team.id}>
-                          {team.name} ({team.club.name})
+                          <span className="truncate">
+                            {team.name} ({team.club.name})
+                          </span>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -1015,7 +1024,7 @@ export default function Fixtures() {
                 
                 <div>
                   <Label>Match Date</Label>
-                  <Popover>
+                  <Popover open={editCalendarOpen} onOpenChange={setEditCalendarOpen}>
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
@@ -1032,7 +1041,10 @@ export default function Fixtures() {
                       <CalendarComponent
                         mode="single"
                         selected={selectedDate}
-                        onSelect={setSelectedDate}
+                        onSelect={(date) => {
+                          setSelectedDate(date);
+                          setEditCalendarOpen(false);
+                        }}
                         initialFocus
                         className="p-3 pointer-events-auto"
                       />
