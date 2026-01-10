@@ -4,10 +4,11 @@ const config: CapacitorConfig = {
   appId: 'com.yourorg.sidelinecoach',
   appName: 'SideLine Coach Assistant',
   webDir: 'dist',
-  server: {
-    url: 'http://YOUR_LAN_IP:5173',
-    cleartext: true,
-  },
+  // Disable server config for web testing - re-enable for mobile device testing
+  // server: {
+  //   url: 'http://YOUR_LAN_IP:5173',
+  //   cleartext: true,
+  // },
 };
 
 export default config;
