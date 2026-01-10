@@ -965,163 +965,19 @@ export default function Fixtures() {
           </Dialog>
 
           {/* Edit Dialog */}
-          <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-            <DialogContent className="dialog-standard max-w-lg">
-              <DialogHeader>
-                <DialogTitle>Edit Fixture</DialogTitle>
-                <DialogDescription>
-                  Update fixture details
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 px-1">
-                <div>
-                  <Label htmlFor="edit-team" className="form-label-standard">Team</Label>
-                  <Select value={newFixture.team_id} onValueChange={(value) => setNewFixture({ ...newFixture, team_id: value })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a team" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {teams.map((team) => (
-                        <SelectItem key={team.id} value={team.id}>
-                          <span className="truncate">
-                            {team.name} ({team.club.name})
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div>
-                  <Label htmlFor="edit-opponent" className="form-label-standard">Opponent</Label>
-                  <Input
-                    id="edit-opponent"
-                    value={newFixture.opponent_name}
-                    onChange={(e) => setNewFixture({ ...newFixture, opponent_name: e.target.value })}
-                    placeholder="Opponent team name"
-                    className="form-input-standard"
-                  />
-                </div>
-                
-                <div>
-                  <Label htmlFor="edit-fixture_type">Match Type</Label>
-                  <Select value={newFixture.fixture_type} onValueChange={(value: any) => setNewFixture({ ...newFixture, fixture_type: value })}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {FIXTURE_TYPES.map((type) => (
-                        <SelectItem key={type.value} value={type.value}>
-                          <div className="flex items-center">
-                            <type.icon className="h-4 w-4 mr-2" />
-                            {type.label}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div>
-                  <Label>Match Date</Label>
-                  <Popover open={editCalendarOpen} onOpenChange={setEditCalendarOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal",
-                          !selectedDate && "text-muted-foreground"
-                        )}
-                      >
-                        <Calendar className="mr-2 h-4 w-4" />
-                        {selectedDate ? format(selectedDate, "PPP") : "Pick a date"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <CalendarComponent
-                        mode="single"
-                        selected={selectedDate}
-                        onSelect={(date) => {
-                          setSelectedDate(date);
-                          setEditCalendarOpen(false);
-                        }}
-                        initialFocus
-                        className="p-3 pointer-events-auto"
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                
-                <div>
-                  <Label htmlFor="edit-time" className="form-label-standard">Match Time (Optional)</Label>
-                  <Input
-                    id="edit-time"
-                    type="time"
-                    value={selectedTime}
-                    onChange={(e) => setSelectedTime(e.target.value)}
-                  />
-                </div>
-                
-                <div>
-                  <Label htmlFor="edit-location">Location (Optional)</Label>
-                  <Input
-                    id="edit-location"
-                    value={newFixture.location}
-                    onChange={(e) => setNewFixture({ ...newFixture, location: e.target.value })}
-                    placeholder="Match venue"
-                  />
-                </div>
-                
-                <div>
-                  <Label htmlFor="edit-competition_type">Competition Type</Label>
-                  <Select 
-                    value={newFixture.competition_type} 
-                    onValueChange={(value: 'league' | 'tournament' | 'friendly') => setNewFixture({ 
-                      ...newFixture, 
-                      competition_type: value,
-                      competition_name: value === 'friendly' ? '' : newFixture.competition_name
-                    })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {COMPETITION_TYPES.map((type) => (
-                        <SelectItem key={type.value} value={type.value}>
-                          {type.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                {(newFixture.competition_type === 'tournament' || newFixture.competition_type === 'league') && (
-                  <div>
-                    <Label htmlFor="edit-competition_name">
-                      {newFixture.competition_type === 'tournament' ? 'Tournament Name' : 'League Name'} 
-                      {newFixture.competition_type === 'tournament' && <span className="text-destructive">*</span>}
-                    </Label>
-                    <Input
-                      id="edit-competition_name"
-                      value={newFixture.competition_name}
-                      onChange={(e) => setNewFixture({ ...newFixture, competition_name: e.target.value })}
-                      placeholder={`Enter ${newFixture.competition_type} name`}
-                    />
-                  </div>
-                )}
-
-                
-                <div className="flex gap-2 pt-4">
-                  <Button onClick={updateFixture} disabled={updating} className="flex-1">
-                    {updating ? "Updating..." : "Update Fixture"}
-                  </Button>
-                  <Button variant="outline" onClick={() => setEditDialogOpen(false)} className="flex-1">
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <EditFixtureDialog
+            open={editDialogOpen}
+            onOpenChange={setEditDialogOpen}
+            teams={teams}
+            fixtureData={newFixture}
+            onFixtureDataChange={setNewFixture}
+            selectedDate={selectedDate}
+            onDateChange={setSelectedDate}
+            selectedTime={selectedTime}
+            onTimeChange={setSelectedTime}
+            onConfirm={updateFixture}
+            isUpdating={updating}
+          />
         </div>
       </div>
 
