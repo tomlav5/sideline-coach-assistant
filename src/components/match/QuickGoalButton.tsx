@@ -4,6 +4,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Goal, Check, Search } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -17,7 +19,7 @@ interface Player {
 
 interface QuickGoalButtonProps {
   players: Player[];
-  onGoalScored: (playerId: string, isOurTeam: boolean, assistPlayerId?: string) => Promise<void>;
+  onGoalScored: (playerId: string, isOurTeam: boolean, assistPlayerId?: string, isPenalty?: boolean) => Promise<void>;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -33,6 +35,7 @@ export function QuickGoalButton({ players, onGoalScored, open, onOpenChange }: Q
   const [isOurTeam, setIsOurTeam] = useState(true);
   const [selectedScorer, setSelectedScorer] = useState<string | null>(null);
   const [showAssistSelect, setShowAssistSelect] = useState(false);
+  const [isPenalty, setIsPenalty] = useState(false);
 
   // Load recent scorers from localStorage
   useEffect(() => {
@@ -67,7 +70,7 @@ export function QuickGoalButton({ players, onGoalScored, open, onOpenChange }: Q
     setIsLoading(true);
     try {
       // Opponent goals don't require player selection
-      await onGoalScored('', false, undefined);
+      await onGoalScored('', false, undefined, isPenalty);
       resetDialog();
     } catch (error) {
       // Error handled by parent
@@ -79,7 +82,7 @@ export function QuickGoalButton({ players, onGoalScored, open, onOpenChange }: Q
   const handleGoalScored = async (scorerId: string, assistId: string | null) => {
     setIsLoading(true);
     try {
-      await onGoalScored(scorerId, isOurTeam, assistId || undefined);
+      await onGoalScored(scorerId, isOurTeam, assistId || undefined, isPenalty);
       if (isOurTeam) {
         addRecentScorer(scorerId);
       }
@@ -97,6 +100,7 @@ export function QuickGoalButton({ players, onGoalScored, open, onOpenChange }: Q
     setIsOurTeam(true);
     setSelectedScorer(null);
     setShowAssistSelect(false);
+    setIsPenalty(false);
   };
 
   // Filter players based on search
@@ -200,6 +204,17 @@ export function QuickGoalButton({ players, onGoalScored, open, onOpenChange }: Q
           <p className="text-sm text-muted-foreground text-center">
             Record a goal for the opposing team
           </p>
+          
+          {/* Penalty Checkbox */}
+          <div className="flex items-center justify-center space-x-2">
+            <Checkbox
+              id="penalty-opponent"
+              checked={isPenalty}
+              onCheckedChange={(checked) => setIsPenalty(checked === true)}
+            />
+            <Label htmlFor="penalty-opponent">Penalty Kick</Label>
+          </div>
+          
           <Button
             onClick={handleOpponentGoal}
             disabled={isLoading}
@@ -212,6 +227,16 @@ export function QuickGoalButton({ players, onGoalScored, open, onOpenChange }: Q
         </div>
       ) : (
         <>
+          {/* Penalty Checkbox for Our Team */}
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="penalty-our-team"
+              checked={isPenalty}
+              onCheckedChange={(checked) => setIsPenalty(checked === true)}
+            />
+            <Label htmlFor="penalty-our-team">Penalty Kick</Label>
+          </div>
+          
           {/* Recent Scorers - Quick Tap (only for our team) */}
           {recentScorerPlayers.length > 0 && (
             <div>

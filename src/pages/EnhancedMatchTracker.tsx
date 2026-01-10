@@ -247,7 +247,7 @@ export default function EnhancedMatchTracker() {
   };
 
   // Quick goal handler with optimistic updates and assist tracking
-  const handleQuickGoal = async (playerId: string, isOurTeam: boolean = true, assistPlayerId?: string) => {
+  const handleQuickGoal = async (playerId: string, isOurTeam: boolean = true, assistPlayerId?: string, isPenalty: boolean = false) => {
     try {
       // Get current period
       const { data: activePeriod } = await supabase
@@ -264,6 +264,9 @@ export default function EnhancedMatchTracker() {
 
       // Generate unique client event ID
       const clientEventId = generateUUID();
+      
+      // Auto-mark as penalty if in penalty shootout period
+      const isPenaltyPeriod = (activePeriod as any).period_type === 'penalties';
 
       // Create goal event
       const { data: newEvent, error } = await supabase
@@ -277,7 +280,7 @@ export default function EnhancedMatchTracker() {
           minute_in_period: currentMinute,
           total_match_minute: totalMatchMinute,
           is_our_team: isOurTeam,
-          is_penalty: false,
+          is_penalty: isPenaltyPeriod || isPenalty,
           is_retrospective: false,
           client_event_id: clientEventId,
         })
