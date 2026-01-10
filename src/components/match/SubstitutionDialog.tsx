@@ -38,8 +38,12 @@ export function SubstitutionDialog({
   isHalftime = false
 }: SubstitutionDialogProps) {
   const isMobile = useIsMobile();
+  
+  // Simple UUID generator for compatibility
+  const generateId = () => `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  
   const [substitutionPairs, setSubstitutionPairs] = useState<SubstitutionPair[]>([{
-    id: crypto.randomUUID(),
+    id: generateId(),
     playerOut: '',
     playerIn: ''
   }]);
@@ -48,7 +52,7 @@ export function SubstitutionDialog({
   useEffect(() => {
     if (open) {
       setSubstitutionPairs([{
-        id: crypto.randomUUID(),
+        id: generateId(),
         playerOut: '',
         playerIn: ''
       }]);
@@ -57,7 +61,7 @@ export function SubstitutionDialog({
 
   const addSubstitutionPair = () => {
     setSubstitutionPairs([...substitutionPairs, {
-      id: crypto.randomUUID(),
+      id: generateId(),
       playerOut: '',
       playerIn: ''
     }]);
