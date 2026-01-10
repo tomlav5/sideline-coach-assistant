@@ -246,7 +246,7 @@ All colors MUST be HSL.
 
   /* Dialog Consistency */
   .dialog-standard {
-    @apply max-w-[95vw] sm:max-w-md;
+    @apply w-[calc(100vw-2rem)] max-w-md;
   }
 
   .dialog-large {

@@ -163,15 +163,14 @@ export default function SquadSelection() {
 
   const isSquadValid = () => {
     if (!team) return false;
-    const teamSize = TEAM_SIZE_MAP[team.team_type];
-    const minSquadSize = teamSize - 1;
-    return selectedPlayers.length >= minSquadSize;
+    // Allow any number of players - teams may need to play with fewer due to absences
+    return selectedPlayers.length >= 1;
   };
 
   const canStartMatch = () => {
     if (!team) return false;
-    const teamSize = TEAM_SIZE_MAP[team.team_type];
-    return startingPlayers.size === teamSize && isSquadValid();
+    // Allow starting with any number of players (minimum 1)
+    return startingPlayers.size >= 1 && isSquadValid();
   };
 
   const loadMostRecentSquad = async () => {
