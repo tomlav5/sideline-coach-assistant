@@ -1104,27 +1104,45 @@ export default function EnhancedMatchTracker() {
                     });
                 }
 
-                // Persist substitution event
+                // Persist substitution events (off and on)
                 try {
-                  const clientEventId = generateUUID();
-                  const { error: subEventErr } = await supabase
+                  // Record player going OFF
+                  const offEventId = generateUUID();
+                  const { error: offEventErr } = await supabase
                     .from('match_events')
                     .upsert({
                       fixture_id: fixtureId,
                       period_id: currentPeriod.id,
-                      event_type: 'substitution',
+                      event_type: 'substitution_off',
                       player_id: playerOut,
-                      assist_player_id: playerIn,
                       minute_in_period: currentMinute,
                       total_match_minute: totalMatchMinute,
                       is_our_team: true,
                       notes: null,
                       is_retrospective: false,
-                      client_event_id: clientEventId,
+                      client_event_id: offEventId,
                     }, { onConflict: 'client_event_id' });
-                  if (subEventErr) throw subEventErr;
+                  if (offEventErr) throw offEventErr;
+
+                  // Record player coming ON
+                  const onEventId = generateUUID();
+                  const { error: onEventErr } = await supabase
+                    .from('match_events')
+                    .upsert({
+                      fixture_id: fixtureId,
+                      period_id: currentPeriod.id,
+                      event_type: 'substitution_on',
+                      player_id: playerIn,
+                      minute_in_period: currentMinute,
+                      total_match_minute: totalMatchMinute,
+                      is_our_team: true,
+                      notes: null,
+                      is_retrospective: false,
+                      client_event_id: onEventId,
+                    }, { onConflict: 'client_event_id' });
+                  if (onEventErr) throw onEventErr;
                 } catch (subEventCatch: any) {
-                  console.error('Failed to record substitution event:', subEventCatch);
+                  console.error('Failed to record substitution events:', subEventCatch);
                 }
               }
 
