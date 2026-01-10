@@ -370,16 +370,10 @@ export default function MatchDataEditor() {
           <TabsContent value="events" className="space-y-4">
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <Target className="h-5 w-5" />
-                    Match Events
-                  </CardTitle>
-                  <Button size="sm">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Event
-                  </Button>
-                </div>
+                <CardTitle className="flex items-center gap-2">
+                  <Target className="h-5 w-5" />
+                  Match Events
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <EventsTable
@@ -397,16 +391,10 @@ export default function MatchDataEditor() {
           <TabsContent value="times" className="space-y-4">
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <Clock className="h-5 w-5" />
-                    Player Time Logs
-                  </CardTitle>
-                  <Button size="sm">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Player Time
-                  </Button>
-                </div>
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="h-5 w-5" />
+                  Player Time Logs
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <PlayerTimesTable
@@ -424,16 +412,10 @@ export default function MatchDataEditor() {
           <TabsContent value="periods" className="space-y-4">
             <Card>
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <Calendar className="h-5 w-5" />
-                    Match Periods
-                  </CardTitle>
-                  <Button size="sm">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Period
-                  </Button>
-                </div>
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5" />
+                  Match Periods
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <PeriodsTable
