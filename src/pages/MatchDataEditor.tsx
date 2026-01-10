@@ -276,33 +276,36 @@ export default function MatchDataEditor() {
     <div className="min-h-screen bg-muted/30">
       {/* Header */}
       <div className="bg-background border-b sticky top-0 z-10">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4 flex-1 min-w-0">
-              <Button variant="ghost" size="sm" onClick={handleCancel}>
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back
+        <div className="container mx-auto px-4 py-3">
+          {/* Mobile: Stack vertically, Desktop: Horizontal */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            {/* Left section with Back button and title */}
+            <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
+              <Button variant="ghost" size="sm" onClick={handleCancel} className="flex-shrink-0">
+                <ArrowLeft className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Back</span>
               </Button>
               
               <div className="flex-1 min-w-0">
-                <h1 className="text-xl sm:text-2xl font-bold truncate">
+                <h1 className="text-base sm:text-xl md:text-2xl font-bold truncate">
                   Match Data Editor
                 </h1>
-                <p className="text-sm text-muted-foreground truncate">
+                <p className="text-xs sm:text-sm text-muted-foreground truncate">
                   {fixture.teams.name} vs {fixture.opponent_name}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            {/* Right section with status and cancel */}
+            <div className="flex items-center justify-between sm:justify-end gap-2">
               {hasUnsavedChanges && (
-                <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400">
-                  Unsaved Changes
+                <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400 text-xs">
+                  Unsaved
                 </Badge>
               )}
               <Button variant="outline" size="sm" onClick={handleCancel}>
-                <X className="h-4 w-4 mr-2" />
-                Cancel
+                <X className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Cancel</span>
               </Button>
             </div>
           </div>
@@ -311,32 +314,35 @@ export default function MatchDataEditor() {
 
       {/* Summary Bar */}
       <div className="bg-background border-b">
-        <div className="container mx-auto px-4 py-3">
-          <div className="flex items-center justify-between gap-6 text-sm">
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2">
-                <span className="text-muted-foreground">Score:</span>
-                <span className="font-mono font-bold text-lg">
+        <div className="container mx-auto px-4 py-2 sm:py-3">
+          {/* Mobile: 2-row layout, Desktop: Single row */}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-xs sm:text-sm">
+            {/* Stats row */}
+            <div className="flex items-center gap-3 sm:gap-6 overflow-x-auto">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                <span className="text-muted-foreground text-xs sm:text-sm">Score:</span>
+                <span className="font-mono font-bold text-base sm:text-lg">
                   {ourGoals} - {opponentGoals}
                 </span>
               </div>
-              <Separator orientation="vertical" className="h-6" />
-              <div className="flex items-center gap-2">
-                <Target className="h-4 w-4 text-muted-foreground" />
-                <span>{events.length} Events</span>
+              <Separator orientation="vertical" className="h-4 sm:h-6 hidden sm:block" />
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                <Target className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
+                <span className="whitespace-nowrap">{events.length}</span>
               </div>
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-muted-foreground" />
-                <span>{playerTimes.length} Time Logs</span>
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
+                <span className="whitespace-nowrap">{playerTimes.length}</span>
               </div>
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-                <span>{periods.length} Periods</span>
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
+                <span className="whitespace-nowrap">{periods.length}</span>
               </div>
             </div>
             
-            <div className="text-muted-foreground">
-              {format(new Date(fixture.scheduled_date), 'EEE, MMM do, yyyy')}
+            {/* Date - right aligned on desktop, left on mobile */}
+            <div className="text-muted-foreground text-xs sm:text-sm">
+              {format(new Date(fixture.scheduled_date), 'MMM do, yyyy')}
             </div>
           </div>
         </div>
