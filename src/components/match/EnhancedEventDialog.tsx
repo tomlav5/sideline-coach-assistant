@@ -262,14 +262,14 @@ export function EnhancedEventDialog({
           )}
 
           {/* Penalty Checkbox (only for goals, not in penalty shootout) */}
-          {eventType === 'goal' && resolvedPeriod?.period_type !== 'penalties' && (
+          {eventType === 'goal' && (!resolvedPeriod || resolvedPeriod.period_type !== 'penalties') && (
             <div className="flex items-center space-x-2">
               <Checkbox
                 id="penalty"
                 checked={isPenalty}
                 onCheckedChange={(checked) => setIsPenalty(checked === true)}
               />
-              <Label htmlFor="penalty">Penalty</Label>
+              <Label htmlFor="penalty">Penalty Kick</Label>
             </div>
           )}
 
