@@ -7,7 +7,6 @@ import { RetrospectiveMatchDialog } from '@/components/fixtures/RetrospectiveMat
 import { SubstitutionDialog } from '@/components/match/SubstitutionDialog';
 import { MatchLockingBanner } from '@/components/match/MatchLockingBanner';
 import { QuickGoalButton } from '@/components/match/QuickGoalButton';
-import { UndoButton } from '@/components/match/UndoButton';
 import { FixedMatchHeader } from '@/components/match/FixedMatchHeader';
 import { BottomActionBar } from '@/components/match/BottomActionBar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,12 +22,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { toast } from 'sonner';
 import { Clock, Users, Target, History, ArrowUpDown, RotateCcw, Goal } from 'lucide-react';
 import { useRealtimeMatchSync } from '@/hooks/useRealtimeMatchSync';
 import { useWakeLock } from '@/hooks/useWakeLock';
 import { usePlayerTimers } from '@/hooks/usePlayerTimers';
-import { useUndoStack } from '@/hooks/useUndoStack';
 import { useEditMatchData } from '@/hooks/useEditMatchData';
 import { generateUUID } from '@/lib/uuid';
 import { useOptimisticUpdate } from '@/hooks/useOptimisticUpdate';
@@ -74,11 +71,6 @@ export default function EnhancedMatchTracker() {
   const navigate = useNavigate();
   const { isSupported: wakeLockSupported, requestWakeLock, releaseWakeLock } = useWakeLock();
   
-  // Undo system for quick reversal of actions
-  const { canUndo, isUndoing, currentAction, remainingSeconds, pushUndo, performUndo } = useUndoStack();
-  
-  // Edit capabilities for undo functionality
-  const { deleteEvent } = useEditMatchData();
   
   // Optimistic updates for instant feedback
   const optimisticUpdate = useOptimisticUpdate();
@@ -217,7 +209,7 @@ export default function EnhancedMatchTracker() {
 
     } catch (error) {
       console.error('Error loading match data:', error);
-      toast.error('Failed to load match data');
+      console.error('Failed to load match data');
     } finally {
       setLoading(false);
     }
@@ -268,7 +260,7 @@ export default function EnhancedMatchTracker() {
         .maybeSingle();
 
       if (!activePeriod) {
-        toast.error('No active period - start a period first');
+        console.error('No active period - start a period first');
         return;
       }
 
@@ -296,39 +288,11 @@ export default function EnhancedMatchTracker() {
 
       if (error) throw error;
 
-      // Add to undo stack
-      const player = players.find(p => p.id === playerId);
-      const playerName = player ? `${player.first_name} ${player.last_name}` : 'Unknown';
-      const assistPlayer = assistPlayerId ? players.find(p => p.id === assistPlayerId) : null;
-      const assistName = assistPlayer ? `${assistPlayer.first_name} ${assistPlayer.last_name}` : null;
-      
-      const goalDescription = isOurTeam 
-        ? `Goal by ${playerName}${assistName ? ` (assist: ${assistName})` : ''}` 
-        : `Opponent goal`;
-      
-      pushUndo({
-        type: 'event',
-        description: goalDescription,
-        undo: async () => {
-          await deleteEvent(newEvent.id);
-          await loadEvents();
-        },
-      });
-
-      // Reload events with visual feedback
+      // Reload events to update UI
       await loadEvents();
-      
-      const toastMessage = isOurTeam
-        ? `Goal recorded for ${playerName}!${assistName ? ` Assist: ${assistName}` : ''}`
-        : `Opponent goal recorded`;
-      
-      toast.success(toastMessage, {
-        description: `Minute ${totalMatchMinute}'`,
-        duration: 3000,
-      });
     } catch (error: any) {
       console.error('Error recording quick goal:', error);
-      toast.error(error?.message || 'Failed to record goal');
+      console.error('Failed to record goal:', error?.message);
       throw error;
     }
   };
@@ -436,7 +400,7 @@ export default function EnhancedMatchTracker() {
       const msg = e?.message || String(e);
       // Common RLS hint: missing club membership in DEV
       const hint = msg.includes('permission') || msg.includes('RLS') ? ' (check DEV club_members for your user)' : '';
-      toast.error(`Failed to prepare player statuses: ${msg}${hint}`);
+      console.error(`Failed to prepare player statuses: ${msg}${hint}`);
     }
   };
   const refreshPlayerStatusLists = async () => {
@@ -670,18 +634,14 @@ export default function EnhancedMatchTracker() {
       
       if (error) throw error;
       
-      toast('Match Restarted', {
-        description: "All match data has been reset successfully.",
-      });
+      console.log('Match restarted successfully');
       
       // Reload all data
       await loadMatchData();
       setShowRestartConfirm(false);
     } catch (error: any) {
       console.error('Error restarting match:', error);
-      toast('Error', {
-        description: error.message || "Failed to restart match. Please try again.",
-      });
+      console.error('Failed to restart match:', error.message);
     } finally {
       setIsRestarting(false);
     }
@@ -730,7 +690,7 @@ export default function EnhancedMatchTracker() {
       }
     },
     onOtherEvent: () => setShowEventDialog(true),
-    onUndo: () => canUndo && performUndo(),
+    onUndo: () => {}, // Undo functionality removed
   });
 
   if (loading) {
@@ -1027,7 +987,7 @@ export default function EnhancedMatchTracker() {
         onConfirm={async () => {
           try {
             if (!playerOut || !playerIn) {
-              toast.error('Select both players to make a substitution');
+              console.error('Select both players to make a substitution');
               return;
             }
 
@@ -1170,7 +1130,7 @@ export default function EnhancedMatchTracker() {
                 if (subEventErr) throw subEventErr;
               } catch (subEventCatch: any) {
                 console.error('Failed to record substitution event:', subEventCatch);
-                toast.error(subEventCatch?.message || 'Failed to record substitution event');
+                console.error('Failed to record substitution event:', subEventCatch?.message);
               }
             }
 
@@ -1180,7 +1140,6 @@ export default function EnhancedMatchTracker() {
             setSubstitutions(prev => [...prev, { outId: playerOut, inId: playerIn, minute: currentMinute, total: totalMatchMinute }]);
             console.log('Substitution noted (UI only):', { out: outPlayer, in: inPlayer, minute: currentMinute, total: totalMatchMinute });
 
-            toast.success('Substitution made and recorded');
             setSubDialogOpen(false);
             setPlayerOut('');
             setPlayerIn('');
@@ -1189,7 +1148,7 @@ export default function EnhancedMatchTracker() {
             reloadTimes(); // Refresh player timers to reflect new on-field players
           } catch (e) {
             console.error('Error making substitution:', e);
-            toast.error('Failed to make substitution');
+            console.error('Failed to make substitution');
           }
         }}
       />
@@ -1235,14 +1194,6 @@ export default function EnhancedMatchTracker() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Undo Button - Floating */}
-      <UndoButton
-        canUndo={canUndo}
-        isUndoing={isUndoing}
-        remainingSeconds={remainingSeconds}
-        description={currentAction?.description}
-        onUndo={performUndo}
-      />
 
         </div>
       </div>

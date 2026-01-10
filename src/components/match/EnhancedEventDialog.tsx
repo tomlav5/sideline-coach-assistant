@@ -9,7 +9,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
 
 interface Player {
   id: string;
@@ -123,12 +122,12 @@ export function EnhancedEventDialog({
 
   const handleSubmit = async () => {
     if (!resolvedPeriod) {
-      toast.error('No active period to record event');
+      console.error('No active period to record event');
       return;
     }
 
     if (eventType === 'goal' && !selectedPlayer && isOurTeam) {
-      toast.error('Please select a player for the goal');
+      console.error('Please select a player for the goal');
       return;
     }
 
@@ -158,8 +157,6 @@ export function EnhancedEventDialog({
 
       if (error) throw error;
 
-      toast.success(`${eventType.charAt(0).toUpperCase() + eventType.slice(1)} recorded successfully`);
-      
       // Reset form
       setSelectedPlayer('');
       setAssistPlayer('');
@@ -171,7 +168,7 @@ export function EnhancedEventDialog({
       onOpenChange(false);
     } catch (error: any) {
       console.error('Error recording event:', error);
-      toast.error(error?.message || 'Failed to record event');
+      console.error('Failed to record event:', error?.message);
     } finally {
       setIsLoading(false);
     }
