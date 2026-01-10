@@ -96,8 +96,6 @@ export default function EnhancedMatchTracker() {
 
   // Substitution state
   const [subDialogOpen, setSubDialogOpen] = useState(false);
-  const [playerOut, setPlayerOut] = useState('');
-  const [playerIn, setPlayerIn] = useState('');
   const [activePlayersList, setActivePlayersList] = useState<Player[]>([]);
   const [substitutePlayersList, setSubstitutePlayersList] = useState<Player[]>([]);
   // Local log of substitutions for UI only (not persisted as match_events)
@@ -976,18 +974,12 @@ export default function EnhancedMatchTracker() {
       <SubstitutionDialog
         open={subDialogOpen}
         onOpenChange={setSubDialogOpen}
-        playerOut={playerOut}
-        playerIn={playerIn}
-        onPlayersChange={(outId, inId) => {
-          setPlayerOut(outId);
-          setPlayerIn(inId);
-        }}
         activePlayers={activePlayersList}
         substitutePlayers={substitutePlayersList}
-        onConfirm={async () => {
+        onConfirm={async (pairs) => {
           try {
-            if (!playerOut || !playerIn) {
-              console.error('Select both players to make a substitution');
+            if (!pairs || pairs.length === 0) {
+              console.error('No substitutions to make');
               return;
             }
 
@@ -1032,123 +1024,122 @@ export default function EnhancedMatchTracker() {
               }
             }
             
-            console.log('Current period for substitution:', currentPeriod);
+            console.log('Processing', pairs.length, 'substitution(s) for period:', currentPeriod);
 
-            // Update player statuses and handle time logs
-            const { error: outErr } = await supabase
-              .from('player_match_status')
-              .update({ is_on_field: false })
-              .eq('fixture_id', fixtureId)
-              .eq('player_id', playerOut);
-            if (outErr) throw outErr;
-
-            const { error: inErr } = await supabase
-              .from('player_match_status')
-              .update({ is_on_field: true })
-              .eq('fixture_id', fixtureId)
-              .eq('player_id', playerIn);
-            if (inErr) throw inErr;
-
-            // Handle player time logs for substitution
-            if (currentPeriod) {
-              // Ensure a row exists for the player going OUT; if missing, initialize as starter at 0
-              const { data: outRow } = await supabase
-                .from('player_time_logs')
-                .select('player_id')
+            // Process each substitution pair
+            for (const pair of pairs) {
+              const { playerOut, playerIn } = pair;
+              
+              // Update player statuses
+              const { error: outErr } = await supabase
+                .from('player_match_status')
+                .update({ is_on_field: false })
                 .eq('fixture_id', fixtureId)
-                .eq('player_id', playerOut)
-                .eq('period_id', currentPeriod.id)
-                .maybeSingle();
+                .eq('player_id', playerOut);
+              if (outErr) throw outErr;
 
-              if (!outRow) {
+              const { error: inErr } = await supabase
+                .from('player_match_status')
+                .update({ is_on_field: true })
+                .eq('fixture_id', fixtureId)
+                .eq('player_id', playerIn);
+              if (inErr) throw inErr;
+
+              // Handle player time logs for substitution
+              if (currentPeriod) {
+                // Ensure a row exists for the player going OUT
+                const { data: outRow } = await supabase
+                  .from('player_time_logs')
+                  .select('player_id')
+                  .eq('fixture_id', fixtureId)
+                  .eq('player_id', playerOut)
+                  .eq('period_id', currentPeriod.id)
+                  .maybeSingle();
+
+                if (!outRow) {
+                  await supabase
+                    .from('player_time_logs')
+                    .insert({
+                      fixture_id: fixtureId,
+                      player_id: playerOut,
+                      period_id: currentPeriod.id,
+                      time_on_minute: 0,
+                      is_starter: true,
+                      is_active: true,
+                    });
+                }
+
+                // Finalize time log for player going OUT
                 await supabase
                   .from('player_time_logs')
-                  .insert({
-                    fixture_id: fixtureId,
-                    player_id: playerOut,
-                    period_id: currentPeriod.id,
-                    time_on_minute: 0,
-                    is_starter: true,
-                    is_active: true,
-                  });
-              }
+                  .update({
+                    time_off_minute: currentMinute,
+                    is_active: false,
+                  })
+                  .eq('fixture_id', fixtureId)
+                  .eq('player_id', playerOut)
+                  .eq('period_id', currentPeriod.id)
+                  .eq('is_active', true);
 
-              // Finalize time log for player going OUT (only update active log)
-              await supabase
-                .from('player_time_logs')
-                .update({
-                  time_off_minute: currentMinute,
-                  is_active: false,
-                })
-                .eq('fixture_id', fixtureId)
-                .eq('player_id', playerOut)
-                .eq('period_id', currentPeriod.id)
-                .eq('is_active', true);  // Only close the currently active interval
-
-              // Create time log for player coming IN (supports multiple intervals per period)
-              const { data: activeInLog } = await supabase
-                .from('player_time_logs')
-                .select('id, is_active')
-                .eq('fixture_id', fixtureId)
-                .eq('player_id', playerIn)
-                .eq('period_id', currentPeriod.id)
-                .eq('is_active', true)
-                .maybeSingle();
-
-              // Only insert if no active log exists (player might have closed logs from earlier subs)
-              if (!activeInLog) {
-                await supabase
+                // Create time log for player coming IN
+                const { data: activeInLog } = await supabase
                   .from('player_time_logs')
-                  .insert({
-                    fixture_id: fixtureId,
-                    player_id: playerIn,
-                    period_id: currentPeriod.id,
-                    time_on_minute: currentMinute,
-                    is_starter: false,
-                    is_active: true,
-                  });
+                  .select('id, is_active')
+                  .eq('fixture_id', fixtureId)
+                  .eq('player_id', playerIn)
+                  .eq('period_id', currentPeriod.id)
+                  .eq('is_active', true)
+                  .maybeSingle();
+
+                if (!activeInLog) {
+                  await supabase
+                    .from('player_time_logs')
+                    .insert({
+                      fixture_id: fixtureId,
+                      player_id: playerIn,
+                      period_id: currentPeriod.id,
+                      time_on_minute: currentMinute,
+                      is_starter: false,
+                      is_active: true,
+                    });
+                }
+
+                // Persist substitution event
+                try {
+                  const clientEventId = generateUUID();
+                  const { error: subEventErr } = await supabase
+                    .from('match_events')
+                    .upsert({
+                      fixture_id: fixtureId,
+                      period_id: currentPeriod.id,
+                      event_type: 'substitution',
+                      player_id: playerOut,
+                      assist_player_id: playerIn,
+                      minute_in_period: currentMinute,
+                      total_match_minute: totalMatchMinute,
+                      is_our_team: true,
+                      notes: null,
+                      is_retrospective: false,
+                      client_event_id: clientEventId,
+                    }, { onConflict: 'client_event_id' });
+                  if (subEventErr) throw subEventErr;
+                } catch (subEventCatch: any) {
+                  console.error('Failed to record substitution event:', subEventCatch);
+                }
               }
 
-              // Persist a substitution event (idempotent via client_event_id)
-              try {
-                const clientEventId = generateUUID();
-                const { error: subEventErr } = await supabase
-                  .from('match_events')
-                  .upsert({
-                    fixture_id: fixtureId,
-                    period_id: currentPeriod.id,
-                    event_type: 'substitution',
-                    player_id: playerOut,           // use existing column as OUT
-                    assist_player_id: playerIn,     // use existing column as IN
-                    minute_in_period: currentMinute,
-                    total_match_minute: totalMatchMinute,
-                    is_our_team: true,
-                    notes: null,
-                    is_retrospective: false,
-                    client_event_id: clientEventId,
-                  }, { onConflict: 'client_event_id' });
-                if (subEventErr) throw subEventErr;
-              } catch (subEventCatch: any) {
-                console.error('Failed to record substitution event:', subEventCatch);
-                console.error('Failed to record substitution event:', subEventCatch?.message);
-              }
+              // Add to UI substitutions log
+              setSubstitutions(prev => [...prev, { outId: playerOut, inId: playerIn, minute: currentMinute, total: totalMatchMinute }]);
             }
 
-            // Note substitution in UI only (events restricted to goals/assists)
-            const outPlayer = players.find(p => p.id === playerOut);
-            const inPlayer = players.find(p => p.id === playerIn);
-            setSubstitutions(prev => [...prev, { outId: playerOut, inId: playerIn, minute: currentMinute, total: totalMatchMinute }]);
-            console.log('Substitution noted (UI only):', { out: outPlayer, in: inPlayer, minute: currentMinute, total: totalMatchMinute });
-
+            console.log('Completed', pairs.length, 'substitution(s)');
             setSubDialogOpen(false);
-            setPlayerOut('');
-            setPlayerIn('');
             await refreshPlayerStatusLists();
-            await loadEvents(); // Refresh events list to show the substitution
-            reloadTimes(); // Refresh player timers to reflect new on-field players
+            await loadEvents();
+            reloadTimes();
           } catch (e) {
-            console.error('Error making substitution:', e);
-            console.error('Failed to make substitution');
+            console.error('Error making substitutions:', e);
+            console.error('Failed to make substitutions');
           }
         }}
       />
