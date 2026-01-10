@@ -7,7 +7,7 @@ interface MatchPeriod {
   id: string;
   fixture_id: string;
   period_number: number;
-  period_type: 'period';
+  period_type: 'period' | 'penalties';
   planned_duration_minutes: number;
   actual_start_time?: string;
   actual_end_time?: string;
@@ -214,7 +214,7 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
     }
   };
 
-  const startNewPeriod = async (plannedDurationMinutes: number = 30) => {
+  const startNewPeriod = async (plannedDurationMinutes: number = 30, periodType: 'period' | 'penalties' = 'period') => {
     try {
       const nextPeriodNumber = timerState.periods.length + 1;
       
@@ -223,9 +223,10 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
         .insert({
           fixture_id: fixtureId,
           period_number: nextPeriodNumber,
-          planned_duration_minutes: plannedDurationMinutes,
+          period_type: periodType,
+          planned_duration_minutes: periodType === 'penalties' ? 0 : plannedDurationMinutes,
           actual_start_time: new Date().toISOString(),
-          is_active: true,
+          is_active: periodType === 'period', // Penalties don't auto-run a timer
         })
         .select()
         .single();
@@ -254,7 +255,7 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
         ...prev,
         periods: [...prev.periods, newPeriod],
         currentPeriod: newPeriod,
-        isRunning: true,
+        isRunning: periodType === 'period', // Only regular periods run timer
         currentTime: 0,
         matchStatus: 'in_progress',
       }));
@@ -263,6 +264,40 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
     } catch (error) {
       console.error('Error starting new period:', error);
       toast({ title: 'Error', description: 'Failed to start period', variant: 'destructive' });
+    }
+  };
+
+  const startPenaltyShootout = async () => {
+    try {
+      // Check if at least one period has been completed
+      if (timerState.periods.length === 0) {
+        toast({ 
+          title: 'Cannot start penalty shootout', 
+          description: 'At least one period must be completed first', 
+          variant: 'destructive' 
+        });
+        return;
+      }
+
+      // Check if already in penalty shootout
+      const existingPenalties = timerState.periods.find(p => (p as any).period_type === 'penalties');
+      if (existingPenalties) {
+        toast({ 
+          title: 'Penalty shootout already exists', 
+          description: 'A penalty shootout has already been started', 
+          variant: 'destructive' 
+        });
+        return;
+      }
+
+      await startNewPeriod(0, 'penalties');
+      toast({ 
+        title: 'Penalty Shootout Started', 
+        description: 'Record penalty goals for each team' 
+      });
+    } catch (error) {
+      console.error('Error starting penalty shootout:', error);
+      toast({ title: 'Error', description: 'Failed to start penalty shootout', variant: 'destructive' });
     }
   };
 
@@ -517,6 +552,7 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
   return {
     timerState,
     startNewPeriod,
+    startPenaltyShootout,
     pauseTimer,
     resumeTimer,
     endCurrentPeriod,

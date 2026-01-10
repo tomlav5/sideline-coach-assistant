@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader as AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useEnhancedMatchTimer } from '@/hooks/useEnhancedMatchTimer';
-import { Play, Pause, Square, Plus, Timer, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Play, Pause, Square, Plus, Timer, RefreshCw, AlertTriangle, Target } from 'lucide-react';
 import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -22,6 +22,7 @@ export function EnhancedMatchControls({ fixtureId, onTimerUpdate, forceRefresh }
   const {
     timerState,
     startNewPeriod,
+    startPenaltyShootout,
     pauseTimer,
     resumeTimer,
     endCurrentPeriod,
@@ -75,6 +76,13 @@ export function EnhancedMatchControls({ fixtureId, onTimerUpdate, forceRefresh }
                          (timerState.matchStatus === 'paused' || timerState.matchStatus === 'in_progress');
   const canEndPeriod = timerState.currentPeriod;
   const canEndMatch = timerState.periods.length > 0 && timerState.matchStatus !== 'completed';
+  
+  // Check if penalty shootout can be started
+  const hasPenaltyShootout = timerState.periods.some(p => p.period_type === 'penalties');
+  const canStartPenaltyShootout = timerState.periods.length > 0 && 
+                                   !hasPenaltyShootout && 
+                                   timerState.matchStatus !== 'completed' &&
+                                   (!timerState.currentPeriod || timerState.currentPeriod.actual_end_time);
 
   return (
     <Card>
@@ -129,7 +137,7 @@ export function EnhancedMatchControls({ fixtureId, onTimerUpdate, forceRefresh }
                   variant={period.id === timerState.currentPeriod?.id ? 'default' : 'outline'}
                   className="text-xs"
                 >
-                  P{period.period_number}
+                  {period.period_type === 'penalties' ? '⚽ Penalties' : `P${period.period_number}`}
                   {period.actual_end_time && ' ✓'}
                 </Badge>
               ))}
@@ -181,6 +189,17 @@ export function EnhancedMatchControls({ fixtureId, onTimerUpdate, forceRefresh }
             <RefreshCw className="h-3 w-3" />
             Refresh Timer State
           </Button>
+
+          {/* Start Penalty Shootout Button */}
+          {canStartPenaltyShootout && (
+            <Button
+              onClick={startPenaltyShootout}
+              className="w-full flex items-center justify-center gap-2 h-12 text-base font-semibold bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800"
+            >
+              <Target className="h-5 w-5" />
+              Start Penalty Shootout
+            </Button>
+          )}
 
           {/* End Period Button - Yellow, Requires Confirmation */}
           {canEndPeriod && (

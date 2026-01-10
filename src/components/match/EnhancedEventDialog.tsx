@@ -20,6 +20,7 @@ interface Player {
 interface MatchPeriod {
   id: string;
   period_number: number;
+  period_type?: 'period' | 'penalties';
   planned_duration_minutes: number;
 }
 
@@ -71,7 +72,7 @@ export function EnhancedEventDialog({
           if (fx?.current_period_id) {
             const { data: period, error: pErr } = await supabase
               .from('match_periods')
-              .select('id, period_number, planned_duration_minutes')
+              .select('id, period_number, period_type, planned_duration_minutes')
               .eq('id', fx.current_period_id)
               .single();
             if (pErr) throw pErr;
@@ -134,6 +135,7 @@ export function EnhancedEventDialog({
     setIsLoading(true);
 
     try {
+      const isPenaltyPeriod = resolvedPeriod.period_type === 'penalties';
       const minuteToUse = customMinute ? parseInt(customMinute) : currentMinute;
       
       const eventData = {
@@ -145,7 +147,7 @@ export function EnhancedEventDialog({
         minute_in_period: minuteToUse,
         total_match_minute: customMinute ? totalMatchMinute + (parseInt(customMinute) - currentMinute) : totalMatchMinute,
         is_our_team: isOurTeam,
-        is_penalty: eventType === 'goal' ? isPenalty : false,
+        is_penalty: eventType === 'goal' ? (isPenaltyPeriod || isPenalty) : false,
         notes: notes || null,
         is_retrospective: false,
         client_event_id: (typeof crypto !== 'undefined' && 'randomUUID' in crypto) ? (crypto as any).randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -233,8 +235,8 @@ export function EnhancedEventDialog({
             </div>
           )}
 
-          {/* Assist Player (only for goals from our team) */}
-          {eventType === 'goal' && isOurTeam && (
+          {/* Assist Player (only for goals from our team, not in penalty shootout) */}
+          {eventType === 'goal' && isOurTeam && resolvedPeriod?.period_type !== 'penalties' && (
             <div>
               <Label>Assist Player (optional)</Label>
               <Select
@@ -259,8 +261,8 @@ export function EnhancedEventDialog({
             </div>
           )}
 
-          {/* Penalty Checkbox (only for goals) */}
-          {eventType === 'goal' && (
+          {/* Penalty Checkbox (only for goals, not in penalty shootout) */}
+          {eventType === 'goal' && resolvedPeriod?.period_type !== 'penalties' && (
             <div className="flex items-center space-x-2">
               <Checkbox
                 id="penalty"
@@ -271,9 +273,21 @@ export function EnhancedEventDialog({
             </div>
           )}
 
-          {/* Time Override */}
+          {/* Penalty shootout indicator */}
+          {resolvedPeriod?.period_type === 'penalties' && (
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div className="text-sm font-medium text-blue-900 dark:text-blue-100">⚽ Penalty Shootout</div>
+              <div className="text-xs text-blue-700 dark:text-blue-300">All goals are automatically marked as penalties</div>
+            </div>
+          )}
+
+          {/* Time Override / Shot Number */}
           <div>
-            <Label>Minute (leave empty for current time: {currentMinute})</Label>
+            <Label>
+              {resolvedPeriod?.period_type === 'penalties' 
+                ? 'Shot Number (leave empty for automatic)' 
+                : `Minute (leave empty for current time: ${currentMinute})`}
+            </Label>
             <Input
               type="number"
               value={customMinute}
@@ -297,7 +311,9 @@ export function EnhancedEventDialog({
           {/* Current Context */}
           {resolvedPeriod && (
             <div className="text-sm text-muted-foreground p-2 bg-muted rounded">
-              P{resolvedPeriod.period_number} • Minute {currentMinute} • Total {totalMatchMinute}
+              {resolvedPeriod.period_type === 'penalties' 
+                ? `⚽ Penalty Shootout • Shot ${currentMinute}` 
+                : `P${resolvedPeriod.period_number} • Minute ${currentMinute} • Total ${totalMatchMinute}`}
             </div>
           )}
 
