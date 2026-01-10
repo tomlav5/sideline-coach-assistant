@@ -11,7 +11,6 @@ import { ArrowLeft, Trophy, Target, Clock, Users, Calendar, MapPin, Edit } from 
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { ResponsiveWrapper } from '@/components/ui/responsive-wrapper';
-import { EditMatchDialog } from '@/components/match/EditMatchDialog';
 
 interface MatchEvent {
   id: string;
@@ -81,11 +80,8 @@ export default function MatchReport() {
   const [fixture, setFixture] = useState<FixtureDetails | null>(null);
   const [events, setEvents] = useState<MatchEvent[]>([]);
   const [playerTimes, setPlayerTimes] = useState<PlayerTime[]>([]);
-  const [rawPlayerTimes, setRawPlayerTimes] = useState<any[]>([]); // Raw data for editing
   const [periods, setPeriods] = useState<MatchPeriod[]>([]);
-  const [players, setPlayers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showEditDialog, setShowEditDialog] = useState(false);
 
   useEffect(() => {
     if (fixtureId) {
@@ -201,9 +197,6 @@ export default function MatchReport() {
 
       if (playerTimesError) throw playerTimesError;
       
-      // Store raw data for editing
-      setRawPlayerTimes(playerTimesData || []);
-      
       // Group player times by player_id and calculate actual totals
       const playerTimeMap = new Map<string, PlayerTime>();
       
@@ -231,25 +224,6 @@ export default function MatchReport() {
         return b.total_minutes - a.total_minutes;
       }));
 
-      // Fetch players for the team (needed for editing)
-      if (fixtureData && (fixtureData as any).team_id) {
-        const { data: playersData, error: playersError } = await supabase
-          .from('team_players')
-          .select(`
-            players!fk_team_players_player_id (
-              id,
-              first_name,
-              last_name,
-              jersey_number
-            )
-          `)
-          .eq('team_id', (fixtureData as any).team_id)
-          .order('players(jersey_number)', { ascending: true });
-
-        if (!playersError && playersData) {
-          setPlayers(playersData.map(tp => (tp as any).players).filter(Boolean));
-        }
-      }
 
     } catch (error: any) {
       console.error('Error fetching match report:', error);
@@ -410,7 +384,7 @@ export default function MatchReport() {
           <Button 
             variant="outline"
             size="sm"
-            onClick={() => setShowEditDialog(true)}
+            onClick={() => navigate(`/match-data-editor/${fixtureId}`)}
             className="flex items-center gap-2 w-fit"
           >
             <Edit className="h-4 w-4" />
@@ -663,17 +637,6 @@ export default function MatchReport() {
         </CardContent>
       </Card>
 
-      {/* Edit Match Data Dialog */}
-      <EditMatchDialog
-        open={showEditDialog}
-        onOpenChange={setShowEditDialog}
-        fixtureId={fixtureId!}
-        events={events as any}
-        playerTimes={rawPlayerTimes}
-        periods={periods}
-        players={players}
-        onUpdate={fetchMatchReport}
-      />
     </ResponsiveWrapper>
   );
 }

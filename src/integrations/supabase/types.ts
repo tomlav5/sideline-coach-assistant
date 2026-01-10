@@ -769,7 +769,7 @@ export type Database = {
       fixture_type: "home" | "away"
       match_half: "first" | "second"
       match_status: "scheduled" | "in_progress" | "completed" | "cancelled"
-      period_type: "period"
+      period_type: "period" | "penalties"
       team_type: "5-a-side" | "7-a-side" | "9-a-side" | "11-a-side"
       user_role: "admin" | "official" | "viewer"
     }
@@ -912,7 +912,7 @@ export const Constants = {
       fixture_type: ["home", "away"],
       match_half: ["first", "second"],
       match_status: ["scheduled", "in_progress", "completed", "cancelled"],
-      period_type: ["period"],
+      period_type: ["period", "penalties"],
       team_type: ["5-a-side", "7-a-side", "9-a-side", "11-a-side"],
       user_role: ["admin", "official", "viewer"],
     },

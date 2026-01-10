@@ -5,9 +5,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Calendar, Clock, MapPin, Home, Plane, Trophy, Users, Play, ArrowLeft } from 'lucide-react';
+import { Calendar, Clock, MapPin, Home, Plane, Trophy, Users, Play, ArrowLeft, Settings } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { EditFixtureDialog } from '@/components/fixtures/EditFixtureDialog';
 
 interface Fixture {
   id: string;
@@ -37,10 +38,24 @@ export default function FixtureDetail() {
   const { toast } = useToast();
   const [fixture, setFixture] = useState<Fixture | null>(null);
   const [loading, setLoading] = useState(true);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [teams, setTeams] = useState<any[]>([]);
+  const [fixtureData, setFixtureData] = useState({
+    team_id: '',
+    opponent_name: '',
+    location: '',
+    fixture_type: 'home' as 'home' | 'away',
+    competition_type: 'friendly' as 'league' | 'tournament' | 'friendly',
+    competition_name: '',
+  });
+  const [selectedDate, setSelectedDate] = useState<Date>();
+  const [selectedTime, setSelectedTime] = useState('');
 
   useEffect(() => {
     if (fixtureId) {
       fetchFixture();
+      fetchTeams();
     }
   }, [fixtureId]);
 
@@ -71,6 +86,101 @@ export default function FixtureDetail() {
       navigate('/fixtures');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchTeams = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('teams')
+        .select(`
+          id,
+          name,
+          club:clubs(id, name)
+        `);
+      
+      if (error) throw error;
+      setTeams(data || []);
+    } catch (error) {
+      console.error('Error fetching teams:', error);
+    }
+  };
+
+  const openEditDialog = () => {
+    if (!fixture) return;
+    
+    setFixtureData({
+      team_id: fixture.team_id,
+      opponent_name: fixture.opponent_name,
+      location: fixture.location || '',
+      fixture_type: fixture.fixture_type,
+      competition_type: fixture.competition_type,
+      competition_name: fixture.competition_name || '',
+    });
+    setSelectedDate(new Date(fixture.scheduled_date));
+    setSelectedTime(format(new Date(fixture.scheduled_date), 'HH:mm'));
+    setEditDialogOpen(true);
+  };
+
+  const updateFixture = async () => {
+    if (!fixtureId) return;
+
+    const missingFields: string[] = [];
+    if (!fixtureData.team_id) missingFields.push('Team');
+    if (!fixtureData.opponent_name.trim()) missingFields.push('Opponent');
+    if (!selectedDate) missingFields.push('Match Date');
+    if (fixtureData.competition_type === 'tournament' && !fixtureData.competition_name.trim()) {
+      missingFields.push('Tournament Name');
+    }
+
+    if (missingFields.length > 0) {
+      toast({
+        title: 'Missing Required Fields',
+        description: `Please complete: ${missingFields.join(', ')}`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setUpdating(true);
+      const [hours, minutes] = selectedTime.split(':');
+      const scheduledDateTime = new Date(selectedDate);
+      scheduledDateTime.setHours(parseInt(hours), parseInt(minutes));
+
+      const { error } = await supabase
+        .from('fixtures')
+        .update({
+          team_id: fixtureData.team_id,
+          opponent_name: fixtureData.opponent_name.trim(),
+          location: fixtureData.location.trim() || null,
+          fixture_type: fixtureData.fixture_type,
+          half_length: 25,
+          scheduled_date: scheduledDateTime.toISOString(),
+          competition_type: fixtureData.competition_type,
+          competition_name: fixtureData.competition_name.trim() || null,
+          kickoff_time_tbd: !selectedTime,
+        })
+        .eq('id', fixtureId);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Success',
+        description: 'Fixture updated successfully',
+      });
+      
+      setEditDialogOpen(false);
+      fetchFixture();
+    } catch (error) {
+      console.error('Error updating fixture:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update fixture',
+        variant: 'destructive',
+      });
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -168,7 +278,7 @@ export default function FixtureDetail() {
   return (
     <div className="container mx-auto px-4 py-6 max-w-4xl">
       {/* Header */}
-      <div className="flex items-center space-x-3 mb-6">
+      <div className="flex items-center justify-between mb-6">
         <Button
           variant="ghost"
           size="sm"
@@ -177,6 +287,17 @@ export default function FixtureDetail() {
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Fixtures
         </Button>
+        
+        {isUpcoming && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={openEditDialog}
+          >
+            <Settings className="h-4 w-4 mr-2" />
+            Edit Details
+          </Button>
+        )}
       </div>
 
       <div className="space-y-6">
@@ -385,6 +506,21 @@ export default function FixtureDetail() {
           </Card>
         )}
       </div>
+
+      {/* Edit Dialog */}
+      <EditFixtureDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        teams={teams}
+        fixtureData={fixtureData}
+        onFixtureDataChange={setFixtureData}
+        selectedDate={selectedDate}
+        onDateChange={setSelectedDate}
+        selectedTime={selectedTime}
+        onTimeChange={setSelectedTime}
+        onConfirm={updateFixture}
+        isUpdating={updating}
+      />
     </div>
   );
 }

@@ -9,7 +9,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
 
 interface Player {
   id: string;
@@ -21,6 +20,7 @@ interface Player {
 interface MatchPeriod {
   id: string;
   period_number: number;
+  period_type?: 'period' | 'penalties';
   planned_duration_minutes: number;
 }
 
@@ -72,7 +72,7 @@ export function EnhancedEventDialog({
           if (fx?.current_period_id) {
             const { data: period, error: pErr } = await supabase
               .from('match_periods')
-              .select('id, period_number, planned_duration_minutes')
+              .select('id, period_number, period_type, planned_duration_minutes')
               .eq('id', fx.current_period_id)
               .single();
             if (pErr) throw pErr;
@@ -123,18 +123,19 @@ export function EnhancedEventDialog({
 
   const handleSubmit = async () => {
     if (!resolvedPeriod) {
-      toast.error('No active period to record event');
+      console.error('No active period to record event');
       return;
     }
 
     if (eventType === 'goal' && !selectedPlayer && isOurTeam) {
-      toast.error('Please select a player for the goal');
+      console.error('Please select a player for the goal');
       return;
     }
 
     setIsLoading(true);
 
     try {
+      const isPenaltyPeriod = resolvedPeriod.period_type === 'penalties';
       const minuteToUse = customMinute ? parseInt(customMinute) : currentMinute;
       
       const eventData = {
@@ -146,7 +147,7 @@ export function EnhancedEventDialog({
         minute_in_period: minuteToUse,
         total_match_minute: customMinute ? totalMatchMinute + (parseInt(customMinute) - currentMinute) : totalMatchMinute,
         is_our_team: isOurTeam,
-        is_penalty: eventType === 'goal' ? isPenalty : false,
+        is_penalty: eventType === 'goal' ? (isPenaltyPeriod || isPenalty) : false,
         notes: notes || null,
         is_retrospective: false,
         client_event_id: (typeof crypto !== 'undefined' && 'randomUUID' in crypto) ? (crypto as any).randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -158,8 +159,6 @@ export function EnhancedEventDialog({
 
       if (error) throw error;
 
-      toast.success(`${eventType.charAt(0).toUpperCase() + eventType.slice(1)} recorded successfully`);
-      
       // Reset form
       setSelectedPlayer('');
       setAssistPlayer('');
@@ -171,7 +170,7 @@ export function EnhancedEventDialog({
       onOpenChange(false);
     } catch (error: any) {
       console.error('Error recording event:', error);
-      toast.error(error?.message || 'Failed to record event');
+      console.error('Failed to record event:', error?.message);
     } finally {
       setIsLoading(false);
     }
@@ -236,8 +235,8 @@ export function EnhancedEventDialog({
             </div>
           )}
 
-          {/* Assist Player (only for goals from our team) */}
-          {eventType === 'goal' && isOurTeam && (
+          {/* Assist Player (only for goals from our team, not in penalty shootout) */}
+          {eventType === 'goal' && isOurTeam && resolvedPeriod?.period_type !== 'penalties' && (
             <div>
               <Label>Assist Player (optional)</Label>
               <Select
@@ -262,21 +261,33 @@ export function EnhancedEventDialog({
             </div>
           )}
 
-          {/* Penalty Checkbox (only for goals) */}
-          {eventType === 'goal' && (
+          {/* Penalty Checkbox (only for goals, not in penalty shootout) */}
+          {eventType === 'goal' && (!resolvedPeriod || resolvedPeriod.period_type !== 'penalties') && (
             <div className="flex items-center space-x-2">
               <Checkbox
                 id="penalty"
                 checked={isPenalty}
                 onCheckedChange={(checked) => setIsPenalty(checked === true)}
               />
-              <Label htmlFor="penalty">Penalty</Label>
+              <Label htmlFor="penalty">Penalty Kick</Label>
             </div>
           )}
 
-          {/* Time Override */}
+          {/* Penalty shootout indicator */}
+          {resolvedPeriod?.period_type === 'penalties' && (
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div className="text-sm font-medium text-blue-900 dark:text-blue-100">⚽ Penalty Shootout</div>
+              <div className="text-xs text-blue-700 dark:text-blue-300">All goals are automatically marked as penalties</div>
+            </div>
+          )}
+
+          {/* Time Override / Shot Number */}
           <div>
-            <Label>Minute (leave empty for current time: {currentMinute})</Label>
+            <Label>
+              {resolvedPeriod?.period_type === 'penalties' 
+                ? 'Shot Number (leave empty for automatic)' 
+                : `Minute (leave empty for current time: ${currentMinute})`}
+            </Label>
             <Input
               type="number"
               value={customMinute}
@@ -300,7 +311,9 @@ export function EnhancedEventDialog({
           {/* Current Context */}
           {resolvedPeriod && (
             <div className="text-sm text-muted-foreground p-2 bg-muted rounded">
-              P{resolvedPeriod.period_number} • Minute {currentMinute} • Total {totalMatchMinute}
+              {resolvedPeriod.period_type === 'penalties' 
+                ? `⚽ Penalty Shootout • Shot ${currentMinute}` 
+                : `P${resolvedPeriod.period_number} • Minute ${currentMinute} • Total ${totalMatchMinute}`}
             </div>
           )}
 

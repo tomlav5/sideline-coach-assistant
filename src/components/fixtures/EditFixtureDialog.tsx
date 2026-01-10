@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -65,13 +66,15 @@ export function EditFixtureDialog({
   onConfirm,
   isUpdating
 }: EditFixtureDialogProps) {
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  
   const updateFixtureData = (updates: Partial<FixtureFormData>) => {
     onFixtureDataChange({ ...fixtureData, ...updates });
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="dialog-standard">
+      <DialogContent className="dialog-standard max-w-lg">
         <DialogHeader>
           <DialogTitle>Edit Fixture</DialogTitle>
           <DialogDescription>
@@ -88,7 +91,9 @@ export function EditFixtureDialog({
               <SelectContent>
                 {teams.map((team) => (
                   <SelectItem key={team.id} value={team.id}>
-                    {team.name} ({team.club.name})
+                    <span className="truncate">
+                      {team.name} ({team.club.name})
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -127,7 +132,7 @@ export function EditFixtureDialog({
           
           <div>
             <Label>Match Date</Label>
-            <Popover>
+            <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
@@ -144,7 +149,10 @@ export function EditFixtureDialog({
                 <CalendarComponent
                   mode="single"
                   selected={selectedDate}
-                  onSelect={onDateChange}
+                  onSelect={(date) => {
+                    onDateChange(date);
+                    setIsCalendarOpen(false);
+                  }}
                   initialFocus
                   className="p-3 pointer-events-auto"
                 />

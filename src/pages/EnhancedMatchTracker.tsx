@@ -7,7 +7,6 @@ import { RetrospectiveMatchDialog } from '@/components/fixtures/RetrospectiveMat
 import { SubstitutionDialog } from '@/components/match/SubstitutionDialog';
 import { MatchLockingBanner } from '@/components/match/MatchLockingBanner';
 import { QuickGoalButton } from '@/components/match/QuickGoalButton';
-import { UndoButton } from '@/components/match/UndoButton';
 import { FixedMatchHeader } from '@/components/match/FixedMatchHeader';
 import { BottomActionBar } from '@/components/match/BottomActionBar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,12 +22,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { toast } from 'sonner';
 import { Clock, Users, Target, History, ArrowUpDown, RotateCcw, Goal } from 'lucide-react';
 import { useRealtimeMatchSync } from '@/hooks/useRealtimeMatchSync';
 import { useWakeLock } from '@/hooks/useWakeLock';
 import { usePlayerTimers } from '@/hooks/usePlayerTimers';
-import { useUndoStack } from '@/hooks/useUndoStack';
 import { useEditMatchData } from '@/hooks/useEditMatchData';
 import { generateUUID } from '@/lib/uuid';
 import { useOptimisticUpdate } from '@/hooks/useOptimisticUpdate';
@@ -74,11 +71,6 @@ export default function EnhancedMatchTracker() {
   const navigate = useNavigate();
   const { isSupported: wakeLockSupported, requestWakeLock, releaseWakeLock } = useWakeLock();
   
-  // Undo system for quick reversal of actions
-  const { canUndo, isUndoing, currentAction, remainingSeconds, pushUndo, performUndo } = useUndoStack();
-  
-  // Edit capabilities for undo functionality
-  const { deleteEvent } = useEditMatchData();
   
   // Optimistic updates for instant feedback
   const optimisticUpdate = useOptimisticUpdate();
@@ -104,8 +96,6 @@ export default function EnhancedMatchTracker() {
 
   // Substitution state
   const [subDialogOpen, setSubDialogOpen] = useState(false);
-  const [playerOut, setPlayerOut] = useState('');
-  const [playerIn, setPlayerIn] = useState('');
   const [activePlayersList, setActivePlayersList] = useState<Player[]>([]);
   const [substitutePlayersList, setSubstitutePlayersList] = useState<Player[]>([]);
   // Local log of substitutions for UI only (not persisted as match_events)
@@ -217,7 +207,7 @@ export default function EnhancedMatchTracker() {
 
     } catch (error) {
       console.error('Error loading match data:', error);
-      toast.error('Failed to load match data');
+      console.error('Failed to load match data');
     } finally {
       setLoading(false);
     }
@@ -257,7 +247,7 @@ export default function EnhancedMatchTracker() {
   };
 
   // Quick goal handler with optimistic updates and assist tracking
-  const handleQuickGoal = async (playerId: string, isOurTeam: boolean = true, assistPlayerId?: string) => {
+  const handleQuickGoal = async (playerId: string, isOurTeam: boolean = true, assistPlayerId?: string, isPenalty: boolean = false) => {
     try {
       // Get current period
       const { data: activePeriod } = await supabase
@@ -268,12 +258,15 @@ export default function EnhancedMatchTracker() {
         .maybeSingle();
 
       if (!activePeriod) {
-        toast.error('No active period - start a period first');
+        console.error('No active period - start a period first');
         return;
       }
 
       // Generate unique client event ID
       const clientEventId = generateUUID();
+      
+      // Auto-mark as penalty if in penalty shootout period
+      const isPenaltyPeriod = (activePeriod as any).period_type === 'penalties';
 
       // Create goal event
       const { data: newEvent, error } = await supabase
@@ -287,7 +280,7 @@ export default function EnhancedMatchTracker() {
           minute_in_period: currentMinute,
           total_match_minute: totalMatchMinute,
           is_our_team: isOurTeam,
-          is_penalty: false,
+          is_penalty: isPenaltyPeriod || isPenalty,
           is_retrospective: false,
           client_event_id: clientEventId,
         })
@@ -296,39 +289,11 @@ export default function EnhancedMatchTracker() {
 
       if (error) throw error;
 
-      // Add to undo stack
-      const player = players.find(p => p.id === playerId);
-      const playerName = player ? `${player.first_name} ${player.last_name}` : 'Unknown';
-      const assistPlayer = assistPlayerId ? players.find(p => p.id === assistPlayerId) : null;
-      const assistName = assistPlayer ? `${assistPlayer.first_name} ${assistPlayer.last_name}` : null;
-      
-      const goalDescription = isOurTeam 
-        ? `Goal by ${playerName}${assistName ? ` (assist: ${assistName})` : ''}` 
-        : `Opponent goal`;
-      
-      pushUndo({
-        type: 'event',
-        description: goalDescription,
-        undo: async () => {
-          await deleteEvent(newEvent.id);
-          await loadEvents();
-        },
-      });
-
-      // Reload events with visual feedback
+      // Reload events to update UI
       await loadEvents();
-      
-      const toastMessage = isOurTeam
-        ? `Goal recorded for ${playerName}!${assistName ? ` Assist: ${assistName}` : ''}`
-        : `Opponent goal recorded`;
-      
-      toast.success(toastMessage, {
-        description: `Minute ${totalMatchMinute}'`,
-        duration: 3000,
-      });
     } catch (error: any) {
       console.error('Error recording quick goal:', error);
-      toast.error(error?.message || 'Failed to record goal');
+      console.error('Failed to record goal:', error?.message);
       throw error;
     }
   };
@@ -436,7 +401,7 @@ export default function EnhancedMatchTracker() {
       const msg = e?.message || String(e);
       // Common RLS hint: missing club membership in DEV
       const hint = msg.includes('permission') || msg.includes('RLS') ? ' (check DEV club_members for your user)' : '';
-      toast.error(`Failed to prepare player statuses: ${msg}${hint}`);
+      console.error(`Failed to prepare player statuses: ${msg}${hint}`);
     }
   };
   const refreshPlayerStatusLists = async () => {
@@ -670,18 +635,14 @@ export default function EnhancedMatchTracker() {
       
       if (error) throw error;
       
-      toast('Match Restarted', {
-        description: "All match data has been reset successfully.",
-      });
+      console.log('Match restarted successfully');
       
       // Reload all data
       await loadMatchData();
       setShowRestartConfirm(false);
     } catch (error: any) {
       console.error('Error restarting match:', error);
-      toast('Error', {
-        description: error.message || "Failed to restart match. Please try again.",
-      });
+      console.error('Failed to restart match:', error.message);
     } finally {
       setIsRestarting(false);
     }
@@ -730,7 +691,7 @@ export default function EnhancedMatchTracker() {
       }
     },
     onOtherEvent: () => setShowEventDialog(true),
-    onUndo: () => canUndo && performUndo(),
+    onUndo: () => {}, // Undo functionality removed
   });
 
   if (loading) {
@@ -1016,18 +977,12 @@ export default function EnhancedMatchTracker() {
       <SubstitutionDialog
         open={subDialogOpen}
         onOpenChange={setSubDialogOpen}
-        playerOut={playerOut}
-        playerIn={playerIn}
-        onPlayersChange={(outId, inId) => {
-          setPlayerOut(outId);
-          setPlayerIn(inId);
-        }}
         activePlayers={activePlayersList}
         substitutePlayers={substitutePlayersList}
-        onConfirm={async () => {
+        onConfirm={async (pairs) => {
           try {
-            if (!playerOut || !playerIn) {
-              toast.error('Select both players to make a substitution');
+            if (!pairs || pairs.length === 0) {
+              console.error('No substitutions to make');
               return;
             }
 
@@ -1072,124 +1027,140 @@ export default function EnhancedMatchTracker() {
               }
             }
             
-            console.log('Current period for substitution:', currentPeriod);
+            console.log('Processing', pairs.length, 'substitution(s) for period:', currentPeriod);
 
-            // Update player statuses and handle time logs
-            const { error: outErr } = await supabase
-              .from('player_match_status')
-              .update({ is_on_field: false })
-              .eq('fixture_id', fixtureId)
-              .eq('player_id', playerOut);
-            if (outErr) throw outErr;
-
-            const { error: inErr } = await supabase
-              .from('player_match_status')
-              .update({ is_on_field: true })
-              .eq('fixture_id', fixtureId)
-              .eq('player_id', playerIn);
-            if (inErr) throw inErr;
-
-            // Handle player time logs for substitution
-            if (currentPeriod) {
-              // Ensure a row exists for the player going OUT; if missing, initialize as starter at 0
-              const { data: outRow } = await supabase
-                .from('player_time_logs')
-                .select('player_id')
+            // Process each substitution pair
+            for (const pair of pairs) {
+              const { playerOut, playerIn } = pair;
+              
+              // Update player statuses
+              const { error: outErr } = await supabase
+                .from('player_match_status')
+                .update({ is_on_field: false })
                 .eq('fixture_id', fixtureId)
-                .eq('player_id', playerOut)
-                .eq('period_id', currentPeriod.id)
-                .maybeSingle();
+                .eq('player_id', playerOut);
+              if (outErr) throw outErr;
 
-              if (!outRow) {
+              const { error: inErr } = await supabase
+                .from('player_match_status')
+                .update({ is_on_field: true })
+                .eq('fixture_id', fixtureId)
+                .eq('player_id', playerIn);
+              if (inErr) throw inErr;
+
+              // Handle player time logs for substitution
+              if (currentPeriod) {
+                // Ensure a row exists for the player going OUT
+                const { data: outRow } = await supabase
+                  .from('player_time_logs')
+                  .select('player_id')
+                  .eq('fixture_id', fixtureId)
+                  .eq('player_id', playerOut)
+                  .eq('period_id', currentPeriod.id)
+                  .maybeSingle();
+
+                if (!outRow) {
+                  await supabase
+                    .from('player_time_logs')
+                    .insert({
+                      fixture_id: fixtureId,
+                      player_id: playerOut,
+                      period_id: currentPeriod.id,
+                      time_on_minute: 0,
+                      is_starter: true,
+                      is_active: true,
+                    });
+                }
+
+                // Finalize time log for player going OUT
                 await supabase
                   .from('player_time_logs')
-                  .insert({
-                    fixture_id: fixtureId,
-                    player_id: playerOut,
-                    period_id: currentPeriod.id,
-                    time_on_minute: 0,
-                    is_starter: true,
-                    is_active: true,
-                  });
-              }
+                  .update({
+                    time_off_minute: currentMinute,
+                    is_active: false,
+                  })
+                  .eq('fixture_id', fixtureId)
+                  .eq('player_id', playerOut)
+                  .eq('period_id', currentPeriod.id)
+                  .eq('is_active', true);
 
-              // Finalize time log for player going OUT (only update active log)
-              await supabase
-                .from('player_time_logs')
-                .update({
-                  time_off_minute: currentMinute,
-                  is_active: false,
-                })
-                .eq('fixture_id', fixtureId)
-                .eq('player_id', playerOut)
-                .eq('period_id', currentPeriod.id)
-                .eq('is_active', true);  // Only close the currently active interval
-
-              // Create time log for player coming IN (supports multiple intervals per period)
-              const { data: activeInLog } = await supabase
-                .from('player_time_logs')
-                .select('id, is_active')
-                .eq('fixture_id', fixtureId)
-                .eq('player_id', playerIn)
-                .eq('period_id', currentPeriod.id)
-                .eq('is_active', true)
-                .maybeSingle();
-
-              // Only insert if no active log exists (player might have closed logs from earlier subs)
-              if (!activeInLog) {
-                await supabase
+                // Create time log for player coming IN
+                const { data: activeInLog } = await supabase
                   .from('player_time_logs')
-                  .insert({
-                    fixture_id: fixtureId,
-                    player_id: playerIn,
-                    period_id: currentPeriod.id,
-                    time_on_minute: currentMinute,
-                    is_starter: false,
-                    is_active: true,
-                  });
+                  .select('id, is_active')
+                  .eq('fixture_id', fixtureId)
+                  .eq('player_id', playerIn)
+                  .eq('period_id', currentPeriod.id)
+                  .eq('is_active', true)
+                  .maybeSingle();
+
+                if (!activeInLog) {
+                  await supabase
+                    .from('player_time_logs')
+                    .insert({
+                      fixture_id: fixtureId,
+                      player_id: playerIn,
+                      period_id: currentPeriod.id,
+                      time_on_minute: currentMinute,
+                      is_starter: false,
+                      is_active: true,
+                    });
+                }
+
+                // Persist substitution events (off and on)
+                try {
+                  // Record player going OFF
+                  const offEventId = generateUUID();
+                  const { error: offEventErr } = await supabase
+                    .from('match_events')
+                    .upsert({
+                      fixture_id: fixtureId,
+                      period_id: currentPeriod.id,
+                      event_type: 'substitution_off',
+                      player_id: playerOut,
+                      minute_in_period: currentMinute,
+                      total_match_minute: totalMatchMinute,
+                      is_our_team: true,
+                      notes: null,
+                      is_retrospective: false,
+                      client_event_id: offEventId,
+                    }, { onConflict: 'client_event_id' });
+                  if (offEventErr) throw offEventErr;
+
+                  // Record player coming ON
+                  const onEventId = generateUUID();
+                  const { error: onEventErr } = await supabase
+                    .from('match_events')
+                    .upsert({
+                      fixture_id: fixtureId,
+                      period_id: currentPeriod.id,
+                      event_type: 'substitution_on',
+                      player_id: playerIn,
+                      minute_in_period: currentMinute,
+                      total_match_minute: totalMatchMinute,
+                      is_our_team: true,
+                      notes: null,
+                      is_retrospective: false,
+                      client_event_id: onEventId,
+                    }, { onConflict: 'client_event_id' });
+                  if (onEventErr) throw onEventErr;
+                } catch (subEventCatch: any) {
+                  console.error('Failed to record substitution events:', subEventCatch);
+                }
               }
 
-              // Persist a substitution event (idempotent via client_event_id)
-              try {
-                const clientEventId = generateUUID();
-                const { error: subEventErr } = await supabase
-                  .from('match_events')
-                  .upsert({
-                    fixture_id: fixtureId,
-                    period_id: currentPeriod.id,
-                    event_type: 'substitution',
-                    player_id: playerOut,           // use existing column as OUT
-                    assist_player_id: playerIn,     // use existing column as IN
-                    minute_in_period: currentMinute,
-                    total_match_minute: totalMatchMinute,
-                    is_our_team: true,
-                    notes: null,
-                    is_retrospective: false,
-                    client_event_id: clientEventId,
-                  }, { onConflict: 'client_event_id' });
-                if (subEventErr) throw subEventErr;
-              } catch (subEventCatch: any) {
-                console.error('Failed to record substitution event:', subEventCatch);
-                toast.error(subEventCatch?.message || 'Failed to record substitution event');
-              }
+              // Add to UI substitutions log
+              setSubstitutions(prev => [...prev, { outId: playerOut, inId: playerIn, minute: currentMinute, total: totalMatchMinute }]);
             }
 
-            // Note substitution in UI only (events restricted to goals/assists)
-            const outPlayer = players.find(p => p.id === playerOut);
-            const inPlayer = players.find(p => p.id === playerIn);
-            setSubstitutions(prev => [...prev, { outId: playerOut, inId: playerIn, minute: currentMinute, total: totalMatchMinute }]);
-            console.log('Substitution noted (UI only):', { out: outPlayer, in: inPlayer, minute: currentMinute, total: totalMatchMinute });
-
-            toast.success('Substitution made and recorded');
+            console.log('Completed', pairs.length, 'substitution(s)');
             setSubDialogOpen(false);
-            setPlayerOut('');
-            setPlayerIn('');
             await refreshPlayerStatusLists();
-            await loadEvents(); // Refresh events list to show the substitution
-            reloadTimes(); // Refresh player timers to reflect new on-field players
+            await loadEvents();
+            reloadTimes();
           } catch (e) {
-            console.error('Error making substitution:', e);
-            toast.error('Failed to make substitution');
+            console.error('Error making substitutions:', e);
+            console.error('Failed to make substitutions');
           }
         }}
       />
@@ -1235,14 +1206,6 @@ export default function EnhancedMatchTracker() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Undo Button - Floating */}
-      <UndoButton
-        canUndo={canUndo}
-        isUndoing={isUndoing}
-        remainingSeconds={remainingSeconds}
-        description={currentAction?.description}
-        onUndo={performUndo}
-      />
 
         </div>
       </div>

@@ -26,6 +26,7 @@ const Reports = lazy(() => import("./pages/Reports"));
 const Settings = lazy(() => import("./pages/Settings"));
 const FixtureDetail = lazy(() => import("./pages/FixtureDetail"));
 const MatchReport = lazy(() => import("./pages/MatchReport"));
+const MatchDataEditor = lazy(() => import("./pages/MatchDataEditor"));
 
 const App = () => (
   <ThemeProvider defaultTheme="dark" storageKey="sideline-theme">
@@ -114,6 +115,13 @@ const App = () => (
               <Layout>
                 <LazyLoader>
                   <MatchReport />
+                </LazyLoader>
+              </Layout>
+            } />
+            <Route path="/match-data-editor/:fixtureId" element={
+              <Layout>
+                <LazyLoader>
+                  <MatchDataEditor />
                 </LazyLoader>
               </Layout>
             } />

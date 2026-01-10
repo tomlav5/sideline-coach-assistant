@@ -6,7 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Users, Play, UserCheck, UserX, Star, ArrowLeft, UserPlus } from 'lucide-react';
+import { Users, Play, UserCheck, UserX, Star, ArrowLeft, UserPlus, Save } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
 interface Player {
@@ -51,6 +51,8 @@ export default function SquadSelection() {
   const [startingPlayers, setStartingPlayers] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [lastSavedSquadData, setLastSavedSquadData] = useState<any>(null);
 
   useEffect(() => {
     if (fixtureId) {
@@ -108,6 +110,8 @@ export default function SquadSelection() {
         
         setSelectedPlayers(savedSelectedPlayers);
         setStartingPlayers(savedStartingPlayers);
+        setLastSavedSquadData(savedData);
+        setHasUnsavedChanges(false);
       }
       
     } catch (error) {
@@ -123,6 +127,7 @@ export default function SquadSelection() {
   };
 
   const togglePlayerSelection = (player: Player) => {
+    setHasUnsavedChanges(true);
     setSelectedPlayers(prev => {
       const isSelected = prev.some(p => p.id === player.id);
       if (isSelected) {
@@ -140,6 +145,7 @@ export default function SquadSelection() {
   };
 
   const toggleStartingPlayer = (playerId: string) => {
+    setHasUnsavedChanges(true);
     setStartingPlayers(prev => {
       const newStarting = new Set(prev);
       if (newStarting.has(playerId)) {
@@ -163,15 +169,22 @@ export default function SquadSelection() {
 
   const isSquadValid = () => {
     if (!team) return false;
-    const teamSize = TEAM_SIZE_MAP[team.team_type];
-    const minSquadSize = teamSize - 1;
-    return selectedPlayers.length >= minSquadSize;
+    // Allow any number of players - teams may need to play with fewer due to absences
+    return selectedPlayers.length >= 1;
   };
 
   const canStartMatch = () => {
     if (!team) return false;
-    const teamSize = TEAM_SIZE_MAP[team.team_type];
-    return startingPlayers.size === teamSize && isSquadValid();
+    // Require: minimum 1 starting player, valid squad, AND squad must be saved
+    return startingPlayers.size >= 1 && isSquadValid() && !hasUnsavedChanges && lastSavedSquadData !== null;
+  };
+  
+  const getStartMatchDisabledReason = () => {
+    if (!team) return 'Team not loaded';
+    if (selectedPlayers.length < 1) return 'Select at least 1 player for your squad';
+    if (startingPlayers.size < 1) return 'Mark at least 1 player as a starter';
+    if (hasUnsavedChanges || lastSavedSquadData === null) return 'Save your squad selection before starting';
+    return '';
   };
 
   const loadMostRecentSquad = async () => {
@@ -200,6 +213,7 @@ export default function SquadSelection() {
         
         setSelectedPlayers(recentSelectedPlayers);
         setStartingPlayers(recentStartingPlayers);
+        setHasUnsavedChanges(true);
         
         toast({
           title: "Recent Squad Loaded",
@@ -246,6 +260,10 @@ export default function SquadSelection() {
         .eq('id', fixtureId);
 
       if (error) throw error;
+
+      // Update saved state
+      setLastSavedSquadData(squadData);
+      setHasUnsavedChanges(false);
 
       toast({
         title: "✅ Squad Saved Successfully",
@@ -408,10 +426,21 @@ export default function SquadSelection() {
              size="sm"
              className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
            >
-             {saving ? 'Saving...' : 'Save Squad'}
+             <Save className="h-4 w-4 mr-2" />
+             {saving ? 'Saving...' : hasUnsavedChanges ? 'Save Squad *' : 'Squad Saved ✓'}
            </Button>
           <Button 
-            onClick={startMatch} 
+            onClick={() => {
+              if (!canStartMatch()) {
+                toast({
+                  title: "Cannot Start Match",
+                  description: getStartMatchDisabledReason(),
+                  variant: "destructive",
+                });
+              } else {
+                startMatch();
+              }
+            }}
             disabled={!canStartMatch()}
             className="bg-green-600 hover:bg-green-700 w-full sm:w-auto"
             size="sm"
