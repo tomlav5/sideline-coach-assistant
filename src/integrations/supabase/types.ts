@@ -14,26 +14,135 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_notifications: {
+        Row: {
+          actioned_at: string | null
+          club_id: string | null
+          created_at: string
+          id: string
+          metadata: Json | null
+          notification_type: string
+          read_at: string | null
+          status: string | null
+          user_id: string | null
+        }
+        Insert: {
+          actioned_at?: string | null
+          club_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          notification_type: string
+          read_at?: string | null
+          status?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          actioned_at?: string | null
+          club_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          notification_type?: string
+          read_at?: string | null
+          status?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_notifications_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      club_invitations: {
+        Row: {
+          accepted_at: string | null
+          accepted_by: string | null
+          club_id: string
+          created_at: string
+          expires_at: string
+          id: string
+          invitation_token: string
+          invited_by: string
+          invited_email: string | null
+          invited_role: Database["public"]["Enums"]["user_role"]
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          club_id: string
+          created_at?: string
+          expires_at: string
+          id?: string
+          invitation_token: string
+          invited_by: string
+          invited_email?: string | null
+          invited_role: Database["public"]["Enums"]["user_role"]
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          club_id?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          invitation_token?: string
+          invited_by?: string
+          invited_email?: string | null
+          invited_role?: Database["public"]["Enums"]["user_role"]
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "club_invitations_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       club_members: {
         Row: {
+          approved_at: string | null
           club_id: string
           created_at: string
           id: string
+          invited_at: string | null
+          invited_by: string | null
           role: Database["public"]["Enums"]["user_role"]
+          status: string | null
           user_id: string
         }
         Insert: {
+          approved_at?: string | null
           club_id: string
           created_at?: string
           id?: string
+          invited_at?: string | null
+          invited_by?: string | null
           role?: Database["public"]["Enums"]["user_role"]
+          status?: string | null
           user_id: string
         }
         Update: {
+          approved_at?: string | null
           club_id?: string
           created_at?: string
           id?: string
+          invited_at?: string | null
+          invited_by?: string | null
           role?: Database["public"]["Enums"]["user_role"]
+          status?: string | null
           user_id?: string
         }
         Relationships: [
@@ -312,6 +421,54 @@ export type Database = {
           },
         ]
       }
+      pending_registrations: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          email: string
+          first_name: string | null
+          id: string
+          last_name: string | null
+          notified_at: string | null
+          oauth_provider: string | null
+          rejection_reason: string | null
+          status: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          email: string
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          notified_at?: string | null
+          oauth_provider?: string | null
+          rejection_reason?: string | null
+          status?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          email?: string
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          notified_at?: string | null
+          oauth_provider?: string | null
+          rejection_reason?: string | null
+          status?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       player_match_status: {
         Row: {
           created_at: string
@@ -474,29 +631,44 @@ export type Database = {
       }
       profiles: {
         Row: {
+          account_status: string | null
+          approved_at: string | null
+          approved_by: string | null
           created_at: string
           email: string | null
           first_name: string | null
           id: string
+          is_super_admin: boolean | null
           last_name: string | null
+          oauth_provider: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          account_status?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
           created_at?: string
           email?: string | null
           first_name?: string | null
           id?: string
+          is_super_admin?: boolean | null
           last_name?: string | null
+          oauth_provider?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          account_status?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
           created_at?: string
           email?: string | null
           first_name?: string | null
           id?: string
+          is_super_admin?: boolean | null
           last_name?: string | null
+          oauth_provider?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -578,12 +750,31 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_club_invitation: {
+        Args: { p_token: string; p_user_id: string }
+        Returns: Json
+      }
+      approve_user_registration: {
+        Args: { approver_id: string; registration_id: string }
+        Returns: Json
+      }
       claim_match_tracking: {
         Args: { fixture_id_param: string }
         Returns: Json
       }
       club_has_no_members: { Args: { club_id_param: string }; Returns: boolean }
+      create_club_invitation: {
+        Args: {
+          p_club_id: string
+          p_expires_days?: number
+          p_invited_by: string
+          p_invited_email: string
+          p_invited_role: Database["public"]["Enums"]["user_role"]
+        }
+        Returns: Json
+      }
       find_user_by_email: { Args: { lookup_email: string }; Returns: string }
+      generate_invitation_token: { Args: never; Returns: string }
       get_competitions: {
         Args: never
         Returns: {
@@ -714,12 +905,21 @@ export type Database = {
           user_id: string
         }[]
       }
+      is_super_admin: { Args: never; Returns: boolean }
       refresh_report_views: { Args: never; Returns: undefined }
+      reject_user_registration: {
+        Args: { approver_id: string; reason?: string; registration_id: string }
+        Returns: Json
+      }
       release_match_tracking: {
         Args: { fixture_id_param: string }
         Returns: boolean
       }
       restart_match: { Args: { fixture_id_param: string }; Returns: boolean }
+      set_super_admin: {
+        Args: { is_admin: boolean; target_user_id: string }
+        Returns: Json
+      }
       test_auth_context: {
         Args: never
         Returns: {
@@ -747,6 +947,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      user_is_approved: { Args: never; Returns: boolean }
       user_is_club_admin: {
         Args: { club_id_param: string; user_id_param: string }
         Returns: boolean
