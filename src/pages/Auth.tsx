@@ -6,13 +6,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Shield, Users, BarChart3 } from 'lucide-react';
+import { Shield, Users, BarChart3, Chrome, Apple } from 'lucide-react';
 import { authSignInSchema, authSignUpSchema } from '@/lib/validation';
 import { toast } from '@/hooks/use-toast';
 
 export default function Auth() {
   const [isLoading, setIsLoading] = useState(false);
-  const { signIn, signUp } = useAuth();
+  const [oauthLoading, setOauthLoading] = useState<string | null>(null);
+  const { signIn, signUp, signInWithOAuth } = useAuth();
   const navigate = useNavigate();
 
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -81,6 +82,12 @@ export default function Auth() {
     setIsLoading(false);
   };
 
+  const handleOAuthSignIn = async (provider: 'google' | 'apple' | 'facebook') => {
+    setOauthLoading(provider);
+    await signInWithOAuth(provider);
+    // OAuth will redirect, so loading state will persist
+  };
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
@@ -127,6 +134,41 @@ export default function Auth() {
               </TabsList>
               
               <TabsContent value="signin" className="space-y-4">
+                {/* OAuth Buttons */}
+                <div className="space-y-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full touch-target"
+                    onClick={() => handleOAuthSignIn('google')}
+                    disabled={oauthLoading !== null}
+                  >
+                    <Chrome className="h-4 w-4 mr-2" />
+                    {oauthLoading === 'google' ? 'Connecting...' : 'Continue with Google'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full touch-target"
+                    onClick={() => handleOAuthSignIn('apple')}
+                    disabled={oauthLoading !== null}
+                  >
+                    <Apple className="h-4 w-4 mr-2" />
+                    {oauthLoading === 'apple' ? 'Connecting...' : 'Continue with Apple'}
+                  </Button>
+                </div>
+
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-2 text-muted-foreground">
+                      Or continue with email
+                    </span>
+                  </div>
+                </div>
+
                 <form onSubmit={handleSignIn} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="signin-email">Email</Label>
@@ -160,6 +202,41 @@ export default function Auth() {
               </TabsContent>
               
               <TabsContent value="signup" className="space-y-4">
+                {/* OAuth Buttons */}
+                <div className="space-y-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full touch-target"
+                    onClick={() => handleOAuthSignIn('google')}
+                    disabled={oauthLoading !== null}
+                  >
+                    <Chrome className="h-4 w-4 mr-2" />
+                    {oauthLoading === 'google' ? 'Connecting...' : 'Sign up with Google'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full touch-target"
+                    onClick={() => handleOAuthSignIn('apple')}
+                    disabled={oauthLoading !== null}
+                  >
+                    <Apple className="h-4 w-4 mr-2" />
+                    {oauthLoading === 'apple' ? 'Connecting...' : 'Sign up with Apple'}
+                  </Button>
+                </div>
+
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-2 text-muted-foreground">
+                      Or sign up with email
+                    </span>
+                  </div>
+                </div>
+
                 <form onSubmit={handleSignUp} className="space-y-4">
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-2">

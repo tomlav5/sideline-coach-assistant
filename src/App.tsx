@@ -27,6 +27,10 @@ const Settings = lazy(() => import("./pages/Settings"));
 const FixtureDetail = lazy(() => import("./pages/FixtureDetail"));
 const MatchReport = lazy(() => import("./pages/MatchReport"));
 const MatchDataEditor = lazy(() => import("./pages/MatchDataEditor"));
+const PendingApproval = lazy(() => import("./pages/PendingApproval"));
+const AdminApprovals = lazy(() => import("./pages/AdminApprovals"));
+const AuthCallback = lazy(() => import("./pages/AuthCallback"));
+const AcceptInvitation = lazy(() => import("./pages/AcceptInvitation"));
 
 const App = () => (
   <ThemeProvider defaultTheme="dark" storageKey="sideline-theme">
@@ -53,6 +57,21 @@ const App = () => (
             <Route path="/registration-success" element={
               <LazyLoader>
                 <RegistrationSuccess />
+              </LazyLoader>
+            } />
+            <Route path="/pending-approval" element={
+              <LazyLoader>
+                <PendingApproval />
+              </LazyLoader>
+            } />
+            <Route path="/auth/callback" element={
+              <LazyLoader>
+                <AuthCallback />
+              </LazyLoader>
+            } />
+            <Route path="/invite/:token" element={
+              <LazyLoader>
+                <AcceptInvitation />
               </LazyLoader>
             } />
             <Route path="/" element={
@@ -136,6 +155,13 @@ const App = () => (
               <Layout>
                 <LazyLoader>
                   <ClubManagement />
+                </LazyLoader>
+              </Layout>
+            } />
+            <Route path="/admin/approvals" element={
+              <Layout>
+                <LazyLoader>
+                  <AdminApprovals />
                 </LazyLoader>
               </Layout>
             } />
