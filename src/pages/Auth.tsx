@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Shield, Users, BarChart3, Chrome, Apple } from 'lucide-react';
+import { Shield, Users, BarChart3, Chrome, Facebook } from 'lucide-react';
 import { authSignInSchema, authSignUpSchema } from '@/lib/validation';
 import { toast } from '@/hooks/use-toast';
 
@@ -150,11 +150,11 @@ export default function Auth() {
                     type="button"
                     variant="outline"
                     className="w-full touch-target"
-                    onClick={() => handleOAuthSignIn('apple')}
+                    onClick={() => handleOAuthSignIn('facebook')}
                     disabled={oauthLoading !== null}
                   >
-                    <Apple className="h-4 w-4 mr-2" />
-                    {oauthLoading === 'apple' ? 'Connecting...' : 'Continue with Apple'}
+                    <Facebook className="h-4 w-4 mr-2" />
+                    {oauthLoading === 'facebook' ? 'Connecting...' : 'Continue with Facebook'}
                   </Button>
                 </div>
 
@@ -218,11 +218,11 @@ export default function Auth() {
                     type="button"
                     variant="outline"
                     className="w-full touch-target"
-                    onClick={() => handleOAuthSignIn('apple')}
+                    onClick={() => handleOAuthSignIn('facebook')}
                     disabled={oauthLoading !== null}
                   >
-                    <Apple className="h-4 w-4 mr-2" />
-                    {oauthLoading === 'apple' ? 'Connecting...' : 'Sign up with Apple'}
+                    <Facebook className="h-4 w-4 mr-2" />
+                    {oauthLoading === 'facebook' ? 'Connecting...' : 'Sign up with Facebook'}
                   </Button>
                 </div>
 
