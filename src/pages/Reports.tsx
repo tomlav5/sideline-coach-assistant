@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { useCompletedMatches, useGoalScorers, usePlayerPlayingTime, useCompetitions } from '@/hooks/useReports';
 import { useReportRefresh } from '@/hooks/useReportRefresh';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -9,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Trophy, Calendar, Target, Clock, MoreVertical, Trash2 } from 'lucide-react';
+import { Trophy, Calendar, Target, Clock, MoreVertical, Trash2, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { ResponsiveWrapper } from '@/components/ui/responsive-wrapper';
@@ -52,6 +53,7 @@ interface PlayerPlayingTime {
 export default function Reports() {
   const [competitionFilter, setCompetitionFilter] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<'matches' | 'scorers' | 'playing-time' | 'dev-time'>('matches');
+  const [searchQuery, setSearchQuery] = useState<string>('');
   
   // Use optimized hooks with pagination (show 50 items per page for better performance)
   const { data: completedMatches = [], isLoading: matchesLoading } = useCompletedMatches(competitionFilter, { 
@@ -137,10 +139,69 @@ export default function Reports() {
     }
   }, [toast, queryClient]);
 
+  // Memoized search filtering with team name priority
+  const filteredMatches = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return completedMatches;
+    }
+
+    const query = searchQuery.toLowerCase().trim();
+    
+    // Score matches: team_name gets higher priority
+    const scoredMatches = completedMatches.map(match => {
+      let score = 0;
+      const searchableText = [
+        match.team_name,
+        match.opponent_name,
+        match.location,
+        format(new Date(match.scheduled_date), 'dd MMM yyyy'),
+        format(new Date(match.scheduled_date), 'dd/MM/yyyy'),
+        `${match.our_score}-${match.opponent_score}`,
+        `${match.our_score} - ${match.opponent_score}`,
+      ].filter(Boolean).join(' ').toLowerCase();
+
+      // Check if any field matches
+      if (!searchableText.includes(query)) {
+        return null;
+      }
+
+      // Team name match gets highest priority (score 100)
+      if (match.team_name.toLowerCase().includes(query)) {
+        score += 100;
+        // Exact match gets bonus
+        if (match.team_name.toLowerCase() === query) {
+          score += 50;
+        }
+      }
+
+      // Opponent name match gets medium priority (score 50)
+      if (match.opponent_name.toLowerCase().includes(query)) {
+        score += 50;
+      }
+
+      // Other fields get lower priority (score 10)
+      if (match.location?.toLowerCase().includes(query)) {
+        score += 10;
+      }
+
+      return { match, score };
+    }).filter(Boolean) as { match: CompletedMatch; score: number }[];
+
+    // Sort by score (highest first), then by date (most recent first)
+    return scoredMatches
+      .sort((a, b) => {
+        if (b.score !== a.score) {
+          return b.score - a.score;
+        }
+        return new Date(b.match.scheduled_date).getTime() - new Date(a.match.scheduled_date).getTime();
+      })
+      .map(item => item.match);
+  }, [completedMatches, searchQuery]);
+
   // Memoized recent form calculation
   const recentForm = useMemo(() => {
-    return completedMatches.slice(0, 5);
-  }, [completedMatches]);
+    return filteredMatches.slice(0, 5);
+  }, [filteredMatches]);
 
   // Memoized loading state
   const isLoading = useMemo(() => {
@@ -173,29 +234,55 @@ export default function Reports() {
         <ExportDialog competitionFilter={competitionFilter} />
       </div>
 
-      {/* Competition Filter */}
+      {/* Competition Filter and Search */}
       <Card>
         <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
-            <Label htmlFor="competition-filter" className="text-base font-medium min-w-fit">Filter by Competition:</Label>
-            <Select value={competitionFilter} onValueChange={setCompetitionFilter}>
-              <SelectTrigger className="w-full sm:w-64 min-h-[44px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Competitions</SelectItem>
-                <SelectItem value="type:league">League Matches Only</SelectItem>
-                <SelectItem value="type:tournament">Tournament Matches Only</SelectItem>
-                <SelectItem value="type:friendly">Friendly Matches Only</SelectItem>
-                {competitions.map((comp, index) => (
-                  comp.display_name && (
-                    <SelectItem key={index} value={comp.filter_value}>
-                      {comp.display_name}
-                    </SelectItem>
-                  )
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="flex flex-col space-y-4">
+            {/* Competition Filter */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+              <Label htmlFor="competition-filter" className="text-base font-medium min-w-fit">Filter by Competition:</Label>
+              <Select value={competitionFilter} onValueChange={setCompetitionFilter}>
+                <SelectTrigger className="w-full sm:w-64 min-h-[44px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Competitions</SelectItem>
+                  <SelectItem value="type:league">League Matches Only</SelectItem>
+                  <SelectItem value="type:tournament">Tournament Matches Only</SelectItem>
+                  <SelectItem value="type:friendly">Friendly Matches Only</SelectItem>
+                  {competitions.map((comp, index) => (
+                    comp.display_name && (
+                      <SelectItem key={index} value={comp.filter_value}>
+                        {comp.display_name}
+                      </SelectItem>
+                    )
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {/* Search Box */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+              <Label htmlFor="search-fixtures" className="text-base font-medium min-w-fit">Search Fixtures:</Label>
+              <div className="relative w-full sm:flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="search-fixtures"
+                  type="text"
+                  placeholder="Search by team, opponent, location..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 min-h-[44px]"
+                />
+              </div>
+            </div>
+            
+            {searchQuery && (
+              <div className="text-sm text-muted-foreground">
+                Found {filteredMatches.length} {filteredMatches.length === 1 ? 'match' : 'matches'}
+                {searchQuery && ` matching "${searchQuery}"`}
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -224,7 +311,7 @@ export default function Reports() {
 
         <TabsContent value="matches" className="space-y-6">
           {/* Last 5 Results Summary */}
-          {completedMatches.length > 0 && (
+          {filteredMatches.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle>Recent Form</CardTitle>
@@ -232,7 +319,7 @@ export default function Reports() {
               </CardHeader>
               <CardContent>
                 <div className="flex items-center justify-center space-x-2">
-                  {completedMatches.slice(0, 5).map((match, index) => {
+                  {filteredMatches.slice(0, 5).map((match, index) => {
                     const { result, color } = getMatchResult(match.our_score, match.opponent_score);
                     return (
                       <div
@@ -244,9 +331,9 @@ export default function Reports() {
                       </div>
                     );
                   })}
-                  {completedMatches.length < 5 && (
+                  {filteredMatches.length < 5 && (
                     <div className="text-sm text-muted-foreground ml-4">
-                      {5 - completedMatches.length} more matches needed for full form
+                      {5 - filteredMatches.length} more matches needed for full form
                     </div>
                   )}
                 </div>
@@ -260,13 +347,13 @@ export default function Reports() {
               <CardTitle>Completed Matches</CardTitle>
             </CardHeader>
             <CardContent>
-              {completedMatches.length === 0 ? (
+              {filteredMatches.length === 0 ? (
                 <p className="text-muted-foreground text-center py-8">
-                  No completed matches found
+                  {searchQuery ? `No matches found for "${searchQuery}"` : 'No completed matches found'}
                 </p>
               ) : (
                 <div className="space-y-2 sm:space-y-3">
-                  {completedMatches.map((match) => {
+                  {filteredMatches.map((match) => {
                     const { result, color } = getMatchResult(match.our_score, match.opponent_score);
                     return (
                       <div key={match.id} className="flex items-center justify-between p-3 sm:p-4 bg-muted/50 rounded-lg gap-2">
