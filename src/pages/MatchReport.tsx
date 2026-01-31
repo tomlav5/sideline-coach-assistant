@@ -20,6 +20,7 @@ interface MatchEvent {
   is_our_team: boolean;
   is_penalty?: boolean;
   player_id?: string;
+  assist_player_id?: string;
   players?: {
     first_name: string;
     last_name: string;
@@ -485,49 +486,15 @@ export default function MatchReport() {
                           <h4 className="font-medium text-xs sm:text-sm mb-2">Unassigned Period</h4>
                           <div className="space-y-1.5 sm:space-y-2">
                             {unassigned.map((event) => (
-                              <div key={event.id} className="flex items-center justify-between p-2 bg-muted/50 rounded text-xs sm:text-sm gap-2">
-                                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-                                  <span className="font-mono font-bold text-[10px] sm:text-xs bg-primary text-primary-foreground px-1.5 sm:px-2 py-0.5 sm:py-1 rounded flex-shrink-0">
-                                    {event.total_match_minute}'
-                                  </span>
-                                  <Target className="h-3 w-3 flex-shrink-0 hidden sm:block" />
-                                  <span className={`truncate ${event.is_our_team ? 'text-green-600' : 'text-red-600'}`}>
-                                    {event.event_type === 'goal' ? 'Goal' : 'Assist'}
-                                    {event.is_penalty ? ' (P)' : ''}
-                                  </span>
-                                </div>
-                                <div className="text-right flex-shrink-0 max-w-[45%]">
-                                  {event.players && event.is_our_team ? (
-                                    <span className="font-medium truncate block text-xs sm:text-sm">
-                                      {getPlayerName(event.players)}
-                                    </span>
-                                  ) : (
-                                    <span className="text-muted-foreground text-xs sm:text-sm">
-                                      {event.is_our_team ? 'Unknown' : 'Opposition'}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {orderedPeriods.map((p) => {
-                        const list = byPeriod[p.id] || [];
-                        if (list.length === 0) return null;
-                        return (
-                          <div key={p.id}>
-                            <h4 className="font-medium text-xs sm:text-sm mb-2">Period {p.period_number}</h4>
-                            <div className="space-y-1.5 sm:space-y-2">
-                              {list.map((event) => (
-                                <div key={event.id} className="flex items-center justify-between p-2 bg-muted/50 rounded text-xs sm:text-sm gap-2">
+                              <div key={event.id} className="flex flex-col p-2 bg-muted/50 rounded text-xs sm:text-sm gap-1">
+                                <div className="flex items-center justify-between">
                                   <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                                     <span className="font-mono font-bold text-[10px] sm:text-xs bg-primary text-primary-foreground px-1.5 sm:px-2 py-0.5 sm:py-1 rounded flex-shrink-0">
                                       {event.total_match_minute}'
                                     </span>
                                     <Target className="h-3 w-3 flex-shrink-0 hidden sm:block" />
                                     <span className={`truncate ${event.is_our_team ? 'text-green-600' : 'text-red-600'}`}>
-                                      {event.event_type === 'goal' ? 'Goal' : 'Assist'}
+                                      {event.event_type === 'goal' ? 'Goal' : event.event_type}
                                       {event.is_penalty ? ' (P)' : ''}
                                     </span>
                                   </div>
@@ -542,6 +509,54 @@ export default function MatchReport() {
                                       </span>
                                     )}
                                   </div>
+                                </div>
+                                {event.event_type === 'goal' && event.assist_players && (
+                                  <div className="text-[10px] sm:text-xs text-muted-foreground ml-8 sm:ml-10">
+                                    Assist: {getPlayerName(event.assist_players)}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {orderedPeriods.map((p) => {
+                        const list = byPeriod[p.id] || [];
+                        if (list.length === 0) return null;
+                        return (
+                          <div key={p.id}>
+                            <h4 className="font-medium text-xs sm:text-sm mb-2">Period {p.period_number}</h4>
+                            <div className="space-y-1.5 sm:space-y-2">
+                              {list.map((event) => (
+                                <div key={event.id} className="flex flex-col p-2 bg-muted/50 rounded text-xs sm:text-sm gap-1">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                                      <span className="font-mono font-bold text-[10px] sm:text-xs bg-primary text-primary-foreground px-1.5 sm:px-2 py-0.5 sm:py-1 rounded flex-shrink-0">
+                                        {event.total_match_minute}'
+                                      </span>
+                                      <Target className="h-3 w-3 flex-shrink-0 hidden sm:block" />
+                                      <span className={`truncate ${event.is_our_team ? 'text-green-600' : 'text-red-600'}`}>
+                                        {event.event_type === 'goal' ? 'Goal' : event.event_type}
+                                        {event.is_penalty ? ' (P)' : ''}
+                                      </span>
+                                    </div>
+                                    <div className="text-right flex-shrink-0 max-w-[45%]">
+                                      {event.players && event.is_our_team ? (
+                                        <span className="font-medium truncate block text-xs sm:text-sm">
+                                          {getPlayerName(event.players)}
+                                        </span>
+                                      ) : (
+                                        <span className="text-muted-foreground text-xs sm:text-sm">
+                                          {event.is_our_team ? 'Unknown' : 'Opposition'}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {event.event_type === 'goal' && event.assist_players && (
+                                    <div className="text-[10px] sm:text-xs text-muted-foreground ml-8 sm:ml-10">
+                                      Assist: {getPlayerName(event.assist_players)}
+                                    </div>
+                                  )}
                                 </div>
                               ))}
                             </div>
@@ -625,7 +640,7 @@ export default function MatchReport() {
             </div>
             <div className="p-2 sm:p-3 bg-muted/50 rounded-lg">
               <div className="text-xl sm:text-2xl font-bold">
-                {events.filter(e => e.is_our_team && e.event_type === 'assist').length}
+                {events.filter(e => e.is_our_team && e.event_type === 'goal' && e.assist_player_id).length}
               </div>
               <div className="text-[10px] sm:text-sm text-muted-foreground">Assists</div>
             </div>
