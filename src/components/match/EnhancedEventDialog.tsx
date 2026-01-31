@@ -46,7 +46,7 @@ export function EnhancedEventDialog({
   onEventRecorded
 }: EnhancedEventDialogProps) {
   const isMobile = useIsMobile();
-  const [eventType, setEventType] = useState<'goal' | 'assist'>('goal');
+  const [eventType, setEventType] = useState<'goal'>('goal');
   const [selectedPlayer, setSelectedPlayer] = useState('');
   const [assistPlayer, setAssistPlayer] = useState('');
   const [isOurTeam, setIsOurTeam] = useState(true);
@@ -178,18 +178,10 @@ export function EnhancedEventDialog({
 
   const content = (
     <div className="space-y-4 px-1">
-          {/* Event Type */}
-          <div>
-            <Label>Event Type</Label>
-            <Select value={eventType} onValueChange={(value: 'goal' | 'assist') => setEventType(value)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="goal">Goal</SelectItem>
-                <SelectItem value="assist">Assist</SelectItem>
-              </SelectContent>
-            </Select>
+          {/* Event Type - Only Goal (assists are recorded as attributes of goals) */}
+          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+            <div className="text-sm font-medium text-blue-900 dark:text-blue-100">⚽ Recording Goal Event</div>
+            <div className="text-xs text-blue-700 dark:text-blue-300 mt-1">Assists are recorded below as part of the goal</div>
           </div>
 
           {/* Team Selection */}
