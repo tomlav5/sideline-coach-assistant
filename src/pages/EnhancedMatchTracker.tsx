@@ -881,52 +881,88 @@ export default function EnhancedMatchTracker() {
                 <div className="text-sm font-semibold text-muted-foreground bg-muted/30 px-3 py-1.5 rounded-md">
                   Period {p.period_number}
                 </div>
-                {periodEvents.map((event, idx) => (
-                  <div 
-                    key={event.id} 
-                    className="flex flex-col sm:flex-row sm:items-center gap-2 p-3 border rounded-lg bg-card/50 animate-in fade-in slide-in-from-bottom-2 duration-300"
-                    style={{ animationDelay: `${idx * 50}ms` }}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Badge variant="secondary" className="text-xs font-mono shrink-0">
-                        {event.total_match_minute}'
-                      </Badge>
-                      {event.event_type === 'goal' ? (
-                        <span className="text-sm font-medium truncate flex items-center gap-1">
-                          <Goal className="h-4 w-4" />
-                          Goal
-                        </span>
-                      ) : event.event_type === 'substitution' ? (
-                        <span className="text-sm font-medium truncate flex items-center gap-1">
-                          <span className="text-lg">🔄</span>
-                          Substitution: {players.find(ply => ply.id === event.player_id)?.first_name || 'Unknown'} {players.find(ply => ply.id === event.player_id)?.last_name || ''}
-                          {' '}→{' '}
-                          {players.find(ply => ply.id === event.assist_player_id)?.first_name || 'Unknown'} {players.find(ply => ply.id === event.assist_player_id)?.last_name || ''}
-                        </span>
-                      ) : (
-                        <span className="text-sm font-medium truncate">
-                          {event.event_type.charAt(0).toUpperCase() + event.event_type.slice(1)}
-                        </span>
-                      )}
-                      <div className="flex gap-1">
-                        {event.is_penalty && <Badge variant="outline" className="text-xs">Penalty</Badge>}
-                        {!event.is_our_team && <Badge variant="destructive" className="text-xs">Opposition</Badge>}
-                      </div>
-                    </div>
-                    {event.event_type !== 'substitution' && event.players && (
-                      <div className="text-sm text-muted-foreground sm:ml-auto sm:text-right">
-                        <span className="font-medium text-foreground">
-                          {event.players.first_name} {event.players.last_name}
-                        </span>
-                        {event.assist_players && (
-                          <div className="text-xs">
-                            Assist: {event.assist_players.first_name} {event.assist_players.last_name}
+                {periodEvents.map((event, idx) => {
+                  const scorer = event.players ? `${event.players.first_name} ${event.players.last_name}` : null;
+                  const assistProvider = event.assist_players ? `${event.assist_players.first_name} ${event.assist_players.last_name}` : null;
+                  const subOut = players.find(ply => ply.id === event.player_id);
+                  const subIn = players.find(ply => ply.id === event.assist_player_id);
+                  
+                  return (
+                    <div 
+                      key={event.id} 
+                      className="flex flex-col gap-2 p-4 border rounded-lg bg-card/50 animate-in fade-in slide-in-from-bottom-2 duration-300"
+                      style={{ animationDelay: `${idx * 50}ms` }}
+                    >
+                      {/* Event Header - Time and Type */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant="secondary" className="text-sm font-mono shrink-0 px-2.5 py-1">
+                          {event.total_match_minute}'
+                        </Badge>
+                        
+                        {event.event_type === 'goal' && (
+                          <>
+                            <div className="flex items-center gap-1.5">
+                              <Goal className="h-5 w-5 text-green-600" />
+                              <span className="font-semibold text-base">GOAL</span>
+                            </div>
+                            {event.is_penalty && <Badge variant="outline" className="text-xs">Penalty</Badge>}
+                            {!event.is_our_team && <Badge variant="destructive" className="text-xs">Opposition</Badge>}
+                          </>
+                        )}
+                        
+                        {event.event_type === 'substitution' && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xl">🔄</span>
+                            <span className="font-semibold text-base">SUBSTITUTION</span>
                           </div>
                         )}
                       </div>
-                    )}
-                  </div>
-                ))}
+                      
+                      {/* Event Details - Player Information */}
+                      {event.event_type === 'goal' && scorer && (
+                        <div className="flex flex-col gap-1 ml-1">
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-xs text-muted-foreground uppercase tracking-wide">Scorer:</span>
+                            <span className="font-semibold text-base text-foreground">{scorer}</span>
+                          </div>
+                          {assistProvider && (
+                            <div className="flex items-baseline gap-2">
+                              <span className="text-xs text-muted-foreground uppercase tracking-wide">Assist:</span>
+                              <span className="font-medium text-sm text-muted-foreground">{assistProvider}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      
+                      {event.event_type === 'goal' && !scorer && !event.is_our_team && (
+                        <div className="flex flex-col gap-1 ml-1">
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-xs text-muted-foreground uppercase tracking-wide">Opponent Goal</span>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {event.event_type === 'substitution' && subOut && subIn && (
+                        <div className="flex flex-col gap-1 ml-1">
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-xs text-muted-foreground uppercase tracking-wide">Off:</span>
+                            <span className="font-medium text-sm text-destructive/80">
+                              {subOut.first_name} {subOut.last_name}
+                              {subOut.jersey_number && ` (#${subOut.jersey_number})`}
+                            </span>
+                          </div>
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-xs text-muted-foreground uppercase tracking-wide">On:</span>
+                            <span className="font-medium text-sm text-green-600">
+                              {subIn.first_name} {subIn.last_name}
+                              {subIn.jersey_number && ` (#${subIn.jersey_number})`}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             );
           })}
