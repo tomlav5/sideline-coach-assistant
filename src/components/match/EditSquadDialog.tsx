@@ -54,17 +54,20 @@ export function EditSquadDialog({
       setSelectedPlayerIds(new Set());
       setSearchTerm('');
     }
-  }, [open, teamId, currentSquadPlayerIds]);
+  }, [open]);
 
   const loadAvailablePlayers = async () => {
     try {
       setLoading(true);
 
+      console.log('[EditSquadDialog] Loading players for team:', teamId);
+      console.log('[EditSquadDialog] Current squad player IDs:', currentSquadPlayerIds);
+
       // Fetch all team players
       const { data: teamPlayersData, error } = await supabase
         .from('team_players')
         .select(`
-          players!inner(
+          players (
             id,
             first_name,
             last_name,
@@ -73,28 +76,46 @@ export function EditSquadDialog({
         `)
         .eq('team_id', teamId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('[EditSquadDialog] Query error:', error);
+        throw error;
+      }
 
-      const allPlayers = teamPlayersData.map(tp => tp.players);
+      console.log('[EditSquadDialog] Raw query result:', teamPlayersData);
+
+      // Extract players from the join result
+      const allPlayers = (teamPlayersData || [])
+        .map(tp => tp.players)
+        .filter(p => p != null) as Player[];
+
+      console.log('[EditSquadDialog] All team players:', allPlayers.length, allPlayers);
       
       // Filter out players already in squad
       const available = allPlayers.filter(
         p => !currentSquadPlayerIds.includes(p.id)
       );
 
+      console.log('[EditSquadDialog] Available players (not in squad):', available.length, available);
+
       setAvailablePlayers(available);
 
-      if (available.length === 0) {
+      if (available.length === 0 && allPlayers.length > 0) {
         toast({
           title: 'All Players Selected',
           description: 'All team players are already in the match squad',
         });
+      } else if (allPlayers.length === 0) {
+        toast({
+          title: 'No Team Players',
+          description: 'No players found for this team',
+          variant: 'destructive',
+        });
       }
     } catch (error: any) {
-      console.error('Error loading available players:', error);
+      console.error('[EditSquadDialog] Error loading available players:', error);
       toast({
         title: 'Error',
-        description: 'Failed to load available players',
+        description: error.message || 'Failed to load available players',
         variant: 'destructive',
       });
     } finally {
