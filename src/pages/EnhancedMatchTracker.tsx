@@ -5,6 +5,7 @@ import { EnhancedMatchControls } from '@/components/match/EnhancedMatchControls'
 import { EnhancedEventDialog } from '@/components/match/EnhancedEventDialog';
 import { RetrospectiveMatchDialog } from '@/components/fixtures/RetrospectiveMatchDialog';
 import { SubstitutionDialog } from '@/components/match/SubstitutionDialog';
+import { EditSquadDialog } from '@/components/match/EditSquadDialog';
 import { MatchLockingBanner } from '@/components/match/MatchLockingBanner';
 import { QuickGoalButton } from '@/components/match/QuickGoalButton';
 import { FixedMatchHeader } from '@/components/match/FixedMatchHeader';
@@ -22,7 +23,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Clock, Users, Target, History, ArrowUpDown, RotateCcw, Goal } from 'lucide-react';
+import { Clock, Users, Target, History, ArrowUpDown, RotateCcw, Goal, UserPlus } from 'lucide-react';
 import { useRealtimeMatchSync } from '@/hooks/useRealtimeMatchSync';
 import { useWakeLock } from '@/hooks/useWakeLock';
 import { usePlayerTimers } from '@/hooks/usePlayerTimers';
@@ -98,6 +99,9 @@ export default function EnhancedMatchTracker() {
   const [subDialogOpen, setSubDialogOpen] = useState(false);
   const [activePlayersList, setActivePlayersList] = useState<Player[]>([]);
   const [substitutePlayersList, setSubstitutePlayersList] = useState<Player[]>([]);
+  
+  // Edit squad state
+  const [editSquadOpen, setEditSquadOpen] = useState(false);
   // Local log of substitutions for UI only (not persisted as match_events)
   const [substitutions, setSubstitutions] = useState<{ outId: string; inId: string; minute: number; total: number }[]>([]);
   
@@ -750,12 +754,23 @@ export default function EnhancedMatchTracker() {
       <div className="space-y-4">
 
         {/* Tertiary Actions */}
-        <div className="flex gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <Button
+            onClick={() => setEditSquadOpen(true)}
+            variant="outline"
+            size="sm"
+            className="h-10"
+            disabled={!matchTracker?.isActiveTracker && (fixture?.status === 'in_progress' || fixture?.status === 'live')}
+          >
+            <UserPlus className="h-4 w-4 mr-2" />
+            Edit Squad
+          </Button>
+          
           <Button
             onClick={() => setShowRetrospectiveDialog(true)}
             variant="ghost"
             size="sm"
-            className="flex-1 h-10"
+            className="h-10"
             disabled={!matchTracker?.isActiveTracker && (fixture?.status === 'in_progress' || fixture?.status === 'live')}
           >
             <History className="h-4 w-4 mr-2" />
@@ -768,7 +783,7 @@ export default function EnhancedMatchTracker() {
             })}
             variant="ghost"
             size="sm"
-            className="flex-1 h-10"
+            className="h-10"
           >
             View Report
           </Button>
@@ -1198,6 +1213,20 @@ export default function EnhancedMatchTracker() {
             console.error('Error making substitutions:', e);
             console.error('Failed to make substitutions');
           }
+        }}
+      />
+
+      {/* Edit Squad Dialog */}
+      <EditSquadDialog
+        open={editSquadOpen}
+        onOpenChange={setEditSquadOpen}
+        fixtureId={fixtureId!}
+        teamId={fixture.team_id}
+        currentSquadPlayerIds={players.map(p => p.id)}
+        onSquadUpdated={async () => {
+          // Reload match data to get updated player list
+          await loadMatchData();
+          await refreshPlayerStatusLists();
         }}
       />
 
