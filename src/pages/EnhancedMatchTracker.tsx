@@ -99,6 +99,7 @@ export default function EnhancedMatchTracker() {
   const [subDialogOpen, setSubDialogOpen] = useState(false);
   const [activePlayersList, setActivePlayersList] = useState<Player[]>([]);
   const [substitutePlayersList, setSubstitutePlayersList] = useState<Player[]>([]);
+  const [preSelectedSubIn, setPreSelectedSubIn] = useState<string | undefined>(undefined);
   
   // Edit squad state
   const [editSquadOpen, setEditSquadOpen] = useState(false);
@@ -857,6 +858,7 @@ export default function EnhancedMatchTracker() {
                     className="flex items-center gap-3 p-3 border rounded-lg bg-blue-50 dark:bg-blue-950/20 hover:bg-blue-100 dark:hover:bg-blue-950/30 cursor-pointer transition-colors"
                     onClick={async () => {
                       await refreshPlayerStatusLists();
+                      setPreSelectedSubIn(player.id);
                       setSubDialogOpen(true);
                     }}
                   >
@@ -1047,9 +1049,15 @@ export default function EnhancedMatchTracker() {
       {/* Substitution Dialog */}
       <SubstitutionDialog
         open={subDialogOpen}
-        onOpenChange={setSubDialogOpen}
+        onOpenChange={(open) => {
+          setSubDialogOpen(open);
+          if (!open) {
+            setPreSelectedSubIn(undefined);
+          }
+        }}
         activePlayers={activePlayersList}
         substitutePlayers={substitutePlayersList}
+        preSelectedPlayerIn={preSelectedSubIn}
         onConfirm={async (pairs) => {
           try {
             if (!pairs || pairs.length === 0) {
