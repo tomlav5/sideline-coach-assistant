@@ -27,6 +27,7 @@ interface SubstitutionDialogProps {
   substitutePlayers: Player[];
   onConfirm: (pairs: SubstitutionPair[]) => void;
   isHalftime?: boolean;
+  preSelectedPlayerIn?: string;
 }
 
 export function SubstitutionDialog({
@@ -35,7 +36,8 @@ export function SubstitutionDialog({
   activePlayers,
   substitutePlayers,
   onConfirm,
-  isHalftime = false
+  isHalftime = false,
+  preSelectedPlayerIn
 }: SubstitutionDialogProps) {
   const isMobile = useIsMobile();
   
@@ -48,16 +50,16 @@ export function SubstitutionDialog({
     playerIn: ''
   }]);
 
-  // Reset pairs when dialog opens
+  // Reset pairs when dialog opens, with optional pre-selected player
   useEffect(() => {
     if (open) {
       setSubstitutionPairs([{
         id: generateId(),
         playerOut: '',
-        playerIn: ''
+        playerIn: preSelectedPlayerIn || ''
       }]);
     }
-  }, [open]);
+  }, [open, preSelectedPlayerIn]);
 
   const addSubstitutionPair = () => {
     setSubstitutionPairs([...substitutionPairs, {
@@ -119,27 +121,6 @@ export function SubstitutionDialog({
             <div className="text-sm font-medium text-muted-foreground">Substitution {index + 1}</div>
             
             <div>
-              <Label>Player Coming Off</Label>
-              <Select 
-                value={pair.playerOut} 
-                onValueChange={(value) => updatePair(pair.id, 'playerOut', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select player to substitute" />
-                </SelectTrigger>
-                <SelectContent>
-                  {activePlayers
-                    .filter(player => !getUsedPlayerOutIds(pair.id).includes(player.id))
-                    .map((player) => (
-                      <SelectItem key={player.id} value={player.id}>
-                        {player.jersey_number ? `#${player.jersey_number} ` : ''}{player.first_name} {player.last_name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
               <Label>Player Coming On</Label>
               <Select 
                 value={pair.playerIn} 
@@ -151,6 +132,27 @@ export function SubstitutionDialog({
                 <SelectContent>
                   {substitutePlayers
                     .filter(player => !getUsedPlayerInIds(pair.id).includes(player.id))
+                    .map((player) => (
+                      <SelectItem key={player.id} value={player.id}>
+                        {player.jersey_number ? `#${player.jersey_number} ` : ''}{player.first_name} {player.last_name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Player Coming Off</Label>
+              <Select 
+                value={pair.playerOut} 
+                onValueChange={(value) => updatePair(pair.id, 'playerOut', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select player to substitute" />
+                </SelectTrigger>
+                <SelectContent>
+                  {activePlayers
+                    .filter(player => !getUsedPlayerOutIds(pair.id).includes(player.id))
                     .map((player) => (
                       <SelectItem key={player.id} value={player.id}>
                         {player.jersey_number ? `#${player.jersey_number} ` : ''}{player.first_name} {player.last_name}

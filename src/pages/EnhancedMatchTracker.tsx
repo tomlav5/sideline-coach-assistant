@@ -23,7 +23,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Clock, Users, Target, History, ArrowUpDown, RotateCcw, Goal, UserPlus } from 'lucide-react';
+import { Clock, Users, Target, History, ArrowUpDown, RotateCcw, Goal, UserPlus, ChevronDown, ChevronUp } from 'lucide-react';
 import { useRealtimeMatchSync } from '@/hooks/useRealtimeMatchSync';
 import { useWakeLock } from '@/hooks/useWakeLock';
 import { usePlayerTimers } from '@/hooks/usePlayerTimers';
@@ -99,9 +99,13 @@ export default function EnhancedMatchTracker() {
   const [subDialogOpen, setSubDialogOpen] = useState(false);
   const [activePlayersList, setActivePlayersList] = useState<Player[]>([]);
   const [substitutePlayersList, setSubstitutePlayersList] = useState<Player[]>([]);
+  const [preSelectedSubIn, setPreSelectedSubIn] = useState<string | undefined>(undefined);
   
   // Edit squad state
   const [editSquadOpen, setEditSquadOpen] = useState(false);
+  
+  // Substitutes bench visibility
+  const [showSubstitutes, setShowSubstitutes] = useState(true);
   // Local log of substitutions for UI only (not persisted as match_events)
   const [substitutions, setSubstitutions] = useState<{ outId: string; inId: string; minute: number; total: number }[]>([]);
   
@@ -827,6 +831,60 @@ export default function EnhancedMatchTracker() {
         </Card>
       )}
 
+      {/* Substitutes Bench */}
+      {substitutePlayersList.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3 cursor-pointer" onClick={() => setShowSubstitutes(!showSubstitutes)}>
+            <CardTitle className="text-lg flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-blue-600" />
+                Substitutes Bench ({substitutePlayersList.length})
+              </div>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                {showSubstitutes ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          {showSubstitutes && (
+            <CardContent className="pt-0">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {substitutePlayersList.map((player) => (
+                  <div
+                    key={player.id}
+                    className="flex items-center gap-3 p-3 border rounded-lg bg-blue-50 dark:bg-blue-950/20 hover:bg-blue-100 dark:hover:bg-blue-950/30 cursor-pointer transition-colors"
+                    onClick={async () => {
+                      await refreshPlayerStatusLists();
+                      setPreSelectedSubIn(player.id);
+                      setSubDialogOpen(true);
+                    }}
+                  >
+                    {player.jersey_number && (
+                      <Badge variant="outline" className="shrink-0 border-blue-600 text-blue-600">
+                        #{player.jersey_number}
+                      </Badge>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">
+                        {player.first_name} {player.last_name}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Available</div>
+                    </div>
+                    <ArrowUpDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 text-xs text-muted-foreground text-center">
+                Click a substitute to begin substitution
+              </div>
+            </CardContent>
+          )}
+        </Card>
+      )}
+
       {/* Recent Substitutions (UI only) */}
       {substitutions.length > 0 && (
         <Card>
@@ -1027,9 +1085,15 @@ export default function EnhancedMatchTracker() {
       {/* Substitution Dialog */}
       <SubstitutionDialog
         open={subDialogOpen}
-        onOpenChange={setSubDialogOpen}
+        onOpenChange={(open) => {
+          setSubDialogOpen(open);
+          if (!open) {
+            setPreSelectedSubIn(undefined);
+          }
+        }}
         activePlayers={activePlayersList}
         substitutePlayers={substitutePlayersList}
+        preSelectedPlayerIn={preSelectedSubIn}
         onConfirm={async (pairs) => {
           try {
             if (!pairs || pairs.length === 0) {
