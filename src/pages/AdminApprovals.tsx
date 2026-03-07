@@ -144,8 +144,8 @@ export default function AdminApprovals() {
 
       if (error) throw error;
 
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to reject registration');
+      if (!(data as any).success) {
+        throw new Error((data as any).error || 'Failed to reject registration');
       }
 
       toast({

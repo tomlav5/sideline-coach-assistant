@@ -62,7 +62,7 @@ interface PlayerTime {
 interface MatchPeriod {
   id: string;
   period_number: number;
-  period_type: string;
+  period_type: 'period' | 'penalties';
   planned_duration_minutes: number;
   actual_start_time?: string;
   actual_end_time?: string;
