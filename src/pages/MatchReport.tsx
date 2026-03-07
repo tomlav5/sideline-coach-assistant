@@ -207,8 +207,8 @@ export default function MatchReport() {
         if (!playerTimeMap.has(playerId)) {
           playerTimeMap.set(playerId, {
             player_id: playerId,
-            time_on: pt.time_on_minute,
-            time_off: pt.time_off_minute,
+            time_on: null,
+            time_off: null,
             total_minutes: 0,
             is_starter: pt.is_starter,
             half: 'first', // Legacy support
@@ -216,8 +216,23 @@ export default function MatchReport() {
           });
         }
         
-        // Accumulate total minutes across all entries for this player
         const existingPlayer = playerTimeMap.get(playerId)!;
+        
+        // Track earliest time_on (first time they came on)
+        if (pt.time_on_minute !== null) {
+          if (existingPlayer.time_on === null || pt.time_on_minute < existingPlayer.time_on) {
+            existingPlayer.time_on = pt.time_on_minute;
+          }
+        }
+        
+        // Track latest time_off (last time they came off)
+        if (pt.time_off_minute !== null) {
+          if (existingPlayer.time_off === null || pt.time_off_minute > existingPlayer.time_off) {
+            existingPlayer.time_off = pt.time_off_minute;
+          }
+        }
+        
+        // Accumulate total minutes across all entries for this player
         existingPlayer.total_minutes += pt.total_period_minutes || 0;
       });
       
@@ -636,11 +651,11 @@ export default function MatchReport() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-3 sm:p-6 pt-0">
-            <ScrollArea className="h-80 sm:h-96">
-              {playerTimes.length === 0 ? (
-                <p className="text-muted-foreground text-center py-4 text-sm">No player time data available</p>
-              ) : (
-                <div className="space-y-2 sm:space-y-3">
+            {playerTimes.length === 0 ? (
+              <p className="text-muted-foreground text-center py-4 text-sm">No player time data available</p>
+            ) : (
+              <div className="relative">
+                <div className="space-y-2 sm:space-y-3 max-h-[500px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent">
                   {playerTimes.map((playerTime) => (
                     <div key={playerTime.player_id} className="flex items-center justify-between p-2.5 sm:p-3 bg-muted/50 rounded-lg gap-2">
                       <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -670,8 +685,14 @@ export default function MatchReport() {
                     </div>
                   ))}
                 </div>
-              )}
-            </ScrollArea>
+                {playerTimes.length > 5 && (
+                  <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-background to-transparent pointer-events-none" />
+                )}
+                <p className="text-xs text-muted-foreground text-center mt-3">
+                  {playerTimes.length} player{playerTimes.length !== 1 ? 's' : ''} • Scroll to view all
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
