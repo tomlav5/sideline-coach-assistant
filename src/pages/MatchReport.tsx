@@ -266,9 +266,22 @@ export default function MatchReport() {
   };
 
   const getPlayerName = (player: any) => {
-    const name = `${player.first_name} ${player.last_name}`;
-    const number = player.jersey_number ? `#${player.jersey_number} ` : '';
-    return `${number}${name}`;
+    if (!player) return 'Unknown';
+    return `${player.first_name} ${player.last_name}`;
+  };
+
+  const formatEventType = (eventType: string) => {
+    switch (eventType) {
+      case 'goal':
+        return 'Goal';
+      case 'substitution_on':
+        return 'Sub On';
+      case 'substitution_off':
+        return 'Sub Off';
+      default:
+        // Capitalize first letter of other event types
+        return eventType.charAt(0).toUpperCase() + eventType.slice(1);
+    }
   };
 
   const getEventsByPeriod = () => {
@@ -494,7 +507,7 @@ export default function MatchReport() {
                                     </span>
                                     <Target className="h-3 w-3 flex-shrink-0 hidden sm:block" />
                                     <span className={`truncate ${event.is_our_team ? 'text-green-600' : 'text-red-600'}`}>
-                                      {event.event_type === 'goal' ? 'Goal' : event.event_type}
+                                      {formatEventType(event.event_type)}
                                       {event.is_penalty ? ' (P)' : ''}
                                     </span>
                                   </div>
@@ -536,7 +549,7 @@ export default function MatchReport() {
                                       </span>
                                       <Target className="h-3 w-3 flex-shrink-0 hidden sm:block" />
                                       <span className={`truncate ${event.is_our_team ? 'text-green-600' : 'text-red-600'}`}>
-                                        {event.event_type === 'goal' ? 'Goal' : event.event_type}
+                                        {formatEventType(event.event_type)}
                                         {event.is_penalty ? ' (P)' : ''}
                                       </span>
                                     </div>
