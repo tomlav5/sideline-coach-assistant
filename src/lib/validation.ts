@@ -111,9 +111,19 @@ export const fixtureCreationSchema = z.object({
   }),
 });
 
+// OTP email-only validation schema
+export const otpEmailSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .email({ message: "Please enter a valid email address" })
+    .max(255, { message: "Email must be less than 255 characters" }),
+});
+
 // Types for validation results
 export type AuthSignUpData = z.infer<typeof authSignUpSchema>;
 export type AuthSignInData = z.infer<typeof authSignInSchema>;
+export type OtpEmailData = z.infer<typeof otpEmailSchema>;
 export type ClubCreationData = z.infer<typeof clubCreationSchema>;
 export type PlayerCreationData = z.infer<typeof playerCreationSchema>;
 export type TeamCreationData = z.infer<typeof teamCreationSchema>;

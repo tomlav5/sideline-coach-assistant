@@ -103,12 +103,12 @@ export default function AcceptInvitation() {
 
       if (error) throw error;
 
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to accept invitation');
+      if (!(data as any).success) {
+        throw new Error((data as any).error || 'Failed to accept invitation');
       }
 
       // Show success message
-      const needsApproval = data.needs_approval;
+      const needsApproval = (data as any).needs_approval;
       
       toast({
         title: needsApproval ? 'Invitation Accepted - Pending Approval' : 'Invitation Accepted',
