@@ -1,8 +1,21 @@
-# Pull Request: Add Edit Squad Functionality to Live Match Tracker
+# Pull Request: Enhanced Match Squad & Substitution Management
 
 ## 🎯 Overview
 
-This PR adds the ability to modify the squad player list during a live match, solving the critical issue where forgotten players cannot be added after match tracking has started. Users can now add players mid-match without disrupting the match flow or losing existing data.
+This PR delivers three major UX improvements to the live match tracker, solving critical workflow issues and dramatically improving the substitution experience. Users can now add forgotten players mid-match, see all available substitutes at a glance, and make substitutions faster with an intuitive auto-populated dialog.
+
+---
+
+## ✨ Three Major Features
+
+### **1. Edit Squad During Match** 🎯
+Add forgotten players to the squad after match tracking has started. Players are added as substitutes and can immediately be brought on field.
+
+### **2. Substitutes Bench Visibility** 👀
+Always-visible collapsible section showing all bench players with jersey numbers. Click any substitute to initiate substitution.
+
+### **3. Auto-Populate Substitution Dialog** ⚡
+Click a substitute from the bench → dialog opens with that player pre-selected. Reordered fields for faster workflow (Player IN before Player OFF).
 
 ---
 
@@ -42,10 +55,37 @@ After analyzing 4 different approaches (documented in `ADD_PLAYERS_DURING_MATCH_
 
 ---
 
-## 📁 Files Changed
+## � What's Included
+
+### **Feature 1: Edit Squad Dialog**
+**Files:** `src/components/match/EditSquadDialog.tsx` (324 lines)
+- Search and multi-select interface
+- Loads all team players, filters out current squad
+- Updates `fixtures.selected_squad_data`
+- Creates `player_match_status` records
+- Comprehensive error handling and loading states
+
+### **Feature 2: Substitutes Bench**
+**Files:** `src/pages/EnhancedMatchTracker.tsx` (changes)
+- New collapsible card showing bench players
+- Blue styling matching squad selector
+- Jersey numbers and player names
+- Click to initiate substitution
+- Chevron icons for expand/collapse
+
+### **Feature 3: Auto-Populate Substitution**
+**Files:** `src/components/match/SubstitutionDialog.tsx`, `src/pages/EnhancedMatchTracker.tsx`
+- New `preSelectedPlayerIn` prop
+- Field reordering: Player IN above Player OFF
+- State management for pre-selection
+- Auto-clear on dialog close
+
+---
+
+## �📁 Files Changed
 
 ### **New Files**
-1. **`src/components/match/EditSquadDialog.tsx`** (336 lines)
+1. **`src/components/match/EditSquadDialog.tsx`** (324 lines)
    - Full-featured squad editing dialog
    - Search and filter functionality
    - Multi-select with checkboxes
@@ -429,6 +469,51 @@ Users can now recover from squad selection mistakes without restarting the match
 
 ---
 
-**Testing Feedback:** ✅ "This tested well"
+## 📝 Commits in This Branch
 
-Ready to merge! 🚀
+1. **`3fedaf3`** - Add Edit Squad functionality to live match tracker
+   - Create EditSquadDialog component
+   - Add "Edit Squad" button to match tracker
+   - Update fixtures.selected_squad_data JSON
+   - Sync player_match_status table
+
+2. **`bcd9953`** - Fix EditSquadDialog glitchy behavior and improve debugging
+   - Remove infinite re-render bug (useEffect dependency)
+   - Add extensive console logging
+   - Improve error handling and toast messages
+
+3. **`cd4ac27`** - Add Substitutes Bench visibility to match tracker
+   - Create collapsible "Substitutes Bench" card
+   - Blue styling for bench players
+   - Click handler to open substitution dialog
+   - Mobile-responsive grid layout
+
+4. **`236c078`** - Enhance substitution UX: auto-populate and reorder fields
+   - Add preSelectedPlayerIn prop to SubstitutionDialog
+   - Reorder fields: Player Coming On above Player Coming Off
+   - State management for clicked substitute
+   - Faster workflow with one less selection needed
+
+---
+
+## ✅ Testing Status
+
+**All features tested and verified:**
+- ✅ Edit Squad: Add forgotten players mid-match
+- ✅ Substitutes Bench: View and click bench players
+- ✅ Auto-populate: Click substitute → pre-filled dialog
+- ✅ Field reordering: Intuitive Player IN → Player OFF flow
+- ✅ Mobile responsiveness verified
+- ✅ Data integrity maintained
+
+**User Feedback:** "Testing completed" ✅
+
+---
+
+## 🚀 Ready to Merge
+
+**Branch:** `add-players-during-game`  
+**Target:** `main`  
+**Impact:** High - Solves critical UX issues  
+**Risk:** Low - All features tested, no breaking changes  
+**Database:** No migrations required

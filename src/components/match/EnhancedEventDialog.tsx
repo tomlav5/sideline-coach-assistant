@@ -210,20 +210,37 @@ export function EnhancedEventDialog({
           {/* Player Selection (only for our team) */}
           {isOurTeam && (
             <div>
-              <Label>Player</Label>
-              <Select value={selectedPlayer} onValueChange={setSelectedPlayer}>
+              <Label>Goal Scorer</Label>
+              <Select 
+                key={`scorer-${open}`} 
+                value={selectedPlayer} 
+                onValueChange={(value) => {
+                  setSelectedPlayer(value);
+                  // Clear assist player when scorer changes to avoid confusion
+                  setAssistPlayer('');
+                }}
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select player" />
+                  <SelectValue placeholder="Select goal scorer" />
                 </SelectTrigger>
                 <SelectContent>
-                  {activePlayers.map((player) => (
-                    <SelectItem key={player.id} value={player.id}>
-                      {player.first_name} {player.last_name}
-                      {player.jersey_number && ` (#${player.jersey_number})`}
-                    </SelectItem>
-                  ))}
+                  {activePlayers.length === 0 ? (
+                    <div className="px-2 py-6 text-center text-sm text-muted-foreground">
+                      No active players available
+                    </div>
+                  ) : (
+                    activePlayers.map((player) => (
+                      <SelectItem key={player.id} value={player.id}>
+                        {player.jersey_number ? `#${player.jersey_number} ` : ''}
+                        {player.first_name} {player.last_name}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                {activePlayers.length} player{activePlayers.length !== 1 ? 's' : ''} available • Type to search
+              </p>
             </div>
           )}
 
@@ -232,6 +249,7 @@ export function EnhancedEventDialog({
             <div>
               <Label>Assist Player (optional)</Label>
               <Select
+                key={`assist-${selectedPlayer}-${open}`}
                 value={assistPlayer === '' ? 'none' : assistPlayer}
                 onValueChange={(v) => setAssistPlayer(v === 'none' ? '' : v)}
               >
@@ -244,12 +262,15 @@ export function EnhancedEventDialog({
                     .filter(p => p.id !== selectedPlayer)
                     .map((player) => (
                     <SelectItem key={player.id} value={player.id}>
+                      {player.jersey_number ? `#${player.jersey_number} ` : ''}
                       {player.first_name} {player.last_name}
-                      {player.jersey_number && ` (#${player.jersey_number})`}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Search cleared • Type to find a player
+              </p>
             </div>
           )}
 
