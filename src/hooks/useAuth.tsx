@@ -196,6 +196,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signUp,
       signIn,
       signInWithOAuth,
+      signInWithOtp,
+      verifyOtp,
       signOut,
     }}>
       {children}

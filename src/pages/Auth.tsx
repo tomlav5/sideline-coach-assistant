@@ -6,14 +6,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Shield, Users, BarChart3, Chrome, Facebook } from 'lucide-react';
-import { authSignInSchema, authSignUpSchema } from '@/lib/validation';
+import { Shield, Users, BarChart3, Chrome, Facebook, Mail, ArrowLeft } from 'lucide-react';
+import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
+import { authSignInSchema, authSignUpSchema, otpEmailSchema } from '@/lib/validation';
 import { toast } from '@/hooks/use-toast';
 
 export default function Auth() {
   const [isLoading, setIsLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<string | null>(null);
-  const { signIn, signUp, signInWithOAuth } = useAuth();
+  const [otpStep, setOtpStep] = useState<'email' | 'code'>('email');
+  const [otpEmail, setOtpEmail] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const { signIn, signUp, signInWithOAuth, signInWithOtp, verifyOtp } = useAuth();
   const navigate = useNavigate();
 
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -26,7 +30,6 @@ export default function Auth() {
       password: formData.get('password') as string,
     };
 
-    // Validate input data
     const validation = authSignInSchema.safeParse(rawData);
     if (!validation.success) {
       const errors = validation.error.errors.map(err => err.message).join(', ');
@@ -59,7 +62,6 @@ export default function Auth() {
       lastName: formData.get('lastName') as string,
     };
 
-    // Validate input data
     const validation = authSignUpSchema.safeParse(rawData);
     if (!validation.success) {
       const errors = validation.error.errors.map(err => err.message).join(', ');
@@ -85,7 +87,53 @@ export default function Auth() {
   const handleOAuthSignIn = async (provider: 'google' | 'apple' | 'facebook') => {
     setOauthLoading(provider);
     await signInWithOAuth(provider);
-    // OAuth will redirect, so loading state will persist
+  };
+
+  const handleSendOtp = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsLoading(true);
+
+    const validation = otpEmailSchema.safeParse({ email: otpEmail });
+    if (!validation.success) {
+      const errors = validation.error.errors.map(err => err.message).join(', ');
+      toast({
+        title: "Validation Error",
+        description: errors,
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
+    }
+
+    const { error } = await signInWithOtp(validation.data.email);
+    if (!error) {
+      setOtpStep('code');
+    }
+    setIsLoading(false);
+  };
+
+  const handleVerifyOtp = async () => {
+    if (otpCode.length !== 6) {
+      toast({
+        title: "Invalid code",
+        description: "Please enter the full 6-digit code.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    const { error } = await verifyOtp(otpEmail, otpCode);
+    if (!error) {
+      navigate('/');
+    }
+    setIsLoading(false);
+  };
+
+  const handleResendOtp = async () => {
+    setIsLoading(true);
+    await signInWithOtp(otpEmail);
+    setIsLoading(false);
   };
 
   return (
@@ -128,9 +176,14 @@ export default function Auth() {
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="signin" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="signin">Sign In</TabsTrigger>
                 <TabsTrigger value="signup">Sign Up</TabsTrigger>
+                <TabsTrigger value="otp" className="flex items-center gap-1">
+                  <Mail className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Email Code</span>
+                  <span className="sm:hidden">Code</span>
+                </TabsTrigger>
               </TabsList>
               
               <TabsContent value="signin" className="space-y-4">
@@ -290,6 +343,97 @@ export default function Auth() {
                     {isLoading ? 'Creating account...' : 'Create Account'}
                   </Button>
                 </form>
+              </TabsContent>
+
+              <TabsContent value="otp" className="space-y-4">
+                {otpStep === 'email' ? (
+                  <>
+                    <p className="text-sm text-muted-foreground text-center">
+                      Sign in without a password — we'll send a 6-digit code to your email.
+                    </p>
+                    <form onSubmit={handleSendOtp} className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="otp-email">Email</Label>
+                        <Input
+                          id="otp-email"
+                          type="email"
+                          placeholder="coach@example.com"
+                          value={otpEmail}
+                          onChange={(e) => setOtpEmail(e.target.value)}
+                          required
+                          className="touch-target"
+                        />
+                      </div>
+                      <Button
+                        type="submit"
+                        className="w-full touch-target"
+                        disabled={isLoading}
+                      >
+                        <Mail className="h-4 w-4 mr-2" />
+                        {isLoading ? 'Sending...' : 'Send Code'}
+                      </Button>
+                    </form>
+                  </>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="text-center space-y-1">
+                      <p className="text-sm font-medium">Enter verification code</p>
+                      <p className="text-xs text-muted-foreground">
+                        Sent to {otpEmail}
+                      </p>
+                    </div>
+
+                    <div className="flex justify-center">
+                      <InputOTP
+                        maxLength={6}
+                        value={otpCode}
+                        onChange={setOtpCode}
+                      >
+                        <InputOTPGroup>
+                          <InputOTPSlot index={0} />
+                          <InputOTPSlot index={1} />
+                          <InputOTPSlot index={2} />
+                          <InputOTPSlot index={3} />
+                          <InputOTPSlot index={4} />
+                          <InputOTPSlot index={5} />
+                        </InputOTPGroup>
+                      </InputOTP>
+                    </div>
+
+                    <Button
+                      onClick={handleVerifyOtp}
+                      className="w-full touch-target"
+                      disabled={isLoading || otpCode.length !== 6}
+                    >
+                      {isLoading ? 'Verifying...' : 'Verify & Sign In'}
+                    </Button>
+
+                    <div className="flex items-center justify-between">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setOtpStep('email');
+                          setOtpCode('');
+                        }}
+                        disabled={isLoading}
+                      >
+                        <ArrowLeft className="h-4 w-4 mr-1" />
+                        Back
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleResendOtp}
+                        disabled={isLoading}
+                      >
+                        Resend Code
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </TabsContent>
             </Tabs>
           </CardContent>
