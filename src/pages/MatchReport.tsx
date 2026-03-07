@@ -83,6 +83,7 @@ export default function MatchReport() {
   const [playerTimes, setPlayerTimes] = useState<PlayerTime[]>([]);
   const [periods, setPeriods] = useState<MatchPeriod[]>([]);
   const [loading, setLoading] = useState(true);
+  const [eventFilter, setEventFilter] = useState<'all' | 'goals' | 'substitutions'>('all');
 
   useEffect(() => {
     if (fixtureId) {
@@ -284,9 +285,21 @@ export default function MatchReport() {
     }
   };
 
+  const getFilteredEvents = () => {
+    if (eventFilter === 'all') return events;
+    if (eventFilter === 'goals') {
+      return events.filter(e => e.event_type === 'goal');
+    }
+    if (eventFilter === 'substitutions') {
+      return events.filter(e => e.event_type === 'substitution_on' || e.event_type === 'substitution_off');
+    }
+    return events;
+  };
+
   const getEventsByPeriod = () => {
+    const filteredEvents = getFilteredEvents();
     const byId: Record<string, MatchEvent[]> = {};
-    events.forEach(e => {
+    filteredEvents.forEach(e => {
       const pid = e.period_id || 'unassigned';
       if (!byId[pid]) byId[pid] = [];
       byId[pid].push(e);
@@ -482,10 +495,40 @@ export default function MatchReport() {
               <Target className="h-4 w-4 sm:h-5 sm:w-5" />
               Match Events
             </CardTitle>
+            <CardDescription className="mt-2">
+              <div className="flex gap-1 sm:gap-2">
+                <Button
+                  variant={eventFilter === 'all' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setEventFilter('all')}
+                  className="text-xs sm:text-sm h-7 sm:h-8"
+                >
+                  All ({events.length})
+                </Button>
+                <Button
+                  variant={eventFilter === 'goals' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setEventFilter('goals')}
+                  className="text-xs sm:text-sm h-7 sm:h-8"
+                >
+                  Goals ({events.filter(e => e.event_type === 'goal').length})
+                </Button>
+                <Button
+                  variant={eventFilter === 'substitutions' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setEventFilter('substitutions')}
+                  className="text-xs sm:text-sm h-7 sm:h-8"
+                >
+                  Subs ({events.filter(e => e.event_type === 'substitution_on' || e.event_type === 'substitution_off').length})
+                </Button>
+              </div>
+            </CardDescription>
           </CardHeader>
           <CardContent className="p-3 sm:p-6 pt-0">
-            {events.length === 0 ? (
-              <p className="text-muted-foreground text-center py-4 text-sm">No events recorded</p>
+            {getFilteredEvents().length === 0 ? (
+              <p className="text-muted-foreground text-center py-4 text-sm">
+                {events.length === 0 ? 'No events recorded' : `No ${eventFilter === 'goals' ? 'goals' : 'substitutions'} recorded`}
+              </p>
             ) : (
               <div className="space-y-3 sm:space-y-4">
                 {(() => {
