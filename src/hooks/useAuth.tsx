@@ -112,6 +112,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error };
   };
 
+  const signInWithOtp = async (email: string) => {
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        shouldCreateUser: true,
+      },
+    });
+
+    if (error) {
+      toast({
+        title: "Failed to send code",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Code sent",
+        description: "Check your email for the verification code.",
+      });
+    }
+
+    return { error };
+  };
+
+  const verifyOtp = async (email: string, token: string) => {
+    const { error } = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: 'email',
+    });
+
+    if (error) {
+      toast({
+        title: "Verification failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+
+    return { error };
+  };
+
   const signOut = async () => {
     try {
       // Clear local state first
