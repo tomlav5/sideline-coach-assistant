@@ -83,6 +83,7 @@ export default function MatchReport() {
   const [playerTimes, setPlayerTimes] = useState<PlayerTime[]>([]);
   const [periods, setPeriods] = useState<MatchPeriod[]>([]);
   const [loading, setLoading] = useState(true);
+  const [eventFilter, setEventFilter] = useState<'all' | 'goals' | 'substitutions'>('all');
 
   useEffect(() => {
     if (fixtureId) {
@@ -206,8 +207,8 @@ export default function MatchReport() {
         if (!playerTimeMap.has(playerId)) {
           playerTimeMap.set(playerId, {
             player_id: playerId,
-            time_on: pt.time_on_minute,
-            time_off: pt.time_off_minute,
+            time_on: null,
+            time_off: null,
             total_minutes: 0,
             is_starter: pt.is_starter,
             half: 'first', // Legacy support
@@ -215,8 +216,23 @@ export default function MatchReport() {
           });
         }
         
-        // Accumulate total minutes across all entries for this player
         const existingPlayer = playerTimeMap.get(playerId)!;
+        
+        // Track earliest time_on (first time they came on)
+        if (pt.time_on_minute !== null) {
+          if (existingPlayer.time_on === null || pt.time_on_minute < existingPlayer.time_on) {
+            existingPlayer.time_on = pt.time_on_minute;
+          }
+        }
+        
+        // Track latest time_off (last time they came off)
+        if (pt.time_off_minute !== null) {
+          if (existingPlayer.time_off === null || pt.time_off_minute > existingPlayer.time_off) {
+            existingPlayer.time_off = pt.time_off_minute;
+          }
+        }
+        
+        // Accumulate total minutes across all entries for this player
         existingPlayer.total_minutes += pt.total_period_minutes || 0;
       });
       
@@ -266,14 +282,39 @@ export default function MatchReport() {
   };
 
   const getPlayerName = (player: any) => {
-    const name = `${player.first_name} ${player.last_name}`;
-    const number = player.jersey_number ? `#${player.jersey_number} ` : '';
-    return `${number}${name}`;
+    if (!player) return 'Unknown';
+    return `${player.first_name} ${player.last_name}`;
+  };
+
+  const formatEventType = (eventType: string) => {
+    switch (eventType) {
+      case 'goal':
+        return 'Goal';
+      case 'substitution_on':
+        return 'Sub On';
+      case 'substitution_off':
+        return 'Sub Off';
+      default:
+        // Capitalize first letter of other event types
+        return eventType.charAt(0).toUpperCase() + eventType.slice(1);
+    }
+  };
+
+  const getFilteredEvents = () => {
+    if (eventFilter === 'all') return events;
+    if (eventFilter === 'goals') {
+      return events.filter(e => e.event_type === 'goal');
+    }
+    if (eventFilter === 'substitutions') {
+      return events.filter(e => e.event_type === 'substitution_on' || e.event_type === 'substitution_off');
+    }
+    return events;
   };
 
   const getEventsByPeriod = () => {
+    const filteredEvents = getFilteredEvents();
     const byId: Record<string, MatchEvent[]> = {};
-    events.forEach(e => {
+    filteredEvents.forEach(e => {
       const pid = e.period_id || 'unassigned';
       if (!byId[pid]) byId[pid] = [];
       byId[pid].push(e);
@@ -469,10 +510,40 @@ export default function MatchReport() {
               <Target className="h-4 w-4 sm:h-5 sm:w-5" />
               Match Events
             </CardTitle>
+            <CardDescription className="mt-2">
+              <div className="flex gap-1 sm:gap-2">
+                <Button
+                  variant={eventFilter === 'all' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setEventFilter('all')}
+                  className="text-xs sm:text-sm h-7 sm:h-8"
+                >
+                  All ({events.length})
+                </Button>
+                <Button
+                  variant={eventFilter === 'goals' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setEventFilter('goals')}
+                  className="text-xs sm:text-sm h-7 sm:h-8"
+                >
+                  Goals ({events.filter(e => e.event_type === 'goal').length})
+                </Button>
+                <Button
+                  variant={eventFilter === 'substitutions' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setEventFilter('substitutions')}
+                  className="text-xs sm:text-sm h-7 sm:h-8"
+                >
+                  Subs ({events.filter(e => e.event_type === 'substitution_on' || e.event_type === 'substitution_off').length})
+                </Button>
+              </div>
+            </CardDescription>
           </CardHeader>
           <CardContent className="p-3 sm:p-6 pt-0">
-            {events.length === 0 ? (
-              <p className="text-muted-foreground text-center py-4 text-sm">No events recorded</p>
+            {getFilteredEvents().length === 0 ? (
+              <p className="text-muted-foreground text-center py-4 text-sm">
+                {events.length === 0 ? 'No events recorded' : `No ${eventFilter === 'goals' ? 'goals' : 'substitutions'} recorded`}
+              </p>
             ) : (
               <div className="space-y-3 sm:space-y-4">
                 {(() => {
@@ -494,7 +565,7 @@ export default function MatchReport() {
                                     </span>
                                     <Target className="h-3 w-3 flex-shrink-0 hidden sm:block" />
                                     <span className={`truncate ${event.is_our_team ? 'text-green-600' : 'text-red-600'}`}>
-                                      {event.event_type === 'goal' ? 'Goal' : event.event_type}
+                                      {formatEventType(event.event_type)}
                                       {event.is_penalty ? ' (P)' : ''}
                                     </span>
                                   </div>
@@ -536,7 +607,7 @@ export default function MatchReport() {
                                       </span>
                                       <Target className="h-3 w-3 flex-shrink-0 hidden sm:block" />
                                       <span className={`truncate ${event.is_our_team ? 'text-green-600' : 'text-red-600'}`}>
-                                        {event.event_type === 'goal' ? 'Goal' : event.event_type}
+                                        {formatEventType(event.event_type)}
                                         {event.is_penalty ? ' (P)' : ''}
                                       </span>
                                     </div>
@@ -580,11 +651,11 @@ export default function MatchReport() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-3 sm:p-6 pt-0">
-            <ScrollArea className="h-80 sm:h-96">
-              {playerTimes.length === 0 ? (
-                <p className="text-muted-foreground text-center py-4 text-sm">No player time data available</p>
-              ) : (
-                <div className="space-y-2 sm:space-y-3">
+            {playerTimes.length === 0 ? (
+              <p className="text-muted-foreground text-center py-4 text-sm">No player time data available</p>
+            ) : (
+              <div className="relative">
+                <div className="space-y-2 sm:space-y-3 max-h-[500px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent">
                   {playerTimes.map((playerTime) => (
                     <div key={playerTime.player_id} className="flex items-center justify-between p-2.5 sm:p-3 bg-muted/50 rounded-lg gap-2">
                       <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -614,8 +685,14 @@ export default function MatchReport() {
                     </div>
                   ))}
                 </div>
-              )}
-            </ScrollArea>
+                {playerTimes.length > 5 && (
+                  <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-background to-transparent pointer-events-none" />
+                )}
+                <p className="text-xs text-muted-foreground text-center mt-3">
+                  {playerTimes.length} player{playerTimes.length !== 1 ? 's' : ''} • Scroll to view all
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

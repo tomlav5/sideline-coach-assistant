@@ -3,12 +3,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
+import { PlayerSelector } from '@/components/match/PlayerSelector';
 
 interface Player {
   id: string;
@@ -210,20 +210,21 @@ export function EnhancedEventDialog({
           {/* Player Selection (only for our team) */}
           {isOurTeam && (
             <div>
-              <Label>Player</Label>
-              <Select value={selectedPlayer} onValueChange={setSelectedPlayer}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select player" />
-                </SelectTrigger>
-                <SelectContent>
-                  {activePlayers.map((player) => (
-                    <SelectItem key={player.id} value={player.id}>
-                      {player.first_name} {player.last_name}
-                      {player.jersey_number && ` (#${player.jersey_number})`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Goal Scorer</Label>
+              <PlayerSelector
+                players={activePlayers}
+                value={selectedPlayer}
+                onValueChange={(value) => {
+                  setSelectedPlayer(value);
+                  // Clear assist player when scorer changes to avoid confusion
+                  setAssistPlayer('');
+                }}
+                placeholder="Select goal scorer"
+                emptyMessage="No active players available"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                {activePlayers.length} player{activePlayers.length !== 1 ? 's' : ''} available • Type to search
+              </p>
             </div>
           )}
 
@@ -231,25 +232,18 @@ export function EnhancedEventDialog({
           {eventType === 'goal' && isOurTeam && resolvedPeriod?.period_type !== 'penalties' && (
             <div>
               <Label>Assist Player (optional)</Label>
-              <Select
+              <PlayerSelector
+                players={activePlayers}
                 value={assistPlayer === '' ? 'none' : assistPlayer}
                 onValueChange={(v) => setAssistPlayer(v === 'none' ? '' : v)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select assist player" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No assist</SelectItem>
-                  {activePlayers
-                    .filter(p => p.id !== selectedPlayer)
-                    .map((player) => (
-                    <SelectItem key={player.id} value={player.id}>
-                      {player.first_name} {player.last_name}
-                      {player.jersey_number && ` (#${player.jersey_number})`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                placeholder="Select assist player"
+                emptyMessage="No players available"
+                excludePlayerId={selectedPlayer}
+                allowNone={true}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Search cleared • Type to find a player
+              </p>
             </div>
           )}
 
