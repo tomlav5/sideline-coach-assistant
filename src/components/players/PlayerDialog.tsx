@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+import { useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,6 +29,8 @@ interface PlayerDialogProps {
 }
 
 export function PlayerDialog({ open, onOpenChange, clubs, onPlayerCreated }: PlayerDialogProps) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [creating, setCreating] = useState(false);
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeams, setSelectedTeams] = useState<string[]>([]);
@@ -59,6 +63,11 @@ export function PlayerDialog({ open, onOpenChange, clubs, onPlayerCreated }: Pla
 
   const createPlayer = async () => {
     if (!newPlayer.first_name.trim() || !newPlayer.last_name.trim() || !newPlayer.club_id) {
+      toast({
+        title: "Validation Error",
+        description: "First name, last name, and club are required",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -96,12 +105,27 @@ export function PlayerDialog({ open, onOpenChange, clubs, onPlayerCreated }: Pla
         if (assignError) throw assignError;
       }
 
+      toast({
+        title: "Success",
+        description: `Added ${newPlayer.first_name} ${newPlayer.last_name}`,
+      });
+
+      // Invalidate queries to refresh UI immediately
+      queryClient.invalidateQueries({ queryKey: ['players'] });
+      queryClient.invalidateQueries({ queryKey: ['teams'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+
       onOpenChange(false);
       setNewPlayer({ first_name: '', last_name: '', jersey_number: '', club_id: '' });
       setSelectedTeams([]);
       onPlayerCreated();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating player:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create player",
+        variant: "destructive",
+      });
     } finally {
       setCreating(false);
     }
