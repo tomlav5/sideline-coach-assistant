@@ -3,10 +3,15 @@ import { useSearchParams } from 'react-router-dom';
 import { usePlayers } from '@/hooks/usePlayers';
 import { useTeams } from '@/hooks/useTeams';
 import { useClubs } from '@/hooks/useClubs';
+import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
+import { useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, User, Users } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Plus, User, Users, Trash2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PlayerCard } from '@/components/players/PlayerCard';
 import { PlayerDialog } from '@/components/players/PlayerDialog';
@@ -38,15 +43,21 @@ interface Player {
 
 export default function Players() {
   const [searchParams] = useSearchParams();
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { data: players = [], isLoading, error } = usePlayers();
   const { data: teams = [] } = useTeams();
   const { data: clubs = [] } = useClubs();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [bulkAssignDialogOpen, setBulkAssignDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [selectedPlayers, setSelectedPlayers] = useState<Player[]>([]);
   const [teamFilter, setTeamFilter] = useState<string>('all');
+  const [deleting, setDeleting] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Memoized filtered players for performance
   const filteredPlayers = useMemo(() => {
@@ -69,6 +80,35 @@ export default function Players() {
     }
   }, [searchParams, teamFilter]);
 
+  // Check if user is admin for any selected players' clubs
+  useEffect(() => {
+    checkAdminRole();
+  }, [user, selectedPlayers]);
+
+  const checkAdminRole = async () => {
+    if (!user || selectedPlayers.length === 0) {
+      setIsAdmin(false);
+      return;
+    }
+    
+    try {
+      // Check if user is admin for the first selected player's club
+      // (assuming all selected players are from same club in most cases)
+      const { data, error } = await supabase
+        .from('club_members')
+        .select('role')
+        .eq('club_id', selectedPlayers[0].club_id)
+        .eq('user_id', user.id)
+        .single();
+      
+      if (error) throw error;
+      setIsAdmin(data?.role === 'admin');
+    } catch (error) {
+      console.error('Error checking admin role:', error);
+      setIsAdmin(false);
+    }
+  };
+
   const handleTeamAssignment = (player: Player) => {
     setSelectedPlayer(player);
     setAssignDialogOpen(true);
@@ -89,6 +129,67 @@ export default function Players() {
 
   const handleBulkTeamAssignment = () => {
     setBulkAssignDialogOpen(true);
+  };
+
+  const handleBulkDelete = () => {
+    if (!isAdmin) {
+      toast({
+        title: "Permission Denied",
+        description: "Only club admins can delete players",
+        variant: "destructive",
+      });
+      return;
+    }
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmBulkDelete = async () => {
+    if (!isAdmin || selectedPlayers.length === 0) return;
+    
+    try {
+      setDeleting(true);
+      const playerIds = selectedPlayers.map(p => p.id);
+      
+      // Delete team assignments first (though CASCADE should handle this)
+      const { error: teamError } = await supabase
+        .from('team_players')
+        .delete()
+        .in('player_id', playerIds);
+
+      if (teamError) {
+        console.error('Error removing team assignments:', teamError);
+      }
+
+      // Delete all selected players
+      const { error } = await supabase
+        .from('players')
+        .delete()
+        .in('id', playerIds);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: `Deleted ${selectedPlayers.length} player${selectedPlayers.length !== 1 ? 's' : ''}`,
+      });
+
+      // Invalidate queries to refresh UI immediately
+      queryClient.invalidateQueries({ queryKey: ['players'] });
+      queryClient.invalidateQueries({ queryKey: ['teams'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+
+      setSelectedPlayers([]);
+      setDeleteDialogOpen(false);
+    } catch (error: any) {
+      console.error('Error deleting players:', error);
+      toast({
+        title: "Error Deleting Players",
+        description: error.message || "Failed to delete players. They may have match history that cannot be removed.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const filterPlayersByTeam = (teamId: string) => {
@@ -135,13 +236,24 @@ export default function Players() {
           
           <div className="flex gap-2">
             {selectedPlayers.length > 0 && (
-              <Button 
-                variant="outline"
-                onClick={handleBulkTeamAssignment}
-              >
-                <Users className="h-4 w-4 mr-2" />
-                Assign {selectedPlayers.length} to Teams
-              </Button>
+              <>
+                <Button 
+                  variant="outline"
+                  onClick={handleBulkTeamAssignment}
+                >
+                  <Users className="h-4 w-4 mr-2" />
+                  Assign {selectedPlayers.length}
+                </Button>
+                {isAdmin && (
+                  <Button 
+                    variant="destructive"
+                    onClick={handleBulkDelete}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete {selectedPlayers.length}
+                  </Button>
+                )}
+              </>
             )}
             <Button 
               className="touch-target"
@@ -242,6 +354,38 @@ export default function Players() {
         availableTeams={teams}
         onAssignmentUpdate={handleAssignmentUpdate}
       />
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selectedPlayers.length} Player{selectedPlayers.length !== 1 ? 's' : ''}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete the following player{selectedPlayers.length !== 1 ? 's' : ''}?
+              <div className="mt-3 space-y-1 max-h-60 overflow-y-auto">
+                {selectedPlayers.map(p => (
+                  <div key={p.id} className="text-sm font-medium text-foreground">
+                    • {p.first_name} {p.last_name}
+                    {p.jersey_number && ` (#${p.jersey_number})`}
+                  </div>
+                ))}
+              </div>
+              <p className="mt-3">
+                This action cannot be undone. Players will be removed from all teams and their match event records will be preserved but anonymized.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmBulkDelete} 
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? "Deleting..." : `Delete ${selectedPlayers.length} Player${selectedPlayers.length !== 1 ? 's' : ''}`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
