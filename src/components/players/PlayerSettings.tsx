@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
+import { useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,6 +34,8 @@ interface PlayerSettingsProps {
 
 export function PlayerSettings({ player, open, onOpenChange, onPlayerUpdate }: PlayerSettingsProps) {
   const { user } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -66,6 +70,11 @@ export function PlayerSettings({ player, open, onOpenChange, onPlayerUpdate }: P
 
   const updatePlayer = async () => {
     if (!editedPlayer.first_name.trim() || !editedPlayer.last_name.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "First name and last name are required",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -89,28 +98,55 @@ export function PlayerSettings({ player, open, onOpenChange, onPlayerUpdate }: P
 
       if (error) throw error;
 
+      toast({
+        title: "Success",
+        description: `Updated ${editedPlayer.first_name} ${editedPlayer.last_name}`,
+      });
+
+      // Invalidate queries to refresh UI
+      queryClient.invalidateQueries({ queryKey: ['players'] });
+      queryClient.invalidateQueries({ queryKey: ['teams'] });
+
       onOpenChange(false);
       onPlayerUpdate();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating player:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update player",
+        variant: "destructive",
+      });
     } finally {
       setSaving(false);
     }
   };
 
   const deletePlayer = async () => {
-    if (!isAdmin) return;
+    if (!isAdmin) {
+      toast({
+        title: "Permission Denied",
+        description: "Only club admins can delete players",
+        variant: "destructive",
+      });
+      return;
+    }
     
     try {
       setDeleting(true);
       
-      // First remove from all teams
-      await supabase
+      // Note: team_players has ON DELETE CASCADE, so it will be auto-deleted
+      // But we'll delete explicitly for clarity and to handle any edge cases
+      const { error: teamError } = await supabase
         .from('team_players')
         .delete()
         .eq('player_id', player.id);
 
-      // Then delete the player
+      if (teamError) {
+        console.error('Error removing team assignments:', teamError);
+        // Continue anyway since cascade should handle it
+      }
+
+      // Delete the player - related records will cascade or set to null per FK constraints
       const { error } = await supabase
         .from('players')
         .delete()
@@ -118,10 +154,25 @@ export function PlayerSettings({ player, open, onOpenChange, onPlayerUpdate }: P
 
       if (error) throw error;
 
+      toast({
+        title: "Success",
+        description: `Deleted ${player.first_name} ${player.last_name}`,
+      });
+
+      // Invalidate queries to refresh UI immediately
+      queryClient.invalidateQueries({ queryKey: ['players'] });
+      queryClient.invalidateQueries({ queryKey: ['teams'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+
       onOpenChange(false);
       onPlayerUpdate();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting player:', error);
+      toast({
+        title: "Error Deleting Player",
+        description: error.message || "Failed to delete player. They may have match history that cannot be removed.",
+        variant: "destructive",
+      });
     } finally {
       setDeleting(false);
     }
