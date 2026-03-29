@@ -176,37 +176,17 @@ export default function Auth() {
                   </>
                 ) : (
                   <div className="space-y-4">
-                    <div className="text-center space-y-1">
-                      <p className="text-sm font-medium">Enter verification code</p>
+                    <div className="text-center space-y-2">
+                      <Mail className="h-10 w-10 text-primary mx-auto" />
+                      <p className="text-sm font-medium">Check your email</p>
                       <p className="text-xs text-muted-foreground">
-                        Sent to {otpEmail}
+                        We've sent a sign-in link to <span className="font-medium text-foreground">{otpEmail}</span>. Click the link in the email to log in.
                       </p>
                     </div>
 
-                    <div className="flex justify-center">
-                      <InputOTP
-                        maxLength={6}
-                        value={otpCode}
-                        onChange={setOtpCode}
-                      >
-                        <InputOTPGroup>
-                          <InputOTPSlot index={0} />
-                          <InputOTPSlot index={1} />
-                          <InputOTPSlot index={2} />
-                          <InputOTPSlot index={3} />
-                          <InputOTPSlot index={4} />
-                          <InputOTPSlot index={5} />
-                        </InputOTPGroup>
-                      </InputOTP>
+                    <div className="rounded-md bg-muted p-3 text-xs text-muted-foreground text-center">
+                      Didn't receive it? Check your spam folder or try again.
                     </div>
-
-                    <Button
-                      onClick={handleVerifyOtp}
-                      className="w-full touch-target"
-                      disabled={isLoading || otpCode.length !== 6}
-                    >
-                      {isLoading ? 'Verifying...' : 'Verify & Sign In'}
-                    </Button>
 
                     <div className="flex items-center justify-between">
                       <Button
@@ -215,7 +195,6 @@ export default function Auth() {
                         size="sm"
                         onClick={() => {
                           setOtpStep('email');
-                          setOtpCode('');
                         }}
                         disabled={isLoading}
                       >
@@ -229,7 +208,7 @@ export default function Auth() {
                         onClick={handleResendOtp}
                         disabled={isLoading}
                       >
-                        Resend Code
+                        Resend Link
                       </Button>
                     </div>
                   </div>
