@@ -74,23 +74,6 @@ export default function Auth() {
     setIsLoading(false);
   };
 
-  const handleVerifyOtp = async () => {
-    if (otpCode.length !== 6) {
-      toast({
-        title: "Invalid code",
-        description: "Please enter the full 6-digit code.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsLoading(true);
-    const { error } = await verifyOtp(otpEmail, otpCode);
-    if (!error) {
-      navigate('/');
-    }
-    setIsLoading(false);
-  };
 
   const handleResendOtp = async () => {
     setIsLoading(true);
