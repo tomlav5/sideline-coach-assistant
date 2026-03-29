@@ -155,8 +155,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       session,
       loading,
       signUp,
-      signIn,
-      signInWithOAuth,
       signInWithOtp,
       verifyOtp,
       signOut,
