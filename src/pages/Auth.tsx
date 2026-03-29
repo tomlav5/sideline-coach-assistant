@@ -14,7 +14,7 @@ export default function Auth() {
   const [isLoading, setIsLoading] = useState(false);
   const [otpStep, setOtpStep] = useState<'email' | 'code'>('email');
   const [otpEmail, setOtpEmail] = useState('');
-  const { signUp, signInWithOtp, verifyOtp } = useAuth();
+  const { signUp, signInWithOtp } = useAuth();
   const navigate = useNavigate();
 
   const handleSignUp = async (e: React.FormEvent<HTMLFormElement>) => {
