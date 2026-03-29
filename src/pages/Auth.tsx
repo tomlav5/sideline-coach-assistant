@@ -14,7 +14,6 @@ export default function Auth() {
   const [isLoading, setIsLoading] = useState(false);
   const [otpStep, setOtpStep] = useState<'email' | 'code'>('email');
   const [otpEmail, setOtpEmail] = useState('');
-  const [otpCode, setOtpCode] = useState('');
   const { signUp, signInWithOtp, verifyOtp } = useAuth();
   const navigate = useNavigate();
 
