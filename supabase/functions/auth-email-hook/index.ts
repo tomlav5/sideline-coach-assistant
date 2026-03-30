@@ -2,6 +2,7 @@ import * as React from 'npm:react@18.3.1'
 import { renderAsync } from 'npm:@react-email/components@0.0.22'
 import { Webhook } from 'npm:standardwebhooks@1.0.0'
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import { sendLovableEmail } from 'npm:@lovable.dev/email-js@0.0.4'
 import { SignupEmail } from '../_shared/email-templates/signup.tsx'
 import { InviteEmail } from '../_shared/email-templates/invite.tsx'
 import { MagicLinkEmail } from '../_shared/email-templates/magic-link.tsx'
@@ -84,6 +85,80 @@ type SupabaseEmailWebhookPayload = {
     token_hash_new?: string
     new_email?: string
   }
+}
+
+type PostgrestishError = {
+  code?: string
+  details?: string
+  message?: string
+}
+
+function isMissingEmailQueueInfrastructure(error: unknown) {
+  if (!error || typeof error !== 'object') {
+    return false
+  }
+
+  const postgrestError = error as PostgrestishError
+  const combinedMessage = [postgrestError.message, postgrestError.details].filter(Boolean).join(' ')
+
+  return (
+    postgrestError.code === 'PGRST202' ||
+    postgrestError.code === 'PGRST205' ||
+    /enqueue_email/i.test(combinedMessage) ||
+    /email_send_log/i.test(combinedMessage) ||
+    /relation .* does not exist/i.test(combinedMessage)
+  )
+}
+
+async function writeEmailLog(
+  supabase: ReturnType<typeof createClient>,
+  payload: {
+    message_id: string
+    template_name: string
+    recipient_email: string
+    status: string
+    error_message?: string
+  }
+) {
+  const { error } = await supabase.from('email_send_log').insert(payload)
+
+  if (error && !isMissingEmailQueueInfrastructure(error)) {
+    console.error('Failed to write auth email log', { error, messageId: payload.message_id })
+  }
+}
+
+async function sendAuthEmailDirectly({
+  emailType,
+  html,
+  messageId,
+  recipient,
+  text,
+}: {
+  emailType: string
+  html: string
+  messageId: string
+  recipient: string
+  text: string
+}) {
+  const apiKey = Deno.env.get('LOVABLE_API_KEY')
+
+  if (!apiKey) {
+    throw new Error('LOVABLE_API_KEY is not configured')
+  }
+
+  await sendLovableEmail(
+    {
+      to: recipient,
+      from: `${SITE_NAME} <noreply@${FROM_DOMAIN}>`,
+      sender_domain: SENDER_DOMAIN,
+      subject: EMAIL_SUBJECTS[emailType] || 'Notification',
+      html,
+      text,
+      purpose: 'transactional',
+      idempotency_key: `auth-email-${messageId}`,
+    },
+    { apiKey }
+  )
 }
 
 function jsonResponse(body: unknown, status = 200) {
@@ -227,7 +302,7 @@ async function handleWebhook(req: Request): Promise<Response> {
   const supabase = createClient(supabaseUrl, serviceRoleKey)
   const messageId = crypto.randomUUID()
 
-  await supabase.from('email_send_log').insert({
+  await writeEmailLog(supabase, {
     message_id: messageId,
     template_name: emailType,
     recipient_email: recipient,
@@ -252,8 +327,42 @@ async function handleWebhook(req: Request): Promise<Response> {
   })
 
   if (enqueueError) {
+    if (isMissingEmailQueueInfrastructure(enqueueError)) {
+      console.warn('Email queue infrastructure missing; sending auth email directly', {
+        error: enqueueError,
+        runId,
+        emailType,
+      })
+
+      try {
+        await sendAuthEmailDirectly({ emailType, html, messageId, recipient, text })
+        await writeEmailLog(supabase, {
+          message_id: messageId,
+          template_name: emailType,
+          recipient_email: recipient,
+          status: 'sent',
+        })
+        return jsonResponse({ success: true, direct: true, queued: false })
+      } catch (directSendError) {
+        console.error('Failed to send auth email directly', {
+          error: directSendError,
+          runId,
+          emailType,
+        })
+        await writeEmailLog(supabase, {
+          message_id: messageId,
+          template_name: emailType,
+          recipient_email: recipient,
+          status: 'failed',
+          error_message:
+            directSendError instanceof Error ? directSendError.message : 'Failed to send email',
+        })
+        return jsonResponse({ error: 'Failed to send email' }, 500)
+      }
+    }
+
     console.error('Failed to enqueue auth email', { error: enqueueError, runId, emailType })
-    await supabase.from('email_send_log').insert({
+    await writeEmailLog(supabase, {
       message_id: messageId,
       template_name: emailType,
       recipient_email: recipient,
