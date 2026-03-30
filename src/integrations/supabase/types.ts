@@ -182,6 +182,81 @@ export type Database = {
         }
         Relationships: []
       }
+      email_queue: {
+        Row: {
+          attempts: number
+          created_at: string
+          error_message: string | null
+          id: string
+          max_attempts: number
+          payload: Json
+          processed_at: string | null
+          queue_name: string
+          scheduled_for: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          max_attempts?: number
+          payload: Json
+          processed_at?: string | null
+          queue_name: string
+          scheduled_for?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          max_attempts?: number
+          payload?: Json
+          processed_at?: string | null
+          queue_name?: string
+          scheduled_for?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      email_send_log: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: string
+          message_id: string
+          recipient_email: string
+          status: string
+          template_name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          message_id: string
+          recipient_email: string
+          status: string
+          template_name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          message_id?: string
+          recipient_email?: string
+          status?: string
+          template_name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       fixtures: {
         Row: {
           active_tracker_id: string | null
@@ -773,6 +848,10 @@ export type Database = {
         }
         Returns: Json
       }
+      enqueue_email: {
+        Args: { payload: Json; queue_name: string; scheduled_for?: string }
+        Returns: string
+      }
       find_user_by_email: { Args: { lookup_email: string }; Returns: string }
       generate_invitation_token: { Args: never; Returns: string }
       get_competitions: {
@@ -840,6 +919,17 @@ export type Database = {
           last_name: string
           penalty_goals: number
           player_id: string
+        }[]
+      }
+      get_pending_emails: {
+        Args: { p_limit?: number; p_queue_name?: string }
+        Returns: {
+          attempts: number
+          created_at: string
+          id: string
+          max_attempts: number
+          payload: Json
+          queue_name: string
         }[]
       }
       get_player_playing_time: {
@@ -935,6 +1025,10 @@ export type Database = {
           jwt_claims: Json
           session_exists: boolean
         }[]
+      }
+      update_email_queue_status: {
+        Args: { error_msg?: string; new_status: string; queue_id: string }
+        Returns: undefined
       }
       update_tracking_activity: {
         Args: { fixture_id_param: string }
