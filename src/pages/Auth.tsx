@@ -130,7 +130,7 @@ export default function Auth() {
                 {otpStep === 'email' ? (
                   <>
                     <p className="text-sm text-muted-foreground text-center">
-                      Enter your email and we'll send you a 6-digit code to sign in.
+                      Enter your email and we'll send you a sign-in link.
                     </p>
                     <form onSubmit={handleSendOtp} className="space-y-4">
                       <div className="space-y-2">
@@ -151,7 +151,7 @@ export default function Auth() {
                         disabled={isLoading}
                       >
                         <Mail className="h-4 w-4 mr-2" />
-                        {isLoading ? 'Sending...' : 'Send Sign In Code'}
+                        {isLoading ? 'Sending...' : 'Send Sign In Link'}
                       </Button>
                     </form>
                   </>
