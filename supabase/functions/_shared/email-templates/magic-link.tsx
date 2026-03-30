@@ -27,13 +27,13 @@ export const MagicLinkEmail = ({
     <Preview>Your login link for {siteName}</Preview>
     <Body style={main}>
       <Container style={container}>
-        <Heading style={h1}>Your SideLine sign-in link</Heading>
+        <Heading style={h1}>Your login link</Heading>
         <Text style={text}>
-          Click the button below to sign in to {siteName}. This link will expire
-          shortly, so use it right away.
+          Click the button below to log in to {siteName}. This link will expire
+          shortly.
         </Text>
         <Button style={button} href={confirmationUrl}>
-          Sign In to SideLine
+          Log In
         </Button>
         <Text style={footer}>
           If you didn't request this link, you can safely ignore this email.
@@ -45,25 +45,25 @@ export const MagicLinkEmail = ({
 
 export default MagicLinkEmail
 
-const main = { backgroundColor: '#ffffff', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }
+const main = { backgroundColor: '#ffffff', fontFamily: 'Arial, sans-serif' }
 const container = { padding: '20px 25px' }
 const h1 = {
   fontSize: '22px',
   fontWeight: 'bold' as const,
-  color: 'hsl(215, 25%, 8%)',
+  color: '#000000',
   margin: '0 0 20px',
 }
 const text = {
   fontSize: '14px',
-  color: 'hsl(215, 16%, 47%)',
+  color: '#55575d',
   lineHeight: '1.5',
   margin: '0 0 25px',
 }
 const button = {
-  backgroundColor: 'hsl(122, 39%, 25%)',
-  color: 'hsl(0, 0%, 98%)',
+  backgroundColor: '#000000',
+  color: '#ffffff',
   fontSize: '14px',
-  borderRadius: '0.75rem',
+  borderRadius: '8px',
   padding: '12px 20px',
   textDecoration: 'none',
 }
