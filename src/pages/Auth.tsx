@@ -151,7 +151,7 @@ export default function Auth() {
                         disabled={isLoading}
                       >
                         <Mail className="h-4 w-4 mr-2" />
-                        {isLoading ? 'Sending...' : 'Send Sign In Code'}
+                        {isLoading ? 'Sending...' : 'Send Sign In Link'}
                       </Button>
                     </form>
                   </>
