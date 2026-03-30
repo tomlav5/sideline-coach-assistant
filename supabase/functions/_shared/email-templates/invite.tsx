@@ -9,6 +9,7 @@ import {
   Head,
   Heading,
   Html,
+  Link,
   Preview,
   Text,
 } from 'npm:@react-email/components@0.0.22'
@@ -32,14 +33,18 @@ export const InviteEmail = ({
         <Text style={logo}>⚽ SideLine</Text>
         <Heading style={h1}>You've been invited</Heading>
         <Text style={text}>
-          You've been invited to join SideLine. Click the button below to accept
-          the invitation and create your account.
+          You've been invited to join{' '}
+          <Link href={siteUrl} style={link}>
+            <strong>SideLine</strong>
+          </Link>
+          . Click the button below to accept the invitation.
         </Text>
         <Button style={button} href={confirmationUrl}>
           Accept Invitation
         </Button>
         <Text style={footer}>
-          If you weren't expecting this invitation, you can safely ignore this email.
+          If you weren't expecting this invitation, you can safely ignore this
+          email.
         </Text>
       </Container>
     </Body>
@@ -68,6 +73,7 @@ const text = {
   lineHeight: '1.5',
   margin: '0 0 25px',
 }
+const link = { color: 'inherit', textDecoration: 'underline' }
 const button = {
   backgroundColor: 'hsl(122, 39%, 25%)',
   color: '#fafafa',
