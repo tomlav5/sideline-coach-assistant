@@ -29,22 +29,30 @@ export const EmailChangeEmail = ({
 }: EmailChangeEmailProps) => (
   <Html lang="en" dir="ltr">
     <Head />
-    <Preview>Confirm your email change for SideLine</Preview>
+    <Preview>Confirm your email change for {siteName}</Preview>
     <Body style={main}>
       <Container style={container}>
-        <Text style={logo}>⚽ SideLine</Text>
         <Heading style={h1}>Confirm your email change</Heading>
         <Text style={text}>
-          You requested to change your email address from{' '}
-          <Link href={`mailto:${email}`} style={link}>{email}</Link>{' '}
+          You requested to change your email address for {siteName} from{' '}
+          <Link href={`mailto:${email}`} style={link}>
+            {email}
+          </Link>{' '}
           to{' '}
-          <Link href={`mailto:${newEmail}`} style={link}>{newEmail}</Link>.
+          <Link href={`mailto:${newEmail}`} style={link}>
+            {newEmail}
+          </Link>
+          .
+        </Text>
+        <Text style={text}>
+          Click the button below to confirm this change:
         </Text>
         <Button style={button} href={confirmationUrl}>
           Confirm Email Change
         </Button>
         <Text style={footer}>
-          If you didn't request this change, please secure your account immediately.
+          If you didn't request this change, please secure your account
+          immediately.
         </Text>
       </Container>
     </Body>
@@ -55,30 +63,24 @@ export default EmailChangeEmail
 
 const main = { backgroundColor: '#ffffff', fontFamily: 'Arial, sans-serif' }
 const container = { padding: '20px 25px' }
-const logo = {
-  fontSize: '20px',
-  fontWeight: 'bold' as const,
-  color: 'hsl(122, 39%, 25%)',
-  margin: '0 0 20px',
-}
 const h1 = {
   fontSize: '22px',
   fontWeight: 'bold' as const,
-  color: 'hsl(215, 25%, 8%)',
+  color: '#000000',
   margin: '0 0 20px',
 }
 const text = {
   fontSize: '14px',
-  color: 'hsl(215, 16%, 47%)',
+  color: '#55575d',
   lineHeight: '1.5',
   margin: '0 0 25px',
 }
 const link = { color: 'inherit', textDecoration: 'underline' }
 const button = {
-  backgroundColor: 'hsl(122, 39%, 25%)',
-  color: '#fafafa',
+  backgroundColor: '#000000',
+  color: '#ffffff',
   fontSize: '14px',
-  borderRadius: '12px',
+  borderRadius: '8px',
   padding: '12px 20px',
   textDecoration: 'none',
 }
