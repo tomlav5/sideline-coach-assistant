@@ -27,10 +27,9 @@ export const InviteEmail = ({
 }: InviteEmailProps) => (
   <Html lang="en" dir="ltr">
     <Head />
-    <Preview>⚽ You've been invited to join {siteName}</Preview>
+    <Preview>You've been invited to join {siteName}</Preview>
     <Body style={main}>
       <Container style={container}>
-        <Text style={logo}>⚽ {siteName}</Text>
         <Heading style={h1}>You've been invited</Heading>
         <Text style={text}>
           You've been invited to join{' '}
@@ -56,21 +55,15 @@ export default InviteEmail
 
 const main = { backgroundColor: '#ffffff', fontFamily: 'Arial, sans-serif' }
 const container = { padding: '20px 25px' }
-const logo = {
-  fontSize: '18px',
-  fontWeight: 'bold' as const,
-  color: 'hsl(122, 39%, 25%)',
-  margin: '0 0 24px',
-}
 const h1 = {
   fontSize: '22px',
   fontWeight: 'bold' as const,
-  color: '#1a1a1a',
+  color: 'hsl(215, 25%, 8%)',
   margin: '0 0 20px',
 }
 const text = {
   fontSize: '14px',
-  color: '#55575d',
+  color: 'hsl(215, 16%, 47%)',
   lineHeight: '1.5',
   margin: '0 0 25px',
 }
