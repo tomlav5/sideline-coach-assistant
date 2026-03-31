@@ -36,7 +36,7 @@ const EMAIL_TEMPLATES: Record<string, React.ComponentType<any>> = {
 }
 
 // Configuration
-const SITE_NAME = "SideLine"
+const SITE_NAME = "sideline-assist"
 const SENDER_DOMAIN = "notify.sidelineassist.club"
 const ROOT_DOMAIN = "sidelineassist.club"
 const FROM_DOMAIN = "notify.sidelineassist.club" // Domain shown in From address (may be root or sender subdomain)
@@ -77,31 +77,6 @@ const SAMPLE_DATA: Record<string, object> = {
   reauthentication: {
     token: '123456',
   },
-}
-
-function buildSupabaseConfirmationUrl(emailData: {
-  email_action_type?: string
-  redirect_to?: string
-  token_hash?: string
-  token_hash_new?: string
-}) {
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')
-  const tokenHash = emailData.token_hash_new ?? emailData.token_hash
-
-  if (!supabaseUrl || !tokenHash || !emailData.email_action_type) {
-    return emailData.redirect_to ?? `https://${ROOT_DOMAIN}`
-  }
-
-  const params = new URLSearchParams({
-    token_hash: tokenHash,
-    type: emailData.email_action_type,
-  })
-
-  if (emailData.redirect_to) {
-    params.set('redirect_to', emailData.redirect_to)
-  }
-
-  return `${supabaseUrl}/auth/v1/verify?${params.toString()}`
 }
 
 // Preview endpoint handler - returns rendered HTML without sending email
@@ -157,17 +132,8 @@ async function handlePreview(req: Request): Promise<Response> {
 // Webhook handler - verifies signature and sends email
 async function handleWebhook(req: Request): Promise<Response> {
   const apiKey = Deno.env.get('LOVABLE_API_KEY')
-  const sendEmailHookSecret = Deno.env.get('SEND_EMAIL_HOOK_SECRET')
-  const authHeader = req.headers.get('authorization') ?? ''
-  const normalizedHookSecret = sendEmailHookSecret?.replace(/^v1,/, '')
-  const isSupabaseBearerHook = Boolean(
-    sendEmailHookSecret && (
-      authHeader === `Bearer ${sendEmailHookSecret}` ||
-      (normalizedHookSecret && authHeader === `Bearer ${normalizedHookSecret}`)
-    )
-  )
 
-  if (!isSupabaseBearerHook && !apiKey) {
+  if (!apiKey) {
     console.error('LOVABLE_API_KEY not configured')
     return new Response(
       JSON.stringify({ error: 'Server configuration error' }),
@@ -179,54 +145,13 @@ async function handleWebhook(req: Request): Promise<Response> {
   let payload: any
   let run_id = ''
   try {
-    if (isSupabaseBearerHook) {
-      const body = await req.json()
-      const emailData = body?.email_data ?? {}
-      const user = body?.user ?? {}
-      const emailType = emailData.email_action_type
-      const email = user.email ?? body?.email
-
-      if (!emailType || !email) {
-        console.error('Invalid Supabase send-email payload', {
-          hasEmailType: Boolean(emailType),
-          hasEmail: Boolean(email),
-        })
-        return new Response(
-          JSON.stringify({ error: 'Invalid webhook payload' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
-
-      payload = {
-        version: '1',
-        run_id: crypto.randomUUID(),
-        data: {
-          action_type: emailType,
-          email,
-          url: buildSupabaseConfirmationUrl(emailData),
-          token: emailData.token_new ?? emailData.token,
-          new_email: user.new_email ?? body?.new_email ?? null,
-        },
-      }
-      run_id = payload.run_id
-      console.log('Received Supabase auth email hook request', { emailType, email, run_id })
-    } else {
-      if (authHeader.startsWith('Bearer ') && sendEmailHookSecret) {
-        console.error('Invalid bearer token on auth email hook')
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
-      }
-
-      const verified = await verifyWebhookRequest({
-        req,
-        secret: apiKey,
-        parser: parseEmailWebhookPayload,
-      })
-      payload = verified.payload
-      run_id = payload.run_id
-    }
+    const verified = await verifyWebhookRequest({
+      req,
+      secret: apiKey,
+      parser: parseEmailWebhookPayload,
+    })
+    payload = verified.payload
+    run_id = payload.run_id
   } catch (error) {
     if (error instanceof WebhookError) {
       switch (error.code) {
