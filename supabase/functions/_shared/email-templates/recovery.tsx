@@ -24,13 +24,13 @@ export const RecoveryEmail = ({
 }: RecoveryEmailProps) => (
   <Html lang="en" dir="ltr">
     <Head />
-    <Preview>⚽ Reset your password for SideLine</Preview>
+    <Preview>⚽ Reset your password for {siteName}</Preview>
     <Body style={main}>
       <Container style={container}>
-        <Text style={logo}>⚽ SideLine</Text>
+        <Text style={logo}>⚽ {siteName}</Text>
         <Heading style={h1}>Reset your password</Heading>
         <Text style={text}>
-          We received a request to reset your password for SideLine. Click
+          We received a request to reset your password for {siteName}. Click
           the button below to choose a new password.
         </Text>
         <Button style={button} href={confirmationUrl}>

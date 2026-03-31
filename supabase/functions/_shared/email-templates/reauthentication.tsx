@@ -19,7 +19,7 @@ interface ReauthenticationEmailProps {
 export const ReauthenticationEmail = ({ token }: ReauthenticationEmailProps) => (
   <Html lang="en" dir="ltr">
     <Head />
-    <Preview>⚽ Your verification code for SideLine</Preview>
+    <Preview>⚽ Your verification code</Preview>
     <Body style={main}>
       <Container style={container}>
         <Text style={logo}>⚽ SideLine</Text>

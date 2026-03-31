@@ -29,20 +29,27 @@ export const SignupEmail = ({
 }: SignupEmailProps) => (
   <Html lang="en" dir="ltr">
     <Head />
-    <Preview>⚽ Confirm your email for SideLine</Preview>
+    <Preview>⚽ Confirm your email for {siteName}</Preview>
     <Body style={main}>
       <Container style={container}>
-        <Text style={logo}>⚽ SideLine</Text>
-        <Heading style={h1}>Welcome to SideLine!</Heading>
+        <Text style={logo}>⚽ {siteName}</Text>
+        <Heading style={h1}>Confirm your email</Heading>
         <Text style={text}>
-          Thanks for signing up! Please confirm your email address (
+          Thanks for signing up for{' '}
+          <Link href={siteUrl} style={link}>
+            <strong>{siteName}</strong>
+          </Link>
+          !
+        </Text>
+        <Text style={text}>
+          Please confirm your email address (
           <Link href={`mailto:${recipient}`} style={link}>
             {recipient}
           </Link>
           ) by clicking the button below:
         </Text>
         <Button style={button} href={confirmationUrl}>
-          Confirm Email
+          Verify Email
         </Button>
         <Text style={footer}>
           If you didn't create an account, you can safely ignore this email.

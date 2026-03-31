@@ -9,6 +9,7 @@ import {
   Head,
   Heading,
   Html,
+  Link,
   Preview,
   Text,
 } from 'npm:@react-email/components@0.0.22'
@@ -26,14 +27,18 @@ export const InviteEmail = ({
 }: InviteEmailProps) => (
   <Html lang="en" dir="ltr">
     <Head />
-    <Preview>⚽ You've been invited to join SideLine</Preview>
+    <Preview>⚽ You've been invited to join {siteName}</Preview>
     <Body style={main}>
       <Container style={container}>
-        <Text style={logo}>⚽ SideLine</Text>
-        <Heading style={h1}>You've been invited!</Heading>
+        <Text style={logo}>⚽ {siteName}</Text>
+        <Heading style={h1}>You've been invited</Heading>
         <Text style={text}>
-          You've been invited to join SideLine. Click the button below to
-          accept the invitation and create your account.
+          You've been invited to join{' '}
+          <Link href={siteUrl} style={link}>
+            <strong>{siteName}</strong>
+          </Link>
+          . Click the button below to accept the invitation and create your
+          account.
         </Text>
         <Button style={button} href={confirmationUrl}>
           Accept Invitation
@@ -69,6 +74,7 @@ const text = {
   lineHeight: '1.5',
   margin: '0 0 25px',
 }
+const link = { color: 'inherit', textDecoration: 'underline' }
 const button = {
   backgroundColor: 'hsl(122, 39%, 25%)',
   color: '#ffffff',
