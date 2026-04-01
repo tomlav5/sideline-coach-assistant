@@ -78,6 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email,
       options: {
         shouldCreateUser: true,
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     });
 
