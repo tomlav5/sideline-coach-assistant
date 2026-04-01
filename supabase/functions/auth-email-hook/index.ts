@@ -44,6 +44,24 @@ function normalizeEmailType(rawType: unknown): string {
   return value
 }
 
+function extractAuthorizationToken(req: Request): string {
+  const authorization = req.headers.get('authorization')?.trim() ?? ''
+  if (!authorization) return ''
+
+  const bearerMatch = authorization.match(/^Bearer\s+(.+)$/i)
+  if (bearerMatch?.[1]) {
+    return bearerMatch[1].trim()
+  }
+
+  return authorization
+}
+
+function getHookSecrets(): string[] {
+  return [Deno.env.get('SEND_EMAIL_HOOK_SECRET'), Deno.env.get('AUTH_HOOK_SECRET')]
+    .filter((secret): secret is string => Boolean(secret && secret.trim().length > 0))
+    .map((secret) => secret.trim())
+}
+
 function buildSupabaseConfirmationUrl(payload: any, emailType: string): string {
   const emailData = payload?.email_data ?? {}
 
@@ -180,7 +198,7 @@ async function handlePreview(req: Request): Promise<Response> {
 // Webhook handler - verifies signature and sends email
 async function handleWebhook(req: Request): Promise<Response> {
   const apiKey = Deno.env.get('LOVABLE_API_KEY')
-  const hookSecret = Deno.env.get('SEND_EMAIL_HOOK_SECRET')
+  const hookSecrets = getHookSecrets()
 
   if (!apiKey) {
     console.error('LOVABLE_API_KEY not configured')
@@ -268,8 +286,8 @@ async function handleWebhook(req: Request): Promise<Response> {
     token = payload?.data?.token
     newEmail = payload?.data?.new_email
   } else {
-    if (!hookSecret) {
-      console.error('SEND_EMAIL_HOOK_SECRET not configured for Supabase hook auth')
+    if (hookSecrets.length === 0) {
+      console.error('No hook secret configured for Supabase hook auth')
       return new Response(
         JSON.stringify({ error: 'Server configuration error' }),
         {
@@ -279,11 +297,26 @@ async function handleWebhook(req: Request): Promise<Response> {
       )
     }
 
-    const authorization = req.headers.get('authorization')
-    if (authorization !== `Bearer ${hookSecret}`) {
-      console.error('Supabase auth hook missing/invalid authorization token')
+    const providedToken = extractAuthorizationToken(req)
+    if (!providedToken) {
+      console.error('Supabase auth hook missing authorization token')
       return new Response(
         JSON.stringify({ error: 'Hook requires authorization token' }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      )
+    }
+
+    const isValidHookToken = hookSecrets.some((secret) => secret === providedToken)
+    if (!isValidHookToken) {
+      console.error('Supabase auth hook invalid authorization token', {
+        providedTokenLength: providedToken.length,
+        configuredSecretsCount: hookSecrets.length,
+      })
+      return new Response(
+        JSON.stringify({ error: 'Hook authorization token mismatch' }),
         {
           status: 401,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
