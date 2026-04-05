@@ -151,8 +151,13 @@ export default function Auth() {
                         disabled={isLoading}
                       >
                         <Mail className="h-4 w-4 mr-2" />
-                        {isLoading ? 'Sending...' : 'Send Sign In Link'}
+                        {isLoading ? 'Sending link…' : 'Send Sign In Link'}
                       </Button>
+                      {isLoading && (
+                        <p className="text-xs text-muted-foreground text-center animate-pulse">
+                          This may take a few seconds…
+                        </p>
+                      )}
                     </form>
                   </>
                 ) : (
