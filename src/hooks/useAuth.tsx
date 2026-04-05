@@ -89,8 +89,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
     } else {
       toast({
-        title: "Code sent",
-        description: "Check your email for the verification code.",
+        title: "Link sent",
+        description: "Check your email for the login link.",
       });
     }
 
