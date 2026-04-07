@@ -217,7 +217,7 @@ export default function AcceptInvitation() {
               <div className="text-center space-y-2">
                 <h3 className="text-xl font-semibold">{invitation.clubs.name}</h3>
                 <Badge variant="secondary" className="capitalize">
-                  {invitation.invited_role}
+                  {invitation.invited_role === 'viewer' ? 'Parent' : invitation.invited_role}
                 </Badge>
               </div>
 
