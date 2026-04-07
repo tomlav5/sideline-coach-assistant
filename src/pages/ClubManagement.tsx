@@ -270,7 +270,7 @@ export default function ClubManagement() {
                       </div>
                       <Badge variant="secondary" className="flex items-center gap-1 self-start shrink-0">
                         <RoleIcon className="h-3 w-3" />
-                        <span className="text-xs">{userRole}</span>
+                        <span className="text-xs">{userRole === 'viewer' ? 'Parent' : userRole}</span>
                       </Badge>
                     </div>
                   </CardHeader>
