@@ -319,7 +319,7 @@ export function UserManagement({ clubId, currentUserRole }: UserManagementProps)
                 
                 <div className="flex items-center space-x-2">
                   <Badge variant={getRoleBadgeVariant(member.role)}>
-                    {member.role}
+                    {member.role === 'viewer' ? 'Parent' : member.role}
                   </Badge>
                   
                   {canManageMembers && (
