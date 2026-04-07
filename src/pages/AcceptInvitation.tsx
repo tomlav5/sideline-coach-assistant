@@ -229,7 +229,7 @@ export default function AcceptInvitation() {
                     <p className="text-xs text-muted-foreground">
                       {invitation.invited_role === 'admin' && 'Full administrative access to the club'}
                       {invitation.invited_role === 'official' && 'Create and manage teams, track matches'}
-                      {invitation.invited_role === 'viewer' && 'View matches and team information'}
+                      {invitation.invited_role === 'viewer' && 'View matches and team information (Parent access)'}
                     </p>
                   </div>
                 </div>

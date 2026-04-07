@@ -31,7 +31,7 @@ interface UserManagementProps {
 const ROLES = [
   { value: 'admin', label: 'Admin', icon: Crown, description: 'Full access to all club functions' },
   { value: 'official', label: 'Official', icon: Shield, description: 'Can manage teams, players, and fixtures' },
-  { value: 'viewer', label: 'Viewer', icon: Eye, description: 'View-only access to assigned teams' },
+  { value: 'viewer', label: 'Parent', icon: Eye, description: 'View-only access to matches and team information' },
 ];
 
 export function UserManagement({ clubId, currentUserRole }: UserManagementProps) {
