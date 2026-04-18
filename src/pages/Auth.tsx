@@ -14,8 +14,9 @@ export default function Auth() {
   const [isLoading, setIsLoading] = useState(false);
   const [otpStep, setOtpStep] = useState<'email' | 'code'>('email');
   const [otpEmail, setOtpEmail] = useState('');
-  const { signUp, signInWithOtp } = useAuth();
+  const { signUp, signInWithOtp, signInWithPassword } = useAuth();
   const navigate = useNavigate();
+  const isDev = import.meta.env.DEV;
 
   const handleSignUp = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -81,6 +82,23 @@ export default function Auth() {
     setIsLoading(false);
   };
 
+  const handlePasswordSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsLoading(true);
+
+    const formData = new FormData(e.currentTarget);
+    const email = formData.get('email') as string;
+    const password = formData.get('password') as string;
+
+    const { error } = await signInWithPassword(email, password);
+    
+    if (!error) {
+      navigate('/');
+    }
+    
+    setIsLoading(false);
+  };
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
@@ -120,10 +138,11 @@ export default function Auth() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="signin" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
+            <Tabs defaultValue={isDev ? "devlogin" : "signin"} className="w-full">
+              <TabsList className={`grid w-full ${isDev ? 'grid-cols-3' : 'grid-cols-2'}`}>
                 <TabsTrigger value="signin">Sign In</TabsTrigger>
                 <TabsTrigger value="signup">Register</TabsTrigger>
+                {isDev && <TabsTrigger value="devlogin">Dev Login</TabsTrigger>}
               </TabsList>
               
               <TabsContent value="signin" className="space-y-4">
@@ -256,6 +275,54 @@ export default function Auth() {
                   </Button>
                 </form>
               </TabsContent>
+
+              {/* Dev-Only Password Login */}
+              {isDev && (
+                <TabsContent value="devlogin" className="space-y-4">
+                  <div className="rounded-lg border-2 border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20 p-3">
+                    <p className="text-xs font-medium text-yellow-800 dark:text-yellow-200 text-center">
+                      🔧 Development Mode Only - Password Login
+                    </p>
+                  </div>
+                  <p className="text-sm text-muted-foreground text-center">
+                    Sign in with email and password (no OTP required)
+                  </p>
+                  <form onSubmit={handlePasswordSignIn} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="dev-email">Email</Label>
+                      <Input
+                        id="dev-email"
+                        name="email"
+                        type="email"
+                        placeholder="coach@example.com"
+                        required
+                        className="touch-target"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="dev-password">Password</Label>
+                      <Input
+                        id="dev-password"
+                        name="password"
+                        type="password"
+                        required
+                        className="touch-target"
+                        minLength={6}
+                      />
+                    </div>
+                    <Button
+                      type="submit"
+                      className="w-full touch-target"
+                      disabled={isLoading}
+                    >
+                      {isLoading ? 'Signing in...' : 'Sign In with Password'}
+                    </Button>
+                  </form>
+                  <p className="text-xs text-center text-muted-foreground">
+                    This tab only appears in development environment
+                  </p>
+                </TabsContent>
+              )}
             </Tabs>
           </CardContent>
         </Card>

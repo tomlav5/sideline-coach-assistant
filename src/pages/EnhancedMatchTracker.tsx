@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { EnhancedMatchControls } from '@/components/match/EnhancedMatchControls';
 import { EnhancedEventDialog } from '@/components/match/EnhancedEventDialog';
 import { RetrospectiveMatchDialog } from '@/components/fixtures/RetrospectiveMatchDialog';
-import { SubstitutionDialog } from '@/components/match/SubstitutionDialog';
+import { EnhancedSubstitutionDialog } from '@/components/match/EnhancedSubstitutionDialog';
 import { EditSquadDialog } from '@/components/match/EditSquadDialog';
 import { MatchLockingBanner } from '@/components/match/MatchLockingBanner';
 import { QuickGoalButton } from '@/components/match/QuickGoalButton';
@@ -35,6 +35,7 @@ import { useMatchTrackerShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { ActivePlayerCard } from '@/components/match/ActivePlayerCard';
 import { SmartSuggestionBadge } from '@/components/match/SmartSuggestionBadge';
 import { MatchTrackerSkeleton } from '@/components/ui/skeleton-loader';
+import { LiveEventsSummary } from '@/components/match/LiveEventsSummary';
 
 interface Player {
   id: string;
@@ -1083,7 +1084,7 @@ export default function EnhancedMatchTracker() {
       />
 
       {/* Substitution Dialog */}
-      <SubstitutionDialog
+      <EnhancedSubstitutionDialog
         open={subDialogOpen}
         onOpenChange={(open) => {
           setSubDialogOpen(open);
@@ -1338,6 +1339,14 @@ export default function EnhancedMatchTracker() {
 
         </div>
       </div>
+
+      {/* Live Events Summary - Fixed above action bar */}
+      <LiveEventsSummary
+        events={events}
+        players={players}
+        loading={eventsLoading}
+        className="fixed bottom-[calc(68px+max(8px,env(safe-area-inset-bottom)))] left-0 right-0 z-30"
+      />
 
       {/* Bottom Action Bar - Fixed */}
       <BottomActionBar
