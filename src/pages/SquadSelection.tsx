@@ -207,17 +207,16 @@ export default function SquadSelection() {
       if (recentFixture?.selected_squad_data) {
         const savedData = recentFixture.selected_squad_data as any;
         const recentSelectedPlayers = availablePlayers.filter(p => savedData.selectedPlayerIds?.includes(p.id));
-        const recentStartingPlayers = new Set<string>(
-          savedData.startingPlayerIds?.filter((id: string) => recentSelectedPlayers.some(p => p.id === id)) || []
-        );
-        
+
+        // Load players as selected (blue) only - do not pre-mark as starters (green).
+        // Coaches typically want to choose the starting XI per match.
         setSelectedPlayers(recentSelectedPlayers);
-        setStartingPlayers(recentStartingPlayers);
+        setStartingPlayers(new Set<string>());
         setHasUnsavedChanges(true);
-        
+
         toast({
           title: "Recent Squad Loaded",
-          description: `Loaded squad from previous fixture (${recentSelectedPlayers.length} players)`,
+          description: `Loaded ${recentSelectedPlayers.length} players as selected. Mark your starters before saving.`,
         });
       } else {
         toast({
