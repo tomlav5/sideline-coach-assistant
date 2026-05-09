@@ -52,6 +52,7 @@ interface PlayerPlayingTime {
 
 export default function Reports() {
   const [competitionFilter, setCompetitionFilter] = useState<string>('all');
+  const [teamFilter, setTeamFilter] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<'matches' | 'scorers' | 'playing-time' | 'dev-time'>('matches');
   const [searchQuery, setSearchQuery] = useState<string>('');
   
@@ -139,16 +140,31 @@ export default function Reports() {
     }
   }, [toast, queryClient]);
 
+  // Distinct teams available across the loaded completed matches
+  const availableTeams = useMemo(() => {
+    const set = new Set<string>();
+    completedMatches.forEach(m => {
+      if (m.team_name) set.add(m.team_name);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [completedMatches]);
+
+  // Apply team filter first, then search filter
+  const teamFilteredMatches = useMemo(() => {
+    if (teamFilter === 'all') return completedMatches;
+    return completedMatches.filter(m => m.team_name === teamFilter);
+  }, [completedMatches, teamFilter]);
+
   // Memoized search filtering with team name priority
   const filteredMatches = useMemo(() => {
     if (!searchQuery.trim()) {
-      return completedMatches;
+      return teamFilteredMatches;
     }
 
     const query = searchQuery.toLowerCase().trim();
     
     // Score matches: team_name gets higher priority
-    const scoredMatches = completedMatches.map(match => {
+    const scoredMatches = teamFilteredMatches.map(match => {
       let score = 0;
       const searchableText = [
         match.team_name,
@@ -196,7 +212,7 @@ export default function Reports() {
         return new Date(b.match.scheduled_date).getTime() - new Date(a.match.scheduled_date).getTime();
       })
       .map(item => item.match);
-  }, [completedMatches, searchQuery]);
+  }, [teamFilteredMatches, searchQuery]);
 
   // Memoized recent form calculation
   const recentForm = useMemo(() => {
@@ -256,6 +272,24 @@ export default function Reports() {
                         {comp.display_name}
                       </SelectItem>
                     )
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Team Filter */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+              <Label htmlFor="team-filter" className="text-base font-medium min-w-fit">Filter by Team:</Label>
+              <Select value={teamFilter} onValueChange={setTeamFilter}>
+                <SelectTrigger className="w-full sm:w-64 min-h-[44px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Teams</SelectItem>
+                  {availableTeams.map((name) => (
+                    <SelectItem key={name} value={name}>
+                      {name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
