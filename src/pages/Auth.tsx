@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { Shield, Users, BarChart3, Mail, ArrowLeft } from 'lucide-react';
 import { authSignUpSchema, otpEmailSchema } from '@/lib/validation';
 import { toast } from '@/hooks/use-toast';
@@ -14,7 +15,8 @@ export default function Auth() {
   const [isLoading, setIsLoading] = useState(false);
   const [otpStep, setOtpStep] = useState<'email' | 'code'>('email');
   const [otpEmail, setOtpEmail] = useState('');
-  const { signUp, signInWithOtp, signInWithPassword } = useAuth();
+  const [otpCode, setOtpCode] = useState('');
+  const { signUp, signInWithOtp, signInWithPassword, verifyOtp } = useAuth();
   const navigate = useNavigate();
   const isDev = import.meta.env.DEV;
 
@@ -71,6 +73,7 @@ export default function Auth() {
     const { error } = await signInWithOtp(validation.data.email);
     if (!error) {
       setOtpStep('code');
+      setOtpCode('');
     }
     setIsLoading(false);
   };
@@ -79,7 +82,28 @@ export default function Auth() {
   const handleResendOtp = async () => {
     setIsLoading(true);
     await signInWithOtp(otpEmail);
+    setOtpCode('');
     setIsLoading(false);
+  };
+
+  const handleVerifyCode = async (code?: string) => {
+    const codeToVerify = (code ?? otpCode).trim();
+    if (codeToVerify.length !== 6) {
+      toast({
+        title: "Invalid code",
+        description: "Please enter the 6-digit code from your email.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsLoading(true);
+    const { error } = await verifyOtp(otpEmail, codeToVerify);
+    setIsLoading(false);
+    if (!error) {
+      navigate('/');
+    } else {
+      setOtpCode('');
+    }
   };
 
   const handlePasswordSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -170,7 +194,7 @@ export default function Auth() {
                         disabled={isLoading}
                       >
                         <Mail className="h-4 w-4 mr-2" />
-                        {isLoading ? 'Sending link…' : 'Send Sign In Link'}
+                        {isLoading ? 'Sending…' : 'Send Sign In Link & Code'}
                       </Button>
                       {isLoading && (
                         <p className="text-xs text-muted-foreground text-center animate-pulse">
@@ -185,12 +209,56 @@ export default function Auth() {
                       <Mail className="h-10 w-10 text-primary mx-auto" />
                       <p className="text-sm font-medium">Check your email</p>
                       <p className="text-xs text-muted-foreground">
-                        We've sent a sign-in link to <span className="font-medium text-foreground">{otpEmail}</span>. Click the link in the email to log in.
+                        We've sent a sign-in link <span className="font-medium">and</span> a 6-digit code to <span className="font-medium text-foreground">{otpEmail}</span>.
                       </p>
                     </div>
 
+                    <div className="rounded-md border bg-muted/40 p-4 space-y-3">
+                      <p className="text-sm font-medium text-center">
+                        1. Click the link in your email
+                      </p>
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 border-t" />
+                        <span className="text-xs text-muted-foreground uppercase tracking-wider">or</span>
+                        <div className="flex-1 border-t" />
+                      </div>
+                      <p className="text-sm font-medium text-center">
+                        2. Enter the 6-digit code below
+                      </p>
+                      <div className="flex justify-center pt-1">
+                        <InputOTP
+                          maxLength={6}
+                          value={otpCode}
+                          onChange={(value) => {
+                            setOtpCode(value);
+                            if (value.length === 6) {
+                              handleVerifyCode(value);
+                            }
+                          }}
+                          disabled={isLoading}
+                        >
+                          <InputOTPGroup>
+                            <InputOTPSlot index={0} />
+                            <InputOTPSlot index={1} />
+                            <InputOTPSlot index={2} />
+                            <InputOTPSlot index={3} />
+                            <InputOTPSlot index={4} />
+                            <InputOTPSlot index={5} />
+                          </InputOTPGroup>
+                        </InputOTP>
+                      </div>
+                      <Button
+                        type="button"
+                        className="w-full touch-target"
+                        onClick={() => handleVerifyCode()}
+                        disabled={isLoading || otpCode.length !== 6}
+                      >
+                        {isLoading ? 'Verifying…' : 'Verify Code'}
+                      </Button>
+                    </div>
+
                     <div className="rounded-md bg-muted p-3 text-xs text-muted-foreground text-center">
-                      Didn't receive it? Check your spam folder or try again.
+                      Didn't receive the email? Check your spam folder or resend below.
                     </div>
 
                     <div className="flex items-center justify-between">
@@ -200,6 +268,7 @@ export default function Auth() {
                         size="sm"
                         onClick={() => {
                           setOtpStep('email');
+                          setOtpCode('');
                         }}
                         disabled={isLoading}
                       >

@@ -10,17 +10,20 @@ import {
   Heading,
   Html,
   Preview,
+  Section,
   Text,
 } from 'npm:@react-email/components@0.0.22'
 
 interface MagicLinkEmailProps {
   siteName: string
   confirmationUrl: string
+  token?: string
 }
 
 export const MagicLinkEmail = ({
   siteName,
   confirmationUrl,
+  token,
 }: MagicLinkEmailProps) => (
   <Html lang="en" dir="ltr">
     <Head />
@@ -35,6 +38,17 @@ export const MagicLinkEmail = ({
         <Button style={button} href={confirmationUrl}>
           Log In
         </Button>
+        {token ? (
+          <Section style={codeSection}>
+            <Text style={orText}>— or —</Text>
+            <Text style={text}>
+              Can't open the link on this device? Enter this 6-digit code on the
+              sign-in screen:
+            </Text>
+            <Text style={codeStyle}>{token}</Text>
+            <Text style={smallText}>This code expires in 1 hour.</Text>
+          </Section>
+        ) : null}
         <Text style={footer}>
           If you didn't request this link, you can safely ignore this email.
         </Text>
@@ -66,5 +80,32 @@ const button = {
   borderRadius: '0.75rem',
   padding: '12px 20px',
   textDecoration: 'none',
+}
+const codeSection = { margin: '30px 0 0' }
+const orText = {
+  fontSize: '12px',
+  color: '#999999',
+  textAlign: 'center' as const,
+  margin: '0 0 20px',
+  textTransform: 'uppercase' as const,
+  letterSpacing: '2px',
+}
+const codeStyle = {
+  fontFamily: 'Courier, monospace',
+  fontSize: '28px',
+  fontWeight: 'bold' as const,
+  color: 'hsl(215, 25%, 8%)',
+  letterSpacing: '6px',
+  textAlign: 'center' as const,
+  margin: '0 0 10px',
+  padding: '14px',
+  backgroundColor: '#f5f5f5',
+  borderRadius: '8px',
+}
+const smallText = {
+  fontSize: '12px',
+  color: '#999999',
+  textAlign: 'center' as const,
+  margin: '0',
 }
 const footer = { fontSize: '12px', color: '#999999', margin: '30px 0 0' }
