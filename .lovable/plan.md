@@ -1,43 +1,96 @@
+## Goal
 
+Keep the magic link as the primary sign-in method, and add a 6-digit code field on the same screen as a fallback. Users on machines where they cannot access their email will be able to read the code on their phone and type it in.
 
-## Current User Role System
+## How it will work
 
-Your app currently has **two layers** of access control:
+Supabase's `signInWithOtp({ email })` already issues **both** a clickable link and a 6-digit OTP code in the same email. We just don't currently surface the code path in the UI. No backend logic, edge functions, or database migrations are needed — only a frontend change plus a small tweak to the magic-link email template.
 
-### Layer 1: Platform-Level (profiles table)
-- **`is_super_admin`** — a boolean on the `profiles` table. This is you — full site control, can approve/reject registrations, manage all users.
-- **`account_status`** — controls whether a user can access the app at all (`pending` → `approved` → `rejected`).
+## Changes
 
-### Layer 2: Club-Level (club_members table)
-The `user_role` enum has three values:
-- **`admin`** — club admin: can manage club settings, members, teams, players, fixtures, delete things
-- **`official`** — can manage teams, players, fixtures, track matches, but cannot delete or manage members
-- **`viewer`** — read-only access to club data
+### 1. Sign In screen (`src/pages/Auth.tsx`)
 
-### How This Maps to Your Vision
+Replace the current post-send confirmation view with a combined screen:
 
-| Your concept | Current implementation | Notes |
-|---|---|---|
-| **Site Admin (you)** | `is_super_admin = true` on profiles | Approve registrations, see all admin notifications |
-| **Team Admin** | `club_members.role = 'admin'` | Full control within their club(s) |
-| **Parent** | `club_members.role = 'viewer'` | Read-only: can see fixtures, match reports, player stats |
+```text
+✉️  Sign-in email sent to coach@example.com
 
-### What's Missing for a "Parent" Role
+  ┌────────────────────────────────────────────┐
+  │ 1. Click the link in your email            │
+  │                                            │
+  │                — or —                      │
+  │                                            │
+  │ 2. Enter the 6-digit code from the email   │
+  │                                            │
+  │      [_] [_] [_] [_] [_] [_]               │
+  │                                            │
+  │           [   Verify Code   ]              │
+  └────────────────────────────────────────────┘
 
-The current `viewer` role already works as a parent-type user, but there's no distinct `parent` label or parent-specific features yet. If you want parents to have a differentiated experience, we could:
+  [ ← Back ]                       [ Resend ]
+```
 
-1. **Keep it as-is** — parents are just `viewer` members of a club. Simple, already works.
-2. **Rename/rebrand** — show "Parent" in the UI instead of "Viewer" for clarity, but keep the same permissions.
-3. **Add a dedicated `parent` role** — with tailored features like seeing only their own child's data, receiving match notifications, etc. This would require a new enum value and new RLS policies.
+- Use the existing `InputOTP` component from `src/components/ui/input-otp.tsx`.
+- Auto-submit when 6 digits are entered (with manual button as a fallback).
+- On success, navigate to `/` (same destination as the magic-link callback).
+- Show inline validation errors ("Invalid or expired code") via toast.
+- Keep the existing "Back" and "Resend Link" buttons.
 
-### Recommendation
+### 2. Pre-send button label (`src/pages/Auth.tsx`)
 
-Option 2 is the quickest win — relabel "Viewer" as "Parent" in the UI while keeping the existing permission model. Option 3 is better long-term if parents should only see their own child's playing time rather than the whole team.
+- Change **"Send Sign In Link"** → **"Send Sign In Link & Code"** so users understand both options will arrive.
 
-### Technical Details
+### 3. Toast wording (`src/hooks/useAuth.tsx`)
 
-- The `user_role` enum is defined in Postgres: `admin | official | viewer`
-- Adding a new role (e.g. `parent`) requires a migration to alter the enum and update RLS policies
-- The `is_super_admin` flag is separate from club roles — you can be a super admin AND a club admin simultaneously
-- Invitation system already supports role assignment when inviting members
+- Update the existing toast inside `signInWithOtp` from:
+  - Title: "Link sent" → "Link & code sent"
+  - Description: "Check your email for the login link." → "Check your email for the sign-in link or 6-digit code."
 
+### 4. Magic-link email template (`supabase/functions/_shared/email-templates/magic-link.tsx`)
+
+Add the OTP code below the existing button, using the `{{ .Token }}` variable Supabase already provides:
+
+```text
+Click the button above to sign in.
+
+— or —
+
+Enter this 6-digit code on the sign-in screen:
+
+      ┌───────────────┐
+      │   1 2 3 4 5 6 │
+      └───────────────┘
+
+This code expires in 1 hour.
+```
+
+- Keep the existing magic-link button as the primary CTA.
+- Use plain table-friendly markup (consistent with the existing template) so it renders correctly in Outlook, Gmail and Proton Mail.
+- Redeploy the `auth-email-hook` edge function after the change so the new template ships.
+
+## What stays the same
+
+- Magic-link click flow — unchanged.
+- Supabase auth provider config — unchanged (6-digit, 1-hour expiry are the defaults already in use).
+- Email infrastructure (Resend/Custom SMTP via `notify.sidelineassist.club`) — unchanged.
+- Registration, dev-login tab, and password reset flows — unchanged.
+- Session lifetime — unchanged (7+ days).
+
+## Out of scope
+
+- No changes to the registration tab.
+- No changes to Supabase Auth settings in the dashboard.
+- No new database tables, RLS policies, or edge functions.
+
+## Technical notes
+
+- `useAuth.tsx` already exposes `verifyOtp(email, token)` which calls `supabase.auth.verifyOtp({ email, token, type: 'email' })`. The new code-entry UI will call this directly — no new auth helpers needed.
+- After successful `verifyOtp`, `onAuthStateChange` will fire and update the session automatically; the screen just needs to `navigate('/')`.
+- The `InputOTP` component is already installed and used elsewhere in the project.
+- Email template change requires redeploying the `auth-email-hook` function (handled automatically by Lovable on save).
+
+## Files touched
+
+- `src/pages/Auth.tsx` — new combined post-send view with OTP input
+- `src/hooks/useAuth.tsx` — toast wording update
+- `supabase/functions/_shared/email-templates/magic-link.tsx` — add code block below button
