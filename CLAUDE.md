@@ -61,8 +61,8 @@ shadcn/ui components (Radix primitives + Tailwind) live in `src/components/ui/` 
 
 ## Notes on repo hygiene
 
-- The repo root has many historical `*.md` investigation/fix-summary/PR-description files (e.g. `BUGFIX_*.md`, `PLAYER_TIME_TRACKING_*.md`, `PHASE_*.md`). These are point-in-time notes from past debugging sessions, not living documentation — useful as archaeology for *why* a particular SQL migration or workaround exists, but don't treat them as current instructions, and don't add new ones for routine work.
-- Several one-off `.mjs`/`.sql` scripts at the repo root (`apply-*.mjs`, `investigate-*.mjs`, `verify-*.mjs`, `refresh-views-now.sql`, `quick-test.sh`) were ad hoc debugging/migration-verification tools, not part of the app or a maintained CLI — don't assume they still run against current schema without checking.
+- Historical `*.md` investigation/fix-summary/PR-description files (e.g. `BUGFIX_*.md`, `PLAYER_TIME_TRACKING_*.md`, `PHASE_*.md`) live in `docs/archive/`. These are point-in-time notes from past debugging sessions, not living documentation — useful as archaeology for *why* a particular SQL migration or workaround exists, but don't treat them as current instructions, and don't add new ones for routine work.
+- Several one-off `.mjs`/`.sql`/`.sh` scripts (`apply-*.mjs`, `investigate-*.mjs`, `verify-*.mjs`, `refresh-views-now.sql`, `quick-test.sh`) live in `scripts/`, with `scripts/README.md` describing what each one did and whether it's already been applied to production. They were ad hoc debugging/migration-verification tools, not part of the app or a maintained CLI — don't assume they still run against current schema without checking.
 
 ---
 
