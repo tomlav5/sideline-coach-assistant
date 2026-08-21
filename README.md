@@ -50,6 +50,21 @@ npm run dev
 - Click on "New codespace" to launch a new Codespace environment.
 - Edit files directly within the Codespace and commit and push your changes once you're done.
 
+## Environment setup
+
+The app reads its Supabase connection details from environment variables at build time
+(via Vite's `import.meta.env`). To run locally:
+
+```sh
+cp .env.example .env
+```
+
+Then fill in `.env` with your Supabase project's URL, project ID, and publishable/anon
+key (find these in the Supabase dashboard under Project Settings > API). `.env` is
+gitignored, so each environment (local, staging, production) can point at a different
+Supabase project without the values being committed. See `.env.example` for the full
+list of variables the app reads.
+
 ## What technologies are used for this project?
 
 This project is built with:
