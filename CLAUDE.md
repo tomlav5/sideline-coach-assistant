@@ -120,3 +120,5 @@ October project.
 - One task per session.
 - When a change touches match recording, say explicitly what could go wrong at a live match
   before writing code.
+- Known issues and planned work are tracked in `docs/BACKLOG.md` — consult it before
+  proposing work, and update the status of completed items there.
