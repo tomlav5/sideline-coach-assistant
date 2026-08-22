@@ -18,7 +18,7 @@ npm run lint         # eslint over the whole repo
 
 There is no test framework configured (no Jest/Vitest/etc. in `package.json`) — do not assume `npm test` works, and don't add tests unless asked.
 
-Package manager: `npm` (package-lock.json is authoritative); `bun.lock`/`bun.lockb`/`deno.lock` also exist in the repo but npm/Vite is the actual dev workflow.
+Package manager: `npm` only — `package-lock.json` is authoritative and must not be hand-edited or regenerated casually. `deno.lock` also exists in the repo but belongs to the Supabase Edge Functions (Deno runtime), not the app. The `bun.lock`/`bun.lockb` files that used to exist here have been removed; do not reintroduce bun or yarn.
 
 ### Supabase
 
