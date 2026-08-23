@@ -1,6 +1,6 @@
 # Schema Baseline (August 2026)
 
-Comparison of `supabase/production_schema.sql` (a `supabase db dump` taken directly against
+Comparison of `supabase/migrations/20260824000408_baseline.sql` (a `supabase db dump` taken directly against
 the live database — authoritative for what production actually contains) against
 `supabase/migrations/` (17 files, the tracked local migration history).
 
@@ -51,7 +51,7 @@ directly against production by Lovable's own sync (see `CLAUDE.md`'s note on bid
 Lovable sync, and backlog item DEBT-007), not through anything ever committed to this repo.
 Both tables are live and in use: `supabase/functions/auth-email-hook/index.ts:253` calls
 the `enqueue_email` RPC, which inserts into `email_queue` (function body confirmed present
-in the dump, `production_schema.sql:566`).
+in the dump, `20260824000408_baseline.sql:566`).
 
 ---
 
@@ -63,7 +63,7 @@ Pure data migrations are marked unknown where no schema trace exists.
 
 | Migration | Verified against production | Applied? |
 |---|---|---|
-| `20250110_add_penalties_period_type.sql` | `period_type` enum contains `'penalties'` (`production_schema.sql:111-114`) | **Yes** |
+| `20250110_add_penalties_period_type.sql` | `period_type` enum contains `'penalties'` (`20260824000408_baseline.sql:111-114`) | **Yes** |
 | `20251012_cleanup_client_event_id_constraint.sql` | `match_events_client_event_id_key` UNIQUE constraint exists (`:1975`) | **Yes** |
 | `20251012_fix_player_time_calc.sql` | `get_player_playing_time()` exists in production | **Yes** (see §3 — but its logic doesn't match the RPC the app actually calls) |
 | `20251012_get_player_playing_time_v2.sql` | Function body in production is byte-for-byte identical | **Yes** |
@@ -85,7 +85,7 @@ Pure data migrations are marked unknown where no schema trace exists.
 
 This migration rewrites `match_events_event_type_check` to
 `CHECK (event_type = ANY (ARRAY['goal', 'substitution']))`. Production's actual constraint
-(`production_schema.sql:1558`) is
+(`20260824000408_baseline.sql:1558`) is
 `CHECK (event_type = ANY (ARRAY['goal', 'assist', 'substitution_on', 'substitution_off']))`
 — confirming this migration never ran — but also revealing the migration itself is now
 **wrong relative to the live app**. The client
@@ -130,7 +130,7 @@ silently changing behavior, and every single reports page load pays for a failed
 round-trip first.
 
 `analytics.mv_player_playing_time` is refreshed by `refresh_report_views()` (§5) and
-granted `SELECT` to `authenticated` (`production_schema.sql:3301`), but **no client code
+granted `SELECT` to `authenticated` (`20260824000408_baseline.sql:3301`), but **no client code
 reads from it** (`grep -rn "mv_player_playing_time" src/` → no results). It's maintained
 for no consumer, computed with yet a third formula that would disagree with `v2` for any
 player who was never substituted off in a period whose logged `total_period_minutes`
@@ -147,7 +147,7 @@ noticed it's missing.
 ## 4. RLS status per table
 
 All 16 tables have `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` in production
-(`production_schema.sql:2763-2808`). One-line summary of what each table's policies allow:
+(`20260824000408_baseline.sql:2763-2808`). One-line summary of what each table's policies allow:
 
 | Table | Policies allow |
 |---|---|
@@ -188,7 +188,7 @@ gap if that ever changes or if the RPC layer is bypassed.
 | `analytics.mv_competitions` | Yes | Yes — via `get_competitions()` RPC (`useReports.tsx:200`) |
 | `analytics.mv_player_playing_time` | Yes | **No** — nothing in `src/` selects it or a wrapper RPC over it (§3) |
 
-`refresh_report_views()` (`production_schema.sql:1048-1094`) refreshes all four
+`refresh_report_views()` (`20260824000408_baseline.sql:1048-1094`) refreshes all four
 `CONCURRENTLY`, each in its own sub-transaction with `EXCEPTION WHEN OTHERS` so one
 view's failure doesn't block the others. Its refresh path covers all data the three
 actually-read views expose.
@@ -199,7 +199,7 @@ explicitly from `useEditMatchData.tsx`, `useEnhancedMatchTimer.tsx` (on match en
 `postgres_changes` events for `fixtures`/`match_events`/`player_time_logs`), and manually
 from `useReports.tsx:221`. There is also a `trigger_refresh_reports()` trigger function
 attached to `fixtures`, `match_events`, and `player_time_logs`
-(`production_schema.sql:2309-2317`) that calls `pg_notify('refresh_reports', ...)` — but
+(`20260824000408_baseline.sql:2309-2317`) that calls `pg_notify('refresh_reports', ...)` — but
 this is Postgres `LISTEN`/`NOTIFY`, a different mechanism from Supabase Realtime's
 `postgres_changes` (which is what the client actually subscribes to). **No code in this
 repo (`grep -rn "LISTEN" supabase/functions/`, `grep -rn "pg_notify" src/`) listens on that
@@ -243,7 +243,7 @@ issue but would break a future `db push` outright once the remote history is rec
 `get_player_playing_time()` has a completely different return signature (`jersey_number`,
 `matches_played bigint`, `total_minutes_played numeric` — not matching any function
 currently in production). It predates most of the 17 tracked migrations and is fully
-subsumed by `supabase/production_schema.sql`, which is newer and verified against the live
+subsumed by `supabase/migrations/20260824000408_baseline.sql`, which is newer and verified against the live
 database.
 
 **`supabase/migrations-disabled/` — not safely deletable without a decision first.** Per
@@ -257,7 +257,7 @@ could be true going forward, and they have opposite answers for this folder:
   into the active history (renamed, deduplicated, checked against the dump) rather than
   deleted, or the active migrations folder permanently loses the ability to build the base
   schema.
-- If the intent is to treat `supabase/production_schema.sql` itself as the new baseline
+- If the intent is to treat `supabase/migrations/20260824000408_baseline.sql` itself as the new baseline
   (i.e., a fresh environment is seeded from the dump, and `migrations/` only needs to
   capture changes *from here forward*), then the old history in both
   `migrations-disabled/` and the unrecorded remote Lovable-era migrations becomes
@@ -271,7 +271,7 @@ Not deleting either without that decision being made explicitly.
 
 ## 8. Leftover debugging artifacts in production
 
-`test_auth_context()` and `test_current_user()` (`production_schema.sql:1297-1322`) are
+`test_auth_context()` and `test_current_user()` (`20260824000408_baseline.sql:1297-1322`) are
 present in production, `GRANT ALL`-ed to `anon`, `authenticated`, and `service_role`
 (`:3178-3186`), and unreferenced anywhere in `src/` or `supabase/functions/` — only
 `src/integrations/supabase/types.ts` (generated) knows about them. `test_current_user()`

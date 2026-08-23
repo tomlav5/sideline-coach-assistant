@@ -53,8 +53,12 @@ the CLI. Worked around by dumping the live schema directly
 Confirmed: the schema in git was *not* the schema in production (`profiles.email` still
 exists despite a migration removing it, `get_player_playing_time_v3` doesn't exist despite
 being the client's first-choice RPC, `email_queue`/`email_send_log` exist in prod with no
-local migration at all). Remaining work is deciding a go-forward strategy — see DEBT-012 —
-not just establishing the baseline, which is now done.
+local migration at all). The baseline has been established locally: `supabase/migrations/`
+now contains a single file, `20260824000408_baseline.sql` (formerly
+`production_schema.sql`), and everything that predates it has moved to
+`supabase/migrations-archive/` (`pre-baseline/`, `lovable-era/`). The remote history reset
+(reconciling `supabase_migrations.schema_migrations` with this new baseline) is still
+pending — no `supabase` CLI commands have been run against the database.
 **Blocks:** ENV-001. **Session 5.**
 
 ### DEBT-003 — Test coverage for critical match paths `IN PROGRESS`
@@ -87,17 +91,20 @@ Present before the npm consolidation. Likely dev-dependency and transitive only,
 reaching users' browsers. Review before the Vercel production deploy; do not chase
 pre-season.
 
-### DEBT-011 — Migration filenames don't follow Supabase convention `OPEN`
+### DEBT-011 — Migration filenames don't follow Supabase convention `IN PROGRESS`
 15 of 17 migrations use 8-digit date prefixes (`20251012_name.sql`) rather than Supabase's
 expected 14-digit timestamp (`YYYYMMDDHHMMSS_name.sql`). Confirmed by the schema baseline
 (`docs/SCHEMA_BASELINE.md` §6): three date prefixes are each reused across multiple files
 (`20251012` ×4, `20251208` ×4, `20260110` ×3). Since the CLI keys its migration history by
 that prefix, this isn't just a style issue — a future `supabase db push` against a project
-tracking these files would collide on the reused version and abort partway. Do not rename
-anything until the DEBT-012 strategy decision is made, since renaming changes the versions
-the (currently nonexistent, locally) migration history would key on.
+tracking these files would collide on the reused version and abort partway. Resolved for
+the go-forward history: the baseline reset (DEBT-012) moved all 17 files to
+`supabase/migrations-archive/pre-baseline/`, so their duplicate/short prefixes no longer
+matter for `supabase db push`. `supabase/migrations/` now has a single 14-digit-prefixed
+file (`20260824000408_baseline.sql`), and CLAUDE.md now states new migrations must use the
+full 14-digit format. Remaining work is the remote history reset itself — not yet run.
 
-### DEBT-012 — Decide the go-forward migration strategy `OPEN`
+### DEBT-012 — Decide the go-forward migration strategy `IN PROGRESS`
 `docs/SCHEMA_BASELINE.md` §7 surfaced a fork that blocks real cleanup: the 17 active
 migrations have **no `CREATE TABLE` for any of the 11 core tables** (`fixtures`, `clubs`,
 `match_events`, `teams`, `players`, `match_periods`, `player_time_logs`, `club_members`,
@@ -111,9 +118,15 @@ migrations have **no `CREATE TABLE` for any of the 11 core tables** (`fixtures`,
    environments, and only track changes from here forward — makes the old history
    (`migrations-disabled/`, and the unrecorded remote Lovable-era migrations) irrelevant
    for schema rebuilds.
-`supabase/cloud_full.sql` is confirmed stale either way (missing 5 tables, no `analytics`
-schema, a different `get_player_playing_time()` signature than anything in production) and
-is safe to delete regardless of which option is chosen.
+
+**Decision made: option 2.** The baseline has been established locally — `git mv`s only, no
+`supabase` CLI commands run. `supabase/production_schema.sql` is now
+`supabase/migrations/20260824000408_baseline.sql`, the single live migration.
+`supabase/migrations-disabled/` no longer exists; its contents moved to
+`supabase/migrations-archive/lovable-era/`, and the 17 former active migrations moved to
+`supabase/migrations-archive/pre-baseline/` (see that directory's `README.md`). The remote
+history reset — reconciling `supabase_migrations.schema_migrations` so a future
+`supabase db push` works against this new baseline — is still pending.
 **Blocks:** DEBT-002, ENV-001.
 
 ### DEBT-013 — `get_player_playing_time_v3` doesn't exist in production `OPEN`
@@ -139,6 +152,13 @@ needs rewriting — not just applying — before it's usable. Its actual purpose
 rogue standalone `'assist'` events from an old UI bug) also never ran; those rows, if any
 existed, are likely still in `match_events` today (unverified — needs a live query, not
 just the schema dump) and would be quietly skewing assist stats in `mv_goal_scorers`.
+
+**Now mitigated (not resolved) by the DEBT-012 baseline reset:** the file moved to
+`supabase/migrations-archive/pre-baseline/20260131_fix_rogue_assist_events.sql`, which is
+never run, and the archive's `README.md` explicitly calls out that it must not be applied.
+It has not been deleted or rewritten — the underlying rogue-`'assist'`-rows cleanup this
+migration was meant to do still hasn't happened, and the constraint-rewrite bug is still
+uncorrected in the file itself.
 **Blocks on:** DEBT-012.
 
 ### DEBT-015 — Two debug RPCs exposed to anonymous callers `OPEN`
