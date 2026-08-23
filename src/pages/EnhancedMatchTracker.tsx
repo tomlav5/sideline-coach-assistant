@@ -29,6 +29,7 @@ import { useWakeLock } from '@/hooks/useWakeLock';
 import { usePlayerTimers } from '@/hooks/usePlayerTimers';
 import { useEditMatchData } from '@/hooks/useEditMatchData';
 import { generateUUID } from '@/lib/uuid';
+import { calculateScore } from '@/lib/matchScore';
 import { useOptimisticUpdate } from '@/hooks/useOptimisticUpdate';
 import { useSmartSuggestions } from '@/hooks/useSmartSuggestions';
 import { useMatchTrackerShortcuts } from '@/hooks/useKeyboardShortcuts';
@@ -683,8 +684,7 @@ export default function EnhancedMatchTracker() {
     };
   }, [fixtureId]);
 
-  const ourGoals = events.filter(e => e.event_type === 'goal' && e.is_our_team).length;
-  const opponentGoals = events.filter(e => e.event_type === 'goal' && !e.is_our_team).length;
+  const { ourGoals, opponentGoals } = calculateScore(events);
 
   // Keyboard shortcuts for quick actions
   useMatchTrackerShortcuts({
