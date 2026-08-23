@@ -153,6 +153,11 @@ been created directly by Lovable's sync, consistent with DEBT-007. Once DEBT-012
 resolved, backfill a migration (or note in the new baseline) capturing these two tables so
 the schema can actually be rebuilt from git.
 
+### DEBT-017 — MatchEventsList.tsx is orphaned `OPEN`
+Not imported anywhere. Its event_type union declares six values the database constraint
+has never permitted (throw_in, corner, free_kick, penalty, goal_kick, substitution),
+which is how it drifted unnoticed. Delete, same as the Session 1 orphans.
+
 ### DEBT-007 — Lovable bidirectional sync still active `OPEN`
 Pushes to this repo sync to Lovable and vice versa. Now that development happens through
 Claude Code, two tools have write access to the same branch with no awareness of each
