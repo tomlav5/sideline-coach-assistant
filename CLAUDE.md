@@ -122,3 +122,11 @@ October project.
   before writing code.
 - Known issues and planned work are tracked in `docs/BACKLOG.md` — consult it before
   proposing work, and update the status of completed items there.
+  
+## Backlog maintenance
+
+At the end of any session where you complete work covered by an item in
+docs/BACKLOG.md, update that item's status and add a one-line note of what was done
+and the PR number if known. When you notice something out of scope for the current
+task, add it as a new numbered item under the appropriate heading rather than only
+mentioning it in your summary. Never delete items — mark them DONE or DEFERRED.
