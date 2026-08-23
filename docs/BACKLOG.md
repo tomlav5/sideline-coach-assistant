@@ -57,10 +57,16 @@ local migration at all). Remaining work is deciding a go-forward strategy — se
 not just establishing the baseline, which is now done.
 **Blocks:** ENV-001. **Session 5.**
 
-### DEBT-003 — No test suite `OPEN`
-No vitest, no Playwright, no `test` script. 31,000 lines, going live 12 September.
-Six critical-path tests planned — see Session 6.
-**Session 6.**
+### DEBT-003 — Test coverage for critical match paths `IN PROGRESS`
+Vitest harness landed in PR #39. Pure-logic tests landed in PR #40: 11 tests covering
+period timing (running, paused, ended, unstarted), pause arithmetic, multi-period
+totals, per-side scoring, and a guard asserting every event_type the app writes is
+permitted by the database constraint.
+
+Remaining: RLS enforcement (a parent must not be able to write to `match_events`) and
+the substitution integration path (one `player_time_logs` row closes as another opens).
+Both need a real database rather than mocks, so they follow staging.
+**Blocked by:** ENV-001.
 
 ### DEBT-004 — `EnhancedMatchTracker.tsx` is ~1,370 lines `OPEN`
 The most important screen in the app, used live under pressure, is a single monolith.
