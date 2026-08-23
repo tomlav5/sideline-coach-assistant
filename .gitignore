@@ -29,5 +29,6 @@ dist-ssr
 
 # Supabase temp
 supabase/.temp/
-# Disabled migrations
-supabase/migrations-disabled/
+
+# Claude Code local settings (personal, not shared)
+.claude/settings.local.json
