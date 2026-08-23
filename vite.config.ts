@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
@@ -62,5 +63,10 @@ export default defineConfig(({ mode }) => ({
   // Performance: Disable certain checks in dev
   esbuild: {
     logOverride: { 'this-is-undefined-in-esm': 'silent' },
+  },
+  test: {
+    environment: "jsdom",
+    setupFiles: ["./src/test/setup.ts"],
+    globals: true,
   },
 }));

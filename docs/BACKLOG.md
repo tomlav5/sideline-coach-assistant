@@ -26,6 +26,16 @@ views. If it's just a stale link, it's a one-word change.
 
 ---
 
+## Performance
+
+### PERF-001 — xlsx library bundled into the Reports page `OPEN`
+Reports chunk is 310 kB (101 kB gzipped), the largest in the build, driven by the
+SheetJS xlsx dependency used only by ExportDialog. Convert to a dynamic import so it
+loads on export rather than on page view. Matters most for parents on mobile data.
+Relates to UX-001.
+
+---
+
 ## Technical debt
 
 ### DEBT-001 — `.env` committed to the repository `DONE 20 Aug 2026`
