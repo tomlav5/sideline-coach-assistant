@@ -270,3 +270,13 @@ and had no project context.
 ### DONE-002 — Remove orphan pages `DONE 20 Aug 2026`
 PR #32. Deleted `MatchTracker.tsx`, `OptimizedDashboard.tsx`, `OptimizedReports.tsx` and
 the orphaned `useDashboard.tsx` hook — 786 lines. Surfaced BUG-001 in the process.
+
+/backlog mark DEBT-002, DEBT-011 and DEBT-012 as DONE — migration history re-baselined, 
+remote history table reset, verified with supabase db pull reporting no changes. 
+Note DEBT-014 as mitigated, the dangerous migration is archived where it cannot be applied. 
+Add SEC-001 under a new Security heading: the storage.objects policy "Allow all storage 
+operations for authenticated users" grants every authenticated user full read, write and 
+delete on every object in every bucket, using (true) with check (true), which overrides 
+the four narrower club-admin policies because permissive policies combine with OR. Any 
+logged-in parent can delete or replace any club's assets. Discovered during the S8 baseline 
+reconciliation.
