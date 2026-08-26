@@ -43,23 +43,24 @@ Untracked via `git rm --cached`; `.gitignore` updated; `.env.example` added. PR 
 Keys were the Supabase URL, project ID and publishable key — public by design, so no
 rotation required. Motivation was environment separation, not secrecy.
 
-### DEBT-002 — Schema drift between git and production `IN PROGRESS`
-`supabase db pull` cannot run: remote `schema_migrations` records ~70 Lovable-era
+### DEBT-002 — Schema drift between git and production `DONE 24 Aug 2026`
+`supabase db pull` could not run: remote `schema_migrations` recorded ~70 Lovable-era
 migrations (20250829–20250929) with no local files, and none of the 17 local migrations
-are recorded remotely — the two histories have fully diverged and cannot be reconciled by
+were recorded remotely — the two histories had fully diverged and could not be reconciled by
 the CLI. Worked around by dumping the live schema directly
 (`supabase/production_schema.sql`, via `supabase db dump`) and diffing it against
 `supabase/migrations/` by hand — see `docs/SCHEMA_BASELINE.md` for the full comparison.
 Confirmed: the schema in git was *not* the schema in production (`profiles.email` still
 exists despite a migration removing it, `get_player_playing_time_v3` doesn't exist despite
 being the client's first-choice RPC, `email_queue`/`email_send_log` exist in prod with no
-local migration at all). The baseline has been established locally: `supabase/migrations/`
+local migration at all). PR #43 established the baseline locally: `supabase/migrations/`
 now contains a single file, `20260824000408_baseline.sql` (formerly
-`production_schema.sql`), and everything that predates it has moved to
-`supabase/migrations-archive/` (`pre-baseline/`, `lovable-era/`). The remote history reset
-(reconciling `supabase_migrations.schema_migrations` with this new baseline) is still
-pending — no `supabase` CLI commands have been run against the database.
-**Blocks:** ENV-001. **Session 5.**
+`production_schema.sql`), and everything that predates it moved to
+`supabase/migrations-archive/` (`pre-baseline/`, `lovable-era/`). Session 8 completed the
+remaining step: the remote `supabase_migrations.schema_migrations` table was reset via the
+Supabase CLI to match this new baseline, verified by `supabase db pull` reporting no
+changes. Local and remote schema history are reconciled.
+**Unblocks:** ENV-001 (jointly with DEBT-001, also DONE). **Session 5, Session 8.**
 
 ### DEBT-003 — Test coverage for critical match paths `IN PROGRESS`
 Vitest harness landed in PR #39. Pure-logic tests landed in PR #40: 11 tests covering
@@ -91,20 +92,21 @@ Present before the npm consolidation. Likely dev-dependency and transitive only,
 reaching users' browsers. Review before the Vercel production deploy; do not chase
 pre-season.
 
-### DEBT-011 — Migration filenames don't follow Supabase convention `IN PROGRESS`
-15 of 17 migrations use 8-digit date prefixes (`20251012_name.sql`) rather than Supabase's
+### DEBT-011 — Migration filenames don't follow Supabase convention `DONE 24 Aug 2026`
+15 of 17 migrations used 8-digit date prefixes (`20251012_name.sql`) rather than Supabase's
 expected 14-digit timestamp (`YYYYMMDDHHMMSS_name.sql`). Confirmed by the schema baseline
-(`docs/SCHEMA_BASELINE.md` §6): three date prefixes are each reused across multiple files
+(`docs/SCHEMA_BASELINE.md` §6): three date prefixes were each reused across multiple files
 (`20251012` ×4, `20251208` ×4, `20260110` ×3). Since the CLI keys its migration history by
-that prefix, this isn't just a style issue — a future `supabase db push` against a project
-tracking these files would collide on the reused version and abort partway. Resolved for
-the go-forward history: the baseline reset (DEBT-012) moved all 17 files to
-`supabase/migrations-archive/pre-baseline/`, so their duplicate/short prefixes no longer
-matter for `supabase db push`. `supabase/migrations/` now has a single 14-digit-prefixed
-file (`20260824000408_baseline.sql`), and CLAUDE.md now states new migrations must use the
-full 14-digit format. Remaining work is the remote history reset itself — not yet run.
+that prefix, this wasn't just a style issue — a `supabase db push` against a project
+tracking these files would have collided on the reused version and aborted partway. The
+baseline reset (DEBT-012) moved all 17 files to `supabase/migrations-archive/pre-baseline/`,
+so their duplicate/short prefixes no longer matter for `supabase db push`.
+`supabase/migrations/` now has a single 14-digit-prefixed file
+(`20260824000408_baseline.sql`), CLAUDE.md states new migrations must use the full 14-digit
+format, and Session 8's remote history reset (DEBT-002) confirmed a real `supabase db push`
+now works cleanly against this history. PR #43; remote reset in Session 8.
 
-### DEBT-012 — Decide the go-forward migration strategy `IN PROGRESS`
+### DEBT-012 — Decide the go-forward migration strategy `DONE 24 Aug 2026`
 `docs/SCHEMA_BASELINE.md` §7 surfaced a fork that blocks real cleanup: the 17 active
 migrations have **no `CREATE TABLE` for any of the 11 core tables** (`fixtures`, `clubs`,
 `match_events`, `teams`, `players`, `match_periods`, `player_time_logs`, `club_members`,
@@ -119,15 +121,17 @@ migrations have **no `CREATE TABLE` for any of the 11 core tables** (`fixtures`,
    (`migrations-disabled/`, and the unrecorded remote Lovable-era migrations) irrelevant
    for schema rebuilds.
 
-**Decision made: option 2.** The baseline has been established locally — `git mv`s only, no
-`supabase` CLI commands run. `supabase/production_schema.sql` is now
+**Decision made: option 2.** The baseline was established locally in PR #43 — `git mv`s
+only, no `supabase` CLI commands run at that point. `supabase/production_schema.sql` became
 `supabase/migrations/20260824000408_baseline.sql`, the single live migration.
 `supabase/migrations-disabled/` no longer exists; its contents moved to
 `supabase/migrations-archive/lovable-era/`, and the 17 former active migrations moved to
-`supabase/migrations-archive/pre-baseline/` (see that directory's `README.md`). The remote
-history reset — reconciling `supabase_migrations.schema_migrations` so a future
-`supabase db push` works against this new baseline — is still pending.
-**Blocks:** DEBT-002, ENV-001.
+`supabase/migrations-archive/pre-baseline/` (see that directory's `README.md`). Session 8
+completed the remaining step: the remote `supabase_migrations.schema_migrations` table was
+reconciled against this baseline via the Supabase CLI, verified by `supabase db pull`
+reporting no changes. A future `supabase db push` now works against this baseline.
+**Unblocked:** DEBT-002, DEBT-011 (both DONE). **Unblocks:** ENV-001 (jointly with
+DEBT-001).
 
 ### DEBT-013 — `get_player_playing_time_v3` doesn't exist in production `OPEN`
 The client (`src/hooks/useReports.tsx:147`) calls `get_player_playing_time_v3` first on
@@ -153,13 +157,14 @@ rogue standalone `'assist'` events from an old UI bug) also never ran; those row
 existed, are likely still in `match_events` today (unverified — needs a live query, not
 just the schema dump) and would be quietly skewing assist stats in `mv_goal_scorers`.
 
-**Now mitigated (not resolved) by the DEBT-012 baseline reset:** the file moved to
+**Mitigated (not resolved) by the now-complete DEBT-012 baseline reset:** the file moved to
 `supabase/migrations-archive/pre-baseline/20260131_fix_rogue_assist_events.sql`, which is
 never run, and the archive's `README.md` explicitly calls out that it must not be applied.
 It has not been deleted or rewritten — the underlying rogue-`'assist'`-rows cleanup this
 migration was meant to do still hasn't happened, and the constraint-rewrite bug is still
-uncorrected in the file itself.
-**Blocks on:** DEBT-012.
+uncorrected in the file itself. A working migration path now exists (DEBT-012 is DONE), so
+the actual fix — a live query for rogue `'assist'` rows plus a corrected migration — is
+unblocked whenever this is picked up.
 
 ### DEBT-015 — Two debug RPCs exposed to anonymous callers `OPEN`
 `test_auth_context()` and `test_current_user()` exist in production, granted to `anon`,
@@ -202,12 +207,29 @@ Several recent commits are named "Changes". Enable branch protection requiring a
 
 ---
 
+## Security
+
+### SEC-001 — Storage policy grants every authenticated user full access to every bucket `OPEN`
+**Found:** 24 Aug 2026, during the Session 8 baseline reconciliation
+
+The `storage.objects` policy `"Allow all storage operations for authenticated users"` is
+defined as `using (true) with check (true)` for every operation, granted to
+`authenticated`. Postgres RLS combines multiple permissive policies with OR, so this
+overrides the four narrower club-admin-scoped policies on the same table — any logged-in
+user, including a parent account, can read, overwrite, or delete any club's storage
+objects (badges, kit photos, etc.), not just their own club's.
+
+Fix is a migration dropping (or correctly narrowing) the blanket policy so the four
+club-admin policies are the actual effective boundary. No longer blocked on a migration
+path — DEBT-012 is DONE, so this can be picked up directly.
+
+---
+
 ## Environments & delivery
 
 ### ENV-001 — Staging Supabase project `OPEN`
 Second Supabase project as staging, so schema changes are tested before touching live
-match data.
-**Blocked by:** DEBT-001, DEBT-002.
+match data. No longer blocked — DEBT-001 and DEBT-002 are both DONE as of Session 8.
 
 ### ENV-002 — Move hosting from Lovable to Vercel `OPEN`
 Free at this scale. Per-branch preview deployments become the test environment at no extra
@@ -270,13 +292,3 @@ and had no project context.
 ### DONE-002 — Remove orphan pages `DONE 20 Aug 2026`
 PR #32. Deleted `MatchTracker.tsx`, `OptimizedDashboard.tsx`, `OptimizedReports.tsx` and
 the orphaned `useDashboard.tsx` hook — 786 lines. Surfaced BUG-001 in the process.
-
-/backlog mark DEBT-002, DEBT-011 and DEBT-012 as DONE — migration history re-baselined, 
-remote history table reset, verified with supabase db pull reporting no changes. 
-Note DEBT-014 as mitigated, the dangerous migration is archived where it cannot be applied. 
-Add SEC-001 under a new Security heading: the storage.objects policy "Allow all storage 
-operations for authenticated users" grants every authenticated user full read, write and 
-delete on every object in every bucket, using (true) with check (true), which overrides 
-the four narrower club-admin policies because permissive policies combine with OR. Any 
-logged-in parent can delete or replace any club's assets. Discovered during the S8 baseline 
-reconciliation.
