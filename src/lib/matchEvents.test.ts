@@ -5,9 +5,9 @@ import { MATCH_EVENT_TYPES } from './matchEvents';
 
 // Files that actually write to match_events (insert/upsert/update), found via:
 //   grep -rl "from('match_events')" src | xargs grep -l "\.\(insert\|upsert\|update\)("
-// Display-only files (e.g. MatchEventsList.tsx) are deliberately excluded: their
-// declared event_type unions have drifted from what's actually written and would
-// produce false positives here.
+// Display-only components are deliberately excluded: their declared event_type
+// unions have drifted from what's actually written and would produce false
+// positives here.
 const WRITE_PATH_FILES = [
   'src/components/match/EnhancedEventDialog.tsx',
   'src/hooks/useRetrospectiveMatch.tsx',
