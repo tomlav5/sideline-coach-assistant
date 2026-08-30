@@ -227,6 +227,19 @@ path — DEBT-012 is DONE, so this can be picked up directly.
 
 ## Environments & delivery
 
+### ENV-003 — Visible environment banner `DONE`
+**Found:** 30 Aug 2026 — `npm run dev:staging` silently served production because
+`.env.staging` was missing and Vite fell back to `.env` with no warning; two hours lost.
+
+`src/components/layout/EnvironmentBanner.tsx` renders a thin, fixed, non-dismissible bar
+at the top of the viewport reporting the Supabase project the app is *actually* connected
+to, derived from the same env values as `src/integrations/supabase/client.ts`
+(`VITE_SUPABASE_PROJECT_ID`, else the `VITE_SUPABASE_URL` subdomain) — never from
+`import.meta.env.MODE`. Red when a dev server is connected to the production database,
+blue for any non-production project, amber when no ref resolves. Renders nothing in the
+normal production build. Mounted in `App.tsx` above `BrowserRouter` so it covers every
+route including auth pages. Tests in `EnvironmentBanner.test.tsx`.
+
 ### ENV-001 — Staging Supabase project `IN PROGRESS`
 Second Supabase project as staging, so schema changes are tested before touching live
 match data. No longer blocked — DEBT-001 and DEBT-002 are both DONE as of Session 8.
