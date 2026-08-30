@@ -8,6 +8,21 @@ Known issues and planned work. Newest findings at the top of each section.
 
 ## Bugs
 
+### BUG-002 — Duplicate club-creator trigger caused club creation to fail `DONE 30 Aug 2026`
+**Found:** 30 Aug 2026, while seeding test data on staging — the first bug the staging
+environment caught.
+
+Creating a club failed with `duplicate key value violates unique constraint
+club_members_club_id_user_id_key`. Cause: two identical `AFTER INSERT` triggers on
+`public.clubs`, both calling `add_club_creator_as_admin()`, so the creator was inserted
+into `club_members` twice.
+
+Fixed in migration `20260830111038` (PR #47): dropped `add_club_creator_as_admin_trigger`
+and added `ON CONFLICT DO NOTHING` to `add_club_creator_as_admin()`. Applied to staging via
+`supabase db push`, and to production via the dashboard SQL editor on 30 August, then
+recorded in production's migration history. Verified on both databases: three triggers
+remain on `clubs`, and both databases list the same three migrations as the repo.
+
 ### BUG-001 — Broken navigation in MatchReport `OPEN`
 **Found:** 20 Aug 2026, during orphan-page cleanup
 **File:** `src/pages/MatchReport.tsx:332`
