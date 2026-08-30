@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/hooks/useTheme";
 import { Layout } from "@/components/layout/Layout";
+import { EnvironmentBanner } from "@/components/layout/EnvironmentBanner";
 import { OptimizedLazyLoader } from "@/components/ui/optimized-lazy-loader";
 import { LazyLoader } from "@/components/ui/lazy-loader";
 
@@ -36,6 +37,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <EnvironmentBanner />
       <BrowserRouter>
         <AuthProvider>
           {/** Global cleanup of stale match sessions */}
