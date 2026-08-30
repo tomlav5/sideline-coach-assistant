@@ -71,7 +71,8 @@ permitted by the database constraint.
 Remaining: RLS enforcement (a parent must not be able to write to `match_events`) and
 the substitution integration path (one `player_time_logs` row closes as another opens).
 Both need a real database rather than mocks, so they follow staging.
-**Blocked by:** ENV-001.
+**Blocked by:** ~~ENV-001~~ — unblocked, ENV-001 DONE 30 Aug 2026; staging is available to
+run these against.
 
 ### DEBT-004 — `EnhancedMatchTracker.tsx` is ~1,370 lines `OPEN`
 The most important screen in the app, used live under pressure, is a single monolith.
@@ -240,17 +241,19 @@ blue for any non-production project, amber when no ref resolves. Renders nothing
 normal production build. Mounted in `App.tsx` above `BrowserRouter` so it covers every
 route including auth pages. Tests in `EnvironmentBanner.test.tsx`.
 
-### ENV-001 — Staging Supabase project `IN PROGRESS`
+### ENV-001 — Staging Supabase project `DONE 30 Aug 2026`
 Second Supabase project as staging, so schema changes are tested before touching live
-match data. No longer blocked — DEBT-001 and DEBT-002 are both DONE as of Session 8.
+match data. Was blocked on DEBT-001 and DEBT-002, both DONE as of Session 8.
 
 Staging project `xszbopufqchbfbqwvqbb` created in West EU (London). Both migrations
 applied cleanly via `supabase db push`; `supabase migration list` confirms local and
-remote are in sync. `.env.staging` and a `dev:staging` script added locally; switching
-between production and staging confirmed working in both directions. Discovered
-ONBOARD-001 while seeding staging.
-
-Remaining: seed staging with a fake match, then commit. **30 Aug 2026.**
+remote are in sync. `.env.staging` and a `dev:staging` script added; switching between
+production and staging confirmed working in both directions. Discovered ONBOARD-001 while
+seeding staging. Staging was then seeded end to end with a fake match (club, team,
+players, fixture, live match tracked to completion) — the run that produced the UX-003
+to UX-006 observations. PR #46.
+**Unblocks:** DEBT-003 (RLS and substitution integration tests can now run against a real
+non-production database).
 
 ### ENV-002 — Move hosting from Lovable to Vercel `OPEN`
 Free at this scale. Per-branch preview deployments become the test environment at no extra
@@ -303,6 +306,57 @@ second, often not at the ground. Parent view needs its own route and layout.
 Used one-handed, outdoors, possibly in rain, possibly with gloves, eyes mostly on the
 pitch. Minimum 44x44pt targets, thumb-reachable placement, unambiguous tap feedback.
 Failure mode is a mis-tap during a goalmouth scramble.
+
+---
+
+## Coach UX observations (30 Aug, from seeding staging)
+
+Raw notes from running the app end to end as a coach would — creating a club, teams and
+players and setting up a fixture — while seeding the staging project. Filed as individual
+UX items below; continues the `UX-` series.
+
+### UX-003 — Bulk player entry, and distinct flows for roster setup vs. new club player `OPEN`
+**Found:** 30 Aug 2026, while seeding staging
+
+Players can only be added one at a time. Setting up a squad this way is slow — there
+should be a table/grid entry mode to add a whole squad in one pass.
+
+Underneath that, three flows are currently collapsed into the same one-by-one form and
+shouldn't be:
+1. Building a team's roster from scratch.
+2. Forking a new team from an existing one (carrying players across).
+3. Adding a genuinely new player to the club.
+
+(1) and (2) are bulk/selection tasks; only (3) is really "create a new person". Separate
+the roster-building UX from the add-a-club-player UX.
+Relates to UX-002.
+
+### UX-004 — Views don't refresh after a mutation; likely app-wide `OPEN`
+**Found:** 30 Aug 2026, while seeding staging
+
+Creating a team doesn't update the teams list — a manual browser refresh is needed before
+the new team appears. Treat this as a pattern audit, not a one-off: the query cache is
+probably not being invalidated/refetched after create/update/delete in multiple places.
+Go through every create/edit/delete flow in the app and confirm the relevant lists and
+detail views update without a reload.
+
+### UX-005 — Inconsistent screen sizing and framing makes the UI look amateur `OPEN`
+**Found:** 30 Aug 2026, while seeding staging
+
+Container widths and screen framing vary from page to page. For a market-ready product the
+app needs one layout system — consistent max-widths, gutters and framing — so moving
+between screens feels like a single continuous interface rather than a set of separately
+built pages.
+Relates to UX-001, DEBT-004.
+
+### UX-006 — Consider removing modal / floating windows entirely `OPEN`
+**Found:** 30 Aug 2026, while seeding staging
+
+Floating dialogs add to the inconsistent feel in UX-005 and are awkward one-handed
+outdoors (UX-002). Evaluate replacing them with full-screen routes or inline panels.
+This is a design decision that needs making before the layout-consistency work in UX-005,
+since it changes the target.
+**Blocks:** UX-005.
 
 ---
 
