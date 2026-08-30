@@ -227,9 +227,17 @@ path — DEBT-012 is DONE, so this can be picked up directly.
 
 ## Environments & delivery
 
-### ENV-001 — Staging Supabase project `OPEN`
+### ENV-001 — Staging Supabase project `IN PROGRESS`
 Second Supabase project as staging, so schema changes are tested before touching live
 match data. No longer blocked — DEBT-001 and DEBT-002 are both DONE as of Session 8.
+
+Staging project `xszbopufqchbfbqwvqbb` created in West EU (London). Both migrations
+applied cleanly via `supabase db push`; `supabase migration list` confirms local and
+remote are in sync. `.env.staging` and a `dev:staging` script added locally; switching
+between production and staging confirmed working in both directions. Discovered
+ONBOARD-001 while seeding staging.
+
+Remaining: seed staging with a fake match, then commit. **30 Aug 2026.**
 
 ### ENV-002 — Move hosting from Lovable to Vercel `OPEN`
 Free at this scale. Per-branch preview deployments become the test environment at no extra
@@ -249,6 +257,25 @@ knowledge. Coaches can be walked through in person; parents cannot.
 Goal and full-time notifications to parents following remotely. Supabase database trigger
 on `match_events` → web push.
 **Blocked by:** PWA-002.
+
+---
+
+## Onboarding
+
+### ONBOARD-001 — First user of a fresh database is permanently stuck as pending `OPEN`
+**Found:** 30 Aug 2026, while seeding the new staging project
+
+Approving a registration requires an existing super admin. On a brand-new database there
+is no super admin yet, so the first user to register can never be approved through the
+app — there's no one with permission to approve them. Production was bootstrapped by hand
+via `20260110_set_initial_super_admin.sql`; staging hit the same wall and had to be
+unblocked with direct SQL rather than through the app.
+
+Not urgent — both existing databases are already past this point — but it matters if
+production is ever rebuilt from scratch, or if the app is offered to a second club with
+its own fresh database. Needs either a documented bootstrap step or a proper first-run
+path (e.g. the first registered user on an empty `profiles` table is auto-approved as
+super admin).
 
 ---
 
