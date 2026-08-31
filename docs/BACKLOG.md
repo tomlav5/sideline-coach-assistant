@@ -8,6 +8,16 @@ Known issues and planned work. Newest findings at the top of each section.
 
 ## Bugs
 
+### BUG-003 — Reopen-a-match doesn't reliably return the match to a trackable state `OPEN`
+**Found:** 31 Aug 2026
+
+the function to reopen a match was introduced some time back, so that match tracking could
+resume if a user mistakenly ended a match (e.g. ending the entire match vs ending a
+period). This doesn't always work - i.e. the state in which the match is returned to
+doesn't reliably allow match tracking to resume
+
+Relates to BUG-001.
+
 ### BUG-002 — Duplicate club-creator trigger caused club creation to fail `DONE 30 Aug 2026`
 **Found:** 30 Aug 2026, while seeding test data on staging — the first bug the staging
 environment caught.
