@@ -253,6 +253,17 @@ path — DEBT-012 is DONE, so this can be picked up directly.
 
 ## Environments & delivery
 
+### ENV-004 — Staging lacks edge functions and auth hook configuration `OPEN`
+**Found:** 31 Aug 2026, while testing a preview deployment.
+
+`supabase db push` applies migrations only. The `auth-email-hook` and `send-email` edge
+functions are not deployed to the staging project, and the Auth "send email" hook isn't
+configured there, so staging sends Supabase's default auth templates rather than the app's
+own. Schema fidelity is good; project-configuration fidelity is not. Deploy the functions
+with `supabase functions deploy` and set the hook when staging needs to exercise email
+flows.
+**Blocked by:** ENV-001 (staging project — DONE 30 Aug 2026).
+
 ### ENV-003 — Visible environment banner `DONE`
 **Found:** 30 Aug 2026 — `npm run dev:staging` silently served production because
 `.env.staging` was missing and Vite fell back to `.env` with no warning; two hours lost.
