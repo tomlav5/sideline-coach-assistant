@@ -219,7 +219,10 @@ which is how it drifted unnoticed. Delete, same as the Session 1 orphans.
 Pushes to this repo sync to Lovable and vice versa. Now that development happens through
 Claude Code, two tools have write access to the same branch with no awareness of each
 other. Treat Lovable as read-only immediately; disconnect properly when moving to Vercel.
-**Blocks:** ENV-002.
+
+Kept open on purpose after ENV-002 (Vercel cutover, DONE 31 Aug 2026): the Lovable
+deployment is retained as a DNS rollback target until 3 September. Disconnect after that.
+**Blocked ENV-002** (now DONE — proceeded ahead, keeping Lovable live as rollback).
 
 ### DEBT-008 — Capacitor `appId` is a placeholder `OPEN`
 `capacitor.config.ts` has `appId: 'com.yourorg.sidelinecoach'`. This becomes the permanent
@@ -252,6 +255,16 @@ path — DEBT-012 is DONE, so this can be picked up directly.
 ---
 
 ## Environments & delivery
+
+### ENV-005 — Production and staging use different Supabase key formats `OPEN`
+**Found:** 31 Aug 2026, while splitting Vercel environment variables (ENV-002)
+
+Production uses the legacy anon JWT keys (the `eyJ...` format); the staging project,
+created 30 August, uses the newer `sb_publishable_...` format. Both keys are correct for
+their own project and `src/integrations/supabase/client.ts` accepts either — the schema is
+identical, only the platform default differs by project age. Recorded so the mismatch
+isn't mistaken for a misconfiguration later; no action needed unless the projects are
+ever standardised.
 
 ### ENV-004 — Staging lacks edge functions and auth hook configuration `OPEN`
 **Found:** 31 Aug 2026, while testing a preview deployment.
@@ -291,10 +304,27 @@ to UX-006 observations. PR #46.
 **Unblocks:** DEBT-003 (RLS and substitution integration tests can now run against a real
 non-production database).
 
-### ENV-002 — Move hosting from Lovable to Vercel `OPEN`
+### ENV-002 — Move hosting from Lovable to Vercel `DONE 31 Aug 2026`
 Free at this scale. Per-branch preview deployments become the test environment at no extra
-setup cost. Point `sideline.assist` (registered at Namecheap) at Vercel.
-**Blocked by:** DEBT-007.
+setup cost. Point `sidelineassist.club` (registered at Namecheap) at Vercel.
+
+Done (PR #54 for the routing fix; hosting/DNS changes made in the Vercel and Namecheap
+dashboards):
+- Vercel Hobby project created and connected to the GitHub repo.
+- Environment variables split so Production uses the production Supabase project while
+  Preview and Development use staging — every branch preview is therefore safe against
+  live match data.
+- `vercel.json` added so client-side routes are served `index.html` rather than 404ing
+  (PR #54).
+- `sidelineassist.club` and `www` cut over from Lovable at Namecheap: apex is primary,
+  `www` redirects to it. Only the two A records changed; all TXT and MX (email) records
+  left intact.
+- Verified with a full login flow end to end.
+
+DEBT-007 (disconnecting Lovable) is deliberately still `OPEN`: the Lovable deployment is
+being kept as a DNS rollback target until 3 September.
+**Was blocked by:** DEBT-007 — proceeded ahead of it by design, keeping Lovable live as
+rollback.
 
 ### PWA-001 — Make the app installable `OPEN`
 Web app manifest, icons, service worker, offline shell. Target for 12 September.
