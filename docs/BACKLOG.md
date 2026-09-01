@@ -8,6 +8,17 @@ Known issues and planned work. Newest findings at the top of each section.
 
 ## Bugs
 
+### BUG-004 — Undo was removed from the live match screen `OPEN`
+**Found:** 31 Aug 2026, during the match screen interaction review
+**File:** `src/pages/EnhancedMatchTracker.tsx:703`
+
+`onUndo: () => {}, // Undo functionality removed` — the handler is stubbed, so the
+control does nothing. A coach who mis-taps during play has no way back; the event has
+to be corrected after the match, if it's noticed at all.
+
+Highest value per line of change of anything on this list. Restore before 12 September.
+Relates to UX-002.
+
 ### BUG-003 — Reopen-a-match doesn't reliably return the match to a trackable state `OPEN`
 **Found:** 31 Aug 2026
 
@@ -62,6 +73,10 @@ Relates to UX-001.
 ---
 
 ## Technical debt
+
+### DEBT-018 — Orphaned `public/favicon.png` `OPEN`
+Leftover path from the Lovable export. Overwritten with current artwork so nothing stale
+is served, but nothing references it. One-line deletion.
 
 ### DEBT-001 — `.env` committed to the repository `DONE 20 Aug 2026`
 Untracked via `git rm --cached`; `.gitignore` updated; `.env.example` added. PR #33.
@@ -326,7 +341,7 @@ being kept as a DNS rollback target until 3 September.
 **Was blocked by:** DEBT-007 — proceeded ahead of it by design, keeping Lovable live as
 rollback.
 
-### PWA-001 — Make the app installable `OPEN`
+### PWA-001 — Make the app installable `IN PROGRESS`
 Web app manifest, icons, service worker, offline shell. Target for 12 September.
 
 ### PWA-002 — Install prompt for non-technical users `OPEN`
@@ -362,6 +377,17 @@ super admin).
 ---
 
 ## UX
+
+### UX-007 — Match screen rebuild for one-handed touchline use `OPEN`
+**Found:** 31 Aug 2026, from the match screen interaction review
+
+The live match screen is the only screen that matters under time pressure, and it
+currently requires scrolling to find a player and moving between views to record a
+substitution. Planned changes: jersey-number tiles instead of a name list, substitution
+completed on one screen, larger score/clock header, and the event history collapsed into
+a pull-up sheet rather than stacked cards.
+
+Target: weekend of 5–6 September. Relates to UX-002, UX-005, DEBT-004.
 
 ### UX-001 — Split the parent view from the coach view `OPEN`
 Currently one interface with permissions applied. They are different design problems:
@@ -423,6 +449,34 @@ outdoors (UX-002). Evaluate replacing them with full-screen routes or inline pan
 This is a design decision that needs making before the layout-consistency work in UX-005,
 since it changes the target.
 **Blocks:** UX-005.
+
+---
+
+## Design
+
+### DESIGN-004 — Brand marks are raster with no vector master `OPEN`
+Both the app icon and the favicon are 1024px rasters. That is exactly the App Store's
+minimum, so there is no headroom, and neither can be resharpened or recoloured cleanly.
+The `og-image.png` wordmark is also set in Poppins rather than Archivo. Rework from
+vector in the off-season.
+
+### DESIGN-003 — Club-configurable colour palettes `DEFERRED`
+So the app can be themed to a club's own colours if it's ever offered beyond this club.
+Requires semantic token names (`--action-primary`, not `--amber`) throughout.
+**Blocked by:** DESIGN-002.
+
+### DESIGN-002 — 258 hard-coded colour classes bypass the design tokens `OPEN`
+`src/index.css` defines a complete shadcn token set, but 258 Tailwind colour utilities
+across the app (116 green, 76 yellow, 66 blue) set colours directly. Until these route
+through semantic tokens, a palette change means a find-and-replace rather than editing
+one file.
+**Blocks:** DESIGN-003.
+
+### DESIGN-001 — Floodlight palette adopted `DONE 1 Sep 2026`
+Navy `#101724`, Signal Amber `#F5A524`, Pitch Blue `#0B5FCC`, with Paper/Card/Slate/Edge
+neutrals. Chosen for outdoor legibility over the previous dark green. Preferred pairing
+is amber on navy (8.8:1). Full spec, contrast pairs and regeneration steps in
+`docs/brand/BRAND.md`.
 
 ---
 
