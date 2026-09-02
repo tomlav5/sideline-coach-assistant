@@ -344,6 +344,20 @@ rollback.
 ### PWA-001 — Make the app installable `IN PROGRESS`
 Web app manifest, icons, service worker, offline shell. Target for 12 September.
 
+Manifest, icon set and link previews shipped 1 September (PR #57): `manifest.webmanifest`
+with name "Sideline Assist" / short name "Sideline", navy theme colour, and both `any` and
+`maskable` icons; a full icon set derived from a single 1024px master; a simplified favicon
+built from the app icon's "A" element; and a 1200×630 Open Graph card replacing the
+Lovable-branded one. Verified live on sidelineassist.club — the manifest serves correctly
+and the meta tags are clean.
+
+Outstanding: service worker and offline shell (S11b). That is the change most able to
+strand a coach on a stale build mid-match, so it needs a tested update path rather than a
+default install. Caching must never cover Supabase responses — the match timer derives
+elapsed time from `actual_start_time` read from Postgres, and a cached response would make
+the clock lie.
+
+
 ### PWA-002 — Install prompt for non-technical users `OPEN`
 iOS only permits web push for PWAs added to the home screen, so "Add to Home Screen" gates
 the entire notification feature. Needs a guided install screen that assumes no technical
