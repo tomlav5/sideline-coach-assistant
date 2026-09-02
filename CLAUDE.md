@@ -122,6 +122,11 @@ October project.
   before writing code.
 - Known issues and planned work are tracked in `docs/BACKLOG.md` — consult it before
   proposing work, and update the status of completed items there.
+- Claude must never run git commands against this repo through the Cowork file bridge. The
+  bridge cannot delete files, and git removes its own `.git/index.lock` when it finishes —
+  so every git command, including a read-only-looking `git status`, leaves a stale lock that
+  makes GitHub Desktop refuse to commit. Claude writes and edits files; every branch, commit,
+  push and merge stays in GitHub Desktop.
   
 ## Backlog maintenance
 
