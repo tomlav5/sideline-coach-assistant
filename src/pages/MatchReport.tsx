@@ -329,7 +329,10 @@ export default function MatchReport() {
   const getBackNavigation = () => {
     // If coming from live tracking, go back to tracking
     if (location.state?.from === 'match-tracker' && fixture?.active_tracker_id) {
-      return () => navigate(`/match-tracker/${fixtureId}`);
+      // /match-tracker/ has never been a route — the live screen is /match-day/.
+      // The 'match-tracker' string above is a navigation-state marker, not a path,
+      // and must stay as it is: EnhancedMatchTracker sets state.from to match it.
+      return () => navigate(`/match-day/${fixtureId}`);
     }
     // Otherwise go to reports
     return () => navigate('/reports');
