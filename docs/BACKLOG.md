@@ -390,6 +390,30 @@ super admin).
 
 ---
 
+## Design
+
+### DESIGN-001 — Floodlight adopted as the app's direction `DONE 1 Sep 2026`
+Cool light ground (#EEF1F4), deep navy ink (#101724), blue for on-pitch state (#0B5FCC),
+amber for the primary action (#F5A524). Chosen for outdoor legibility — a light ground
+because dark screens become mirrors in daylight — and because blue/amber survives every
+common form of colour vision deficiency. Layout validated at real size on a phone: whole
+squad, score, clock, both actions and undo on one screen with no scrolling.
+Dark theme remains available for evening fixtures; it is no longer the default.
+
+### DESIGN-002 — Club-configurable palette `DEFERRED — post-season`
+Future requirement: a club sets its own colours. Not built now, but it constrains how the
+Floodlight rollout is done — every colour must come from a semantically named token
+(--action-primary, not --amber), never a hard-coded Tailwind class. The 258 existing
+hard-coded classes are the only real obstacle, and removing them is the same work as
+adopting Floodlight.
+Guardrail for when it is built: club colours drive identity (headers, badges, accents)
+only. Functional colours — on-pitch/bench, primary action, destructive — stay fixed or
+are contrast-checked against the ground before being accepted, or a club with pale
+colours gets an unreadable match screen.
+Relates to UX-005 (the 258 hard-coded classes are also the layout-consistency obstacle).
+
+---
+
 ## UX
 
 ### UX-007 — Match screen rebuild for one-handed touchline use `OPEN`
