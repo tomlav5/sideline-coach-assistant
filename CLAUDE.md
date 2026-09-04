@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Sideline Coach Assistant — a React/Vite web app (also packaged for iOS via Capacitor) for grassroots football/soccer coaches to manage teams, players, fixtures, and live match tracking (timers, substitutions, goals, player playing-time). Backend is entirely Supabase (Postgres + RLS + edge functions). The project originates from and is still edited via **Lovable** (lovable.dev) — pushes from this repo sync back to the Lovable project, and vice versa, so be aware changes here may be overwritten by Lovable-side edits and vice versa.
+Sideline Coach Assistant — a React/Vite web app (also packaged for iOS via Capacitor) for grassroots football/soccer coaches to manage teams, players, fixtures, and live match tracking (timers, substitutions, goals, player playing-time). Backend is entirely Supabase (Postgres + RLS + edge functions). The project originated in **Lovable** (lovable.dev), but the bidirectional GitHub sync was disconnected on 4 September 2026 (DEBT-007). This repository is now the single source of truth — nothing else has write access, and Vercel builds production from `main`. Lovable-era artefacts remain in the codebase (`lovable-tagger` in `vite.config.ts`, two `@lovable.dev/*` packages in `supabase/functions/auth-email-hook`, and `supabase/migrations-archive/lovable-era/`), but none of them depend on the Lovable platform.
 
 ## Commands
 
@@ -36,7 +36,7 @@ Package manager: `npm` only — `package-lock.json` is authoritative and must no
 Several pages have both a plain and "Optimized" variant (`Index`/`OptimizedIndex`, `Dashboard`/`OptimizedDashboard`, `Reports`/`OptimizedReports`) — the app currently routes through the Optimized versions; the non-optimized ones may be legacy/unused. Check `App.tsx` before assuming a page is live.
 
 ### Auth
-Email OTP / magic-link based (`useAuth.tsx`, backed by `supabase.auth.signInWithOtp` / `verifyOtp`), plus password auth as a fallback. Supabase sends both a magic link and a 6-digit code in the same email; `src/pages/Auth.tsx` surfaces both. New users typically go through an approval flow (`PendingApproval`, `AdminApprovals`, `AcceptInvitation` for club invites) — club membership/roles are enforced through RLS, not just UI checks.
+Email OTP / magic-link based (`useAuth.tsx`, backed by `supabase.auth.signInWithOtp` / `verifyOtp`), plus password auth as a fallback. Supabase sends both a magic link and a 6-digit code in the same email; `src/pages/Auth.tsx` surfaces both. New users typically go through an approval flow (`PendingApproval`, `AdminApprovals`, `AcceptInvitation` for club invites) — club membership/roles are enforced through RLS, not just UI checks. There is currently no password reset flow — nothing in the codebase calls `resetPasswordForEmail` — so a user who sets a password at signup and forgets it must sign in with the emailed OTP code instead (ONBOARD-002).
 
 ### Domain model
 Core entities: **clubs → teams → players**, and **fixtures** (scheduled matches) tracked against a team. A fixture progresses through a squad-selection step (`SquadSelection.tsx`) before match tracking begins.
