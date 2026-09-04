@@ -99,6 +99,31 @@ Relates to UX-001.
 
 ## Technical debt
 
+### DEBT-020 — Lovable leftovers and repo hygiene `OPEN`
+**Found:** 4 Sep 2026
+
+Dead weight now that DEBT-007 is done: `lovable-tagger` in `package.json` and
+`vite.config.ts` (dev-mode only, harmless but pointless), the `.lovable/` directory,
+and a Lovable reference in `src/integrations/supabase/client.ts`.
+
+Separately, a stale `.CLAUDE.md.swp` vim swap file dated 30 August sits in the repo
+root and is not gitignored — delete it and add `*.swp` to `.gitignore`.
+
+All cosmetic; do after the season.
+
+### DEBT-019 — Auth email hook depends on two Lovable npm packages `OPEN`
+**Found:** 4 Sep 2026
+
+`supabase/functions/auth-email-hook/index.ts` imports `npm:@lovable.dev/email-js` and
+`npm:@lovable.dev/webhooks-js` for webhook signature verification and payload parsing,
+and reads a secret named `LOVABLE_API_KEY`. Nothing breaks today — these are public npm
+packages doing local HMAC verification, independent of the Lovable account — but the
+auth email path for every signup, invite and magic link now depends on packages
+maintained by a vendor no longer involved in this project.
+
+Replace with standard HMAC verification and rename the secret when there is time.
+Relates to DEBT-007.
+
 ### DEBT-018 — Orphaned `public/favicon.png` `OPEN`
 Leftover path from the Lovable export. Overwritten with current artwork so nothing stale
 is served, but nothing references it. One-line deletion.
@@ -255,7 +280,7 @@ Not imported anywhere. Its event_type union declares six values the database con
 has never permitted (throw_in, corner, free_kick, penalty, goal_kick, substitution),
 which is how it drifted unnoticed. Delete, same as the Session 1 orphans.
 
-### DEBT-007 — Lovable bidirectional sync still active `OPEN`
+### DEBT-007 — Lovable bidirectional sync still active `DONE 4 Sep 2026`
 Pushes to this repo sync to Lovable and vice versa. Now that development happens through
 Claude Code, two tools have write access to the same branch with no awareness of each
 other. Treat Lovable as read-only immediately; disconnect properly when moving to Vercel.
@@ -269,6 +294,16 @@ deployment is confirmed serving `sidelineassist.club`, so the Lovable deployment
 longer needed as a rollback target. Disconnecting is the next action, and it is now the
 priority before the UX-007 rebuild begins, because two tools currently hold write
 access to the same branch.
+
+**Done 4 Sep 2026:** disconnected via Lovable Project settings → Git → GitHub →
+Disconnect (no PR — an account-settings action, not a code change). The GitHub
+repository remains intact with full history; the Lovable project retains a frozen copy
+that now syncs nowhere. Verified afterwards: `sidelineassist.club` still serves from
+Vercel, an auth email (OTP) still sends, and no commits landed on `main` as a result of
+the disconnect. The Lovable subscription is being cancelled — nothing operational
+depends on the account, since `LOVABLE_API_KEY` is a local HMAC secret in Supabase with
+no call to Lovable's servers, and the `@lovable.dev` packages are public npm (see
+DEBT-019, DEBT-020 for what that leaves behind).
 
 ### DEBT-008 — Capacitor `appId` is a placeholder `OPEN`
 `capacitor.config.ts` has `appId: 'com.yourorg.sidelinecoach'`. This becomes the permanent
@@ -301,6 +336,19 @@ path — DEBT-012 is DONE, so this can be picked up directly.
 ---
 
 ## Environments & delivery
+
+### ENV-007 — Auth emails send from Resend's shared sandbox domain `OPEN`
+**Found:** 4 Sep 2026
+
+`supabase/functions/send-email/index.ts` sends from `'SideLine <onboarding@resend.dev>'`.
+That is Resend's shared test domain, not a verified sender. Acceptable for two coaches
+who know to look for it; a deliverability and credibility problem for parents, since
+shared sender domains attract spam filtering and a club email arriving from
+`resend.dev` does not read as legitimate.
+
+Fix is to verify `sidelineassist.club` with Resend and send from it — a DNS job, so do
+it well before parent rollout.
+Relates to ENV-002, PWA-003.
 
 ### ENV-006 — Report views are created unpopulated and the refresh fails silently `OPEN`
 **Found:** 4 Sep 2026
@@ -425,6 +473,20 @@ on `match_events` → web push.
 ---
 
 ## Onboarding
+
+### ONBOARD-002 — No password reset flow `OPEN`
+**Found:** 4 Sep 2026, while verifying auth after the Lovable disconnect
+
+`useAuth.tsx` exposes `signUp` (with password), `signInWithPassword`, `signInWithOtp`
+and `verifyOtp`, so users do set a password at signup — but nothing anywhere in the
+codebase calls `resetPasswordForEmail`. A user who forgets their password has no route
+back through the UI. Not a lockout, because the emailed OTP code still works, but they
+will not know that.
+
+Workaround for the 12 September coaches: brief them to sign in with the email code
+rather than a password. This becomes a genuine blocker at parent rollout — forty
+parents will forget passwords and most will give up rather than ask.
+Relates to ONBOARD-001, PWA-002.
 
 ### ONBOARD-001 — First user of a fresh database is permanently stuck as pending `OPEN`
 **Found:** 30 Aug 2026, while seeding the new staging project
