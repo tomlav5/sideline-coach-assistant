@@ -9,7 +9,11 @@ interface UndoAction {
   timestamp: number;
 }
 
-const UNDO_WINDOW_MS = 5000; // 5 seconds
+// 10s, not 5. A coach taps, looks up, watches the restart, and only then
+// registers that it was the wrong player — five seconds is gone before they
+// look back down at the phone. Exported so UndoButton's progress bar and this
+// window can never drift apart.
+export const UNDO_WINDOW_MS = 10000;
 
 export function useUndoStack() {
   const [undoStack, setUndoStack] = useState<UndoAction[]>([]);
