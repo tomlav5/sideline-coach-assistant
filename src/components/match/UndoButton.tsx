@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Undo2, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { UNDO_WINDOW_MS } from '@/hooks/useUndoStack';
 
 interface UndoButtonProps {
   canUndo: boolean;
@@ -22,7 +23,12 @@ export function UndoButton({
 }: UndoButtonProps) {
   if (!canUndo) return null;
 
-  const progressPercent = (remainingSeconds / 30) * 100;
+  // Was hard-coded to 30, while the window has always been far shorter — the bar
+  // never filled past a sliver. Derived from the window itself now.
+  const progressPercent = Math.min(
+    100,
+    (remainingSeconds / (UNDO_WINDOW_MS / 1000)) * 100
+  );
 
   return (
     <Card className={cn(
@@ -45,7 +51,7 @@ export function UndoButton({
             disabled={isUndoing}
             size="sm"
             variant="destructive"
-            className="flex-shrink-0 h-10 px-4"
+            className="flex-shrink-0 h-12 px-5"
           >
             {isUndoing ? (
               <Loader2 className="h-4 w-4 animate-spin" />

@@ -37,6 +37,8 @@ import { ActivePlayerCard } from '@/components/match/ActivePlayerCard';
 import { SmartSuggestionBadge } from '@/components/match/SmartSuggestionBadge';
 import { MatchTrackerSkeleton } from '@/components/ui/skeleton-loader';
 import { LiveEventsSummary } from '@/components/match/LiveEventsSummary';
+import { UndoButton } from '@/components/match/UndoButton';
+import { useUndoStack } from '@/hooks/useUndoStack';
 
 interface Player {
   id: string;
@@ -111,12 +113,23 @@ export default function EnhancedMatchTracker() {
   // Local log of substitutions for UI only (not persisted as match_events)
   const [substitutions, setSubstitutions] = useState<{ outId: string; inId: string; minute: number; total: number }[]>([]);
   
+  // Short reversal window for a mis-tap during play (BUG-004). Declared above the
+  // handlers that call pushUndo so the binding is never read before assignment.
+  const {
+    canUndo,
+    isUndoing,
+    currentAction,
+    remainingSeconds,
+    pushUndo,
+    performUndo,
+  } = useUndoStack();
+
   // Real-time sync and match locking
-  const { 
-    matchTracker, 
-    claimMatchTracking, 
-    releaseMatchTracking, 
-    isClaimingMatch 
+  const {
+    matchTracker,
+    claimMatchTracking,
+    releaseMatchTracking,
+    isClaimingMatch
   } = useRealtimeMatchSync(fixtureId);
   useEffect(() => {
     if (fixtureId) {
@@ -298,6 +311,27 @@ export default function EnhancedMatchTracker() {
         .single();
 
       if (error) throw error;
+
+      // Offer a short window to reverse a mis-tap. This deletes only the row we
+      // just created, addressed by its own id — never "the most recent event" —
+      // so a second coach recording on another device cannot be affected. The
+      // score is derived from events via calculateScore(), so it corrects itself
+      // once the row is gone, and the reports trigger refreshes on DELETE.
+      const scorer = players.find((p) => p.id === playerId);
+      pushUndo({
+        type: 'event',
+        description: isOurTeam
+          ? `Goal — ${scorer ? `${scorer.first_name} ${scorer.last_name}` : 'our team'}`
+          : 'Goal — opposition',
+        undo: async () => {
+          const { error: undoError } = await supabase
+            .from('match_events')
+            .delete()
+            .eq('id', newEvent.id);
+          if (undoError) throw undoError;
+          await loadEvents();
+        },
+      });
 
       // Reload events to update UI
       await loadEvents();
@@ -700,7 +734,7 @@ export default function EnhancedMatchTracker() {
       }
     },
     onOtherEvent: () => setShowEventDialog(true),
-    onUndo: () => {}, // Undo functionality removed
+    onUndo: performUndo,
   });
 
   if (loading) {
@@ -1339,6 +1373,17 @@ export default function EnhancedMatchTracker() {
 
         </div>
       </div>
+
+      {/* Undo — positioned to clear both the events summary and the action bar.
+          UndoButton's own bottom-20 would land it on top of the summary. */}
+      <UndoButton
+        canUndo={canUndo}
+        isUndoing={isUndoing}
+        remainingSeconds={remainingSeconds}
+        description={currentAction?.description}
+        onUndo={performUndo}
+        className="bottom-[calc(148px+max(8px,env(safe-area-inset-bottom)))]"
+      />
 
       {/* Live Events Summary - Fixed above action bar */}
       <LiveEventsSummary
