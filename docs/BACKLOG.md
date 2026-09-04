@@ -8,7 +8,7 @@ Known issues and planned work. Newest findings at the top of each section.
 
 ## Bugs
 
-### BUG-004 — Undo was removed from the live match screen `OPEN`
+### BUG-004 — Undo was removed from the live match screen `DONE 4 Sep 2026`
 **Found:** 31 Aug 2026, during the match screen interaction review
 **File:** `src/pages/EnhancedMatchTracker.tsx:703`
 
@@ -16,8 +16,13 @@ Known issues and planned work. Newest findings at the top of each section.
 control does nothing. A coach who mis-taps during play has no way back; the event has
 to be corrected after the match, if it's noticed at all.
 
-Highest value per line of change of anything on this list. Restore before 12 September.
-Relates to UX-002.
+Fixed in PR #61: `useUndoStack`, `UndoButton` and the Ctrl+Z binding were all already
+intact but never wired up — `onUndo` was stubbed at `EnhancedMatchTracker.tsx:703`.
+Undo now deletes only the just-created row by id; the score is derived from
+`match_events`, so it self-corrects. Also fixed two latent bugs found in the
+previously-unused code along the way: the progress bar divided by 30 against a 5s
+window, and the button was a 40px touch target (below the 44px minimum). The undo
+window was raised from 5s to 10s. Relates to UX-002.
 
 ### BUG-003 — Reopen-a-match doesn't reliably return the match to a trackable state `OPEN`
 **Found:** 31 Aug 2026
@@ -26,6 +31,20 @@ the function to reopen a match was introduced some time back, so that match trac
 resume if a user mistakenly ended a match (e.g. ending the entire match vs ending a
 period). This doesn't always work - i.e. the state in which the match is returned to
 doesn't reliably allow match tracking to resume
+
+**Diagnosed 4 Sep 2026:** `reopenMatch()` sets the fixture to `in_progress`, nulls
+`current_period_id`, and leaves `match_periods` untouched. That causes three separate
+problems: (a) no live period — `match_periods` rows keep `is_active=false`, so
+`isMatchRunning` stays false and the clock is dead until a new period is explicitly
+started; (b) controls arrive disabled because `active_tracker_id` is deliberately not
+set on reopen; (c) playing time stays closed, because the `player_time_logs` intervals
+were already finalised when the match ended.
+
+A decision is needed before fixing this: resume the period that was running when the
+match was ended, or always start a fresh one. Estimated ~2-3 hours; do alongside
+UX-007 (`EnhancedMatchTracker.tsx` is already being touched there, so surface the
+resume-vs-fresh-period choice as part of that same pass rather than editing the same
+file twice).
 
 Relates to BUG-001.
 
@@ -53,10 +72,11 @@ live route is `/match-day/:fixtureId`. Any user tapping this control lands on th
 
 Predates the Session 1 cleanup; the route has never matched.
 
-**Before fixing, decide what the control is *for*.** If it's meant to reopen a completed
-match for further tracking, that's a design question, not a typo — reopening a completed
-fixture has implications for `match_state`, the `status` enum, and the materialized report
-views. If it's just a stale link, it's a one-word change.
+**Diagnosed 4 Sep 2026:** the call at `MatchReport.tsx:332` sits inside
+`getBackNavigation()` — it's the "Back to Live Tracking" button, not a reopen control.
+`reopenMatch()`, twelve lines below, already navigates to the correct `/match-day/`
+route. This is a one-word fix, not a design question. Note the practical impact: this
+404s a coach who checks the report screen while the match is still in progress.
 
 **Branch:** `fix/match-report-navigation`
 
@@ -416,6 +436,19 @@ Relates to UX-005 (the 258 hard-coded classes are also the layout-consistency ob
 
 ## UX
 
+### UX-008 — "Restart Match" is a data wipe sitting on the live match screen `OPEN`
+**Found:** 4 Sep 2026
+
+`restart_match()` deletes all `match_events`, `player_time_logs` and `match_periods`
+for the fixture and resets it to `scheduled`. The confirmation dialog is honest about
+what it does — the risk is adjacency, not deception. A coach who mis-taps "End Match"
+during play will find "Restart Match" the most inviting control right next to it on
+screen, and a single confirm away from destroying an irreplaceable match record.
+
+Rename it to something unmistakable (e.g. "Delete Match Data"), or move it off the
+live screen entirely into a less-reachable settings/admin path. Minutes of work either
+way. Relates to BUG-003, UX-002.
+
 ### UX-007 — Match screen rebuild for one-handed touchline use `OPEN`
 **Found:** 31 Aug 2026, from the match screen interaction review
 
@@ -424,6 +457,12 @@ currently requires scrolling to find a player and moving between views to record
 substitution. Planned changes: jersey-number tiles instead of a name list, substitution
 completed on one screen, larger score/clock header, and the event history collapsed into
 a pull-up sheet rather than stacked cards.
+
+**Constraint:** the undo affordance must not be a floating card — this is a
+mobile-first app and floating windows are being removed entirely (UX-006). Attach undo
+to the most recent event row instead, with the countdown rendered as a draining
+underline on that row: larger thumb target, no occlusion of the screen underneath, and
+it generalises cleanly to substitution undo later.
 
 Target: weekend of 5–6 September. Relates to UX-002, UX-005, DEBT-004.
 
@@ -486,6 +525,11 @@ Floating dialogs add to the inconsistent feel in UX-005 and are awkward one-hand
 outdoors (UX-002). Evaluate replacing them with full-screen routes or inline panels.
 This is a design decision that needs making before the layout-consistency work in UX-005,
 since it changes the target.
+
+The undo card shipped with the BUG-004 fix (PR #61) is a worked example of the
+problem this item is about: a floating card sitting over the live match screen. UX-007
+already commits to replacing it with a row-attached affordance instead — treat that as
+the reference pattern when deciding what replaces floating dialogs elsewhere.
 **Blocks:** UX-005.
 
 ---
