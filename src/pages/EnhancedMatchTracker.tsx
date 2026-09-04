@@ -23,7 +23,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Clock, Users, Target, History, ArrowUpDown, RotateCcw, Goal, UserPlus, ChevronDown, ChevronUp } from 'lucide-react';
+import { Clock, Users, Target, History, ArrowUpDown, Trash2, Goal, UserPlus, ChevronDown, ChevronUp } from 'lucide-react';
 import { useRealtimeMatchSync } from '@/hooks/useRealtimeMatchSync';
 import { useWakeLock } from '@/hooks/useWakeLock';
 import { usePlayerTimers } from '@/hooks/usePlayerTimers';
@@ -837,8 +837,10 @@ export default function EnhancedMatchTracker() {
           className="flex items-center justify-center gap-2 min-h-[44px]"
           disabled={!matchTracker?.isActiveTracker}
         >
-          <RotateCcw className="h-4 w-4" />
-          Restart Match
+          {/* Labelled for what it does, not what it is called internally. A coach who
+              has just mis-tapped "End Match" must not read this as a way back. */}
+          <Trash2 className="h-4 w-4" />
+          Delete Match Data
         </Button>
       </div>
 
@@ -1338,13 +1340,13 @@ export default function EnhancedMatchTracker() {
         onComplete={loadMatchData}
       />
 
-      {/* Restart Match Confirmation Dialog */}
+      {/* Delete-match-data confirmation (internally still "restart" — see UX-008) */}
       <AlertDialog open={showRestartConfirm} onOpenChange={setShowRestartConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
-              <RotateCcw className="h-5 w-5 text-destructive" />
-              Restart Match
+              <Trash2 className="h-5 w-5 text-destructive" />
+              Delete all match data?
             </AlertDialogTitle>
             <AlertDialogDescription>
               This action will permanently delete all recorded match data including:
@@ -1364,7 +1366,7 @@ export default function EnhancedMatchTracker() {
               disabled={isRestarting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {isRestarting ? 'Restarting...' : 'Yes, Restart Match'}
+              {isRestarting ? 'Deleting...' : 'Yes, delete everything'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
