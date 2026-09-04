@@ -63,7 +63,7 @@ and added `ON CONFLICT DO NOTHING` to `add_club_creator_as_admin()`. Applied to 
 recorded in production's migration history. Verified on both databases: three triggers
 remain on `clubs`, and both databases list the same three migrations as the repo.
 
-### BUG-001 — Broken navigation in MatchReport `OPEN`
+### BUG-001 — Broken navigation in MatchReport `DONE 4 Sep 2026`
 **Found:** 20 Aug 2026, during orphan-page cleanup
 **File:** `src/pages/MatchReport.tsx:332`
 
@@ -78,7 +78,12 @@ Predates the Session 1 cleanup; the route has never matched.
 route. This is a one-word fix, not a design question. Note the practical impact: this
 404s a coach who checks the report screen while the match is still in progress.
 
-**Branch:** `fix/match-report-navigation`
+Fixed in PR #63: `MatchReport.tsx:332` now points at `/match-day/:fixtureId`, matching
+`reopenMatch()`. Verified on staging — View Report during a live match, then Back to
+Live Tracking, now lands on the match screen instead of the 404. Three other
+`'match-tracker'` references were deliberately left alone: they are navigation-state
+markers matching `state.from` set in `EnhancedMatchTracker.tsx:821`, not paths, and a
+code comment now says so.
 
 ---
 
@@ -259,6 +264,12 @@ Kept open on purpose after ENV-002 (Vercel cutover, DONE 31 Aug 2026): the Lovab
 deployment is retained as a DNS rollback target until 3 September. Disconnect after that.
 **Blocked ENV-002** (now DONE — proceeded ahead, keeping Lovable live as rollback).
 
+**4 Sep 2026:** the rollback window (until 3 September) has now passed, and the Vercel
+deployment is confirmed serving `sidelineassist.club`, so the Lovable deployment is no
+longer needed as a rollback target. Disconnecting is the next action, and it is now the
+priority before the UX-007 rebuild begins, because two tools currently hold write
+access to the same branch.
+
 ### DEBT-008 — Capacitor `appId` is a placeholder `OPEN`
 `capacitor.config.ts` has `appId: 'com.yourorg.sidelinecoach'`. This becomes the permanent
 App Store bundle identifier and **cannot be changed after first submission**. Set before
@@ -290,6 +301,28 @@ path — DEBT-012 is DONE, so this can be picked up directly.
 ---
 
 ## Environments & delivery
+
+### ENV-006 — Report views are created unpopulated and the refresh fails silently `OPEN`
+**Found:** 4 Sep 2026
+
+Completed matches rendered a report on staging but never appeared in the Reports list,
+while production was fine. The Reports page reads four materialized views in the
+`analytics` schema (`mv_completed_matches`, `mv_goal_scorers`, `mv_player_playing_time`,
+`mv_competitions`). The baseline migration creates all four `WITH NO DATA`, and
+`refresh_report_views()` refreshes them with `REFRESH MATERIALIZED VIEW CONCURRENTLY`.
+Postgres refuses `CONCURRENTLY` on a view that has never been populated, and the
+function catches every error with `EXCEPTION WHEN OTHERS THEN RAISE WARNING` — so on
+any freshly built database the refresh fails silently and permanently, with nothing
+surfaced to the user. Production works only because its views were populated during
+the Lovable era. Staging, created 30 August from the baseline, never was.
+
+Unblocked on 4 Sep by running a non-concurrent `REFRESH MATERIALIZED VIEW` on each of
+the four; `CONCURRENTLY` succeeds normally afterwards. Still open as a permanent fix: a
+migration performing that initial non-concurrent refresh, so any database built from
+this repo has working reports — without it a rebuilt production loses Reports
+silently. Also consider whether `refresh_report_views()` should surface failures
+rather than swallow them.
+Relates to ONBOARD-001, ENV-004.
 
 ### ENV-005 — Production and staging use different Supabase key formats `OPEN`
 **Found:** 31 Aug 2026, while splitting Vercel environment variables (ENV-002)
@@ -436,7 +469,29 @@ Relates to UX-005 (the 258 hard-coded classes are also the layout-consistency ob
 
 ## UX
 
-### UX-008 — "Restart Match" is a data wipe sitting on the live match screen `OPEN`
+### UX-009 — Match clock shows seconds but only moves once a minute `OPEN`
+**Found:** 4 Sep 2026, during BUG-001 testing
+**File:** `src/pages/EnhancedMatchTracker.tsx`
+
+`EnhancedMatchTracker.tsx` renders `formatTime(currentMinute * 60)` and
+`formatTime(totalMatchMinute * 60)` into `FixedMatchHeader`. Both inputs are integer
+minutes, so the seconds digits are always `:00` and the display only changes on the
+minute roll-over. The timer itself is correct — `useEnhancedMatchTimer` ticks every
+1000ms from wall-clock timestamps, and second-level values already exist in
+`timerState.currentTime` and `timerState.totalMatchTime` — they are simply never
+passed to the header, because `handleTimerUpdate(minute, totalMinute, periodNumber)`
+carries minutes only.
+
+**IMPORTANT:** do not fix by converting the existing values. `currentMinute` and
+`totalMatchMinute` feed `match_events.minute_in_period` and `total_match_minute`,
+which must stay whole minutes. Seconds must be passed alongside, not instead. Solve in
+the rebuild rather than patching — the screen has three distinct needs (elapsed time
+in the current period, elapsed across the match, whole minutes for event records)
+currently conflated into one pair of numbers.
+
+Estimated ~30-45 min standalone. Relates to UX-007.
+
+### UX-008 — "Restart Match" is a data wipe sitting on the live match screen `DONE 4 Sep 2026`
 **Found:** 4 Sep 2026
 
 `restart_match()` deletes all `match_events`, `player_time_logs` and `match_periods`
@@ -448,6 +503,10 @@ screen, and a single confirm away from destroying an irreplaceable match record.
 Rename it to something unmistakable (e.g. "Delete Match Data"), or move it off the
 live screen entirely into a less-reachable settings/admin path. Minutes of work either
 way. Relates to BUG-003, UX-002.
+
+Fixed in PR #63: relabelled "Delete Match Data" with a bin icon, dialog title "Delete
+all match data?", confirm "Yes, delete everything". The `restart_match` RPC and
+internal identifiers are unchanged, so no migration was needed.
 
 ### UX-007 — Match screen rebuild for one-handed touchline use `OPEN`
 **Found:** 31 Aug 2026, from the match screen interaction review
