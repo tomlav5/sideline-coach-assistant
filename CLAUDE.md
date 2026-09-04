@@ -117,7 +117,12 @@ October project.
 ## Working agreement
 
 - Work on a feature branch, never directly on `main`.
-- One task per session.
+- One reviewable change per branch. A branch does one thing and is mergeable on its own —
+  not "everything I did today". If the change cannot be described in one sentence without
+  using "and", it is probably two branches.
+- Large work is planned as a sequence of those branches, each independently testable and
+  mergeable. An afternoon that runs out should leave merged improvements behind, not a
+  half-finished branch.
 - When a change touches match recording, say explicitly what could go wrong at a live match
   before writing code.
 - Known issues and planned work are tracked in `docs/BACKLOG.md` — consult it before
@@ -127,6 +132,11 @@ October project.
   so every git command, including a read-only-looking `git status`, leaves a stale lock that
   makes GitHub Desktop refuse to commit. Claude writes and edits files; every branch, commit,
   push and merge stays in GitHub Desktop.
+- Test against staging, never production. Confirm the environment banner is blue before
+  testing anything that writes data.
+- Before handing a change back, state plainly which checks were run and which were not.
+  "Typecheck clean, unit suite 16/16, lint unchanged, not tested on a device" is useful.
+  "All good" is not.
   
 ## Backlog maintenance
 
