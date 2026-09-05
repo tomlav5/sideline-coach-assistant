@@ -18,6 +18,22 @@ served — `public/` holds the copies the browser actually loads.
 Preferred logo pairing is Signal Amber on Floodlight Navy — 8.8:1.
 Never set amber on white (2.0:1) or place amber directly against blue (2.9:1).
 
+### Semantic critical
+
+| Token | Hex | Use |
+|---|---|---|
+| `--red` | `#E5484D` | Critical borders and accents |
+| `--red-deep` | `#B4232C` | Critical panel grounds; white text reads at 6.5:1 |
+
+**This is not a second accent.** It must never be used decoratively, for branding, or to
+draw general attention. It appears only when something is about to be lost — the first
+use is the unsubmitted-substitutions state on the match screen (UX-007), where the panel
+turns red after 60 seconds.
+
+Signal Amber remains the action colour everywhere in the app. Notably, when the pending
+panel goes critical the Submit button **stays amber and does not move**: the control a
+coach must hit under pressure should not change beneath their thumb.
+
 ## App icon
 
 `icon-1024.png` is the master. Every size in `public/icons/` is derived from it.
