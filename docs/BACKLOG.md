@@ -570,14 +570,43 @@ Fixed in PR #63: relabelled "Delete Match Data" with a bin icon, dialog title "D
 all match data?", confirm "Yes, delete everything". The `restart_match` RPC and
 internal identifiers are unchanged, so no migration was needed.
 
+### UX-010 — Guard period and match end against unsubmitted substitutions `OPEN`
+**Found:** 5 Sep 2026, while designing the staged substitution model (UX-007)
+
+Staged substitutions do not reach the database until Submit, so a coach who stages a
+change and walks away loses it — and the pitch on screen stops matching the pitch in
+front of them. The pending panel shows a waiting timer and turns critical at 60 seconds,
+but that only nudges.
+
+The guard is what actually prevents the loss: ending a period or ending the match with
+substitutions still pending must stop and ask, offering Submit or Discard. It fires at
+the exact moment the substitution would otherwise vanish. Roughly 15 lines against the
+existing end-period handler.
+
+**Ship in the same branch as the staging model — that model is not safe without it.**
+Relates to UX-007, UX-006.
+
 ### UX-007 — Match screen rebuild for one-handed touchline use `OPEN`
 **Found:** 31 Aug 2026, from the match screen interaction review
 
+**Full design specification: `docs/UX-007-MATCH-SCREEN.md`** — settled 5 September 2026
+against an interactive prototype, covering the live-match risk statement, every locked
+design decision with its reasoning, the palette addition, and the four-branch split.
+Read it before starting any branch.
+
 The live match screen is the only screen that matters under time pressure, and it
 currently requires scrolling to find a player and moving between views to record a
-substitution. Planned changes: jersey-number tiles instead of a name list, substitution
-completed on one screen, larger score/clock header, and the event history collapsed into
-a pull-up sheet rather than stacked cards.
+substitution. Planned changes: player tiles carrying **first name and minutes played**,
+substitution completed on one screen, larger score/clock header, and the event history
+collapsed into a pull-up sheet rather than stacked cards.
+
+Two decisions changed during design and supersede the original note. Tiles carry the
+player's **first name, not a jersey number** — grassroots shirt numbers are unreliable
+week to week, and surnames are kept off a live screen because these are minors.
+Substitutions are **staged rather than committed on tap**: a coach stacks several, peels
+back the newest with undo, and commits the batch with Submit, stamped at submit time
+because a change is often prepared and then held until the referee allows it. Playing
+time does not accrue while a substitution is pending.
 
 **Constraint:** the undo affordance must not be a floating card — this is a
 mobile-first app and floating windows are being removed entirely (UX-006). Attach undo
