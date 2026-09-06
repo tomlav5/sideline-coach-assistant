@@ -158,6 +158,24 @@ period timing (running, paused, ended, unstarted), pause arithmetic, multi-perio
 totals, per-side scoring, and a guard asserting every event_type the app writes is
 permitted by the database constraint.
 
+Match minute convention fixed and pinned on branch `fix/match-minute-convention`:
+`getCurrentMinute` / `getTotalMatchMinute` in `useEnhancedMatchTimer.tsx` derived event
+minutes with `Math.floor(seconds / 60)` (completed minutes), recording a 34:47 goal as
+34'. They now return the minute *in progress* (`floor + 1`) via a new pure helper
+`src/lib/matchMinute.ts`, with `src/lib/matchMinute.test.ts` covering 0:00 / 0:30 /
+0:59 / 1:00 / 34:47 / 45:00 plus the negative/NaN guard (7 tests). The other nine
+`Math.floor(seconds / 60)` call sites (period durations, `usePlayerTimers` elapsed
+time, `formatTime` clock display) are durations and were deliberately left alone;
+comments at each changed function record the TIMESTAMP-vs-DURATION distinction.
+
+Follow-up for the UX-007 / UX-009 rebuild: `EnhancedMatchTracker.tsx` reuses the
+`currentMinute` state for both event timestamps (correctly `floor + 1` now) and
+substitution `player_time_logs.time_off_minute` / `time_on_minute` boundaries
+(lines ~1243, ~1268), which are duration boundaries and now carry the extra minute.
+Effect is bounded at ≤1 min per substitution and largely self-cancelling across the
+off/on pair; no rows dropped. Untangle when the screen's three conflated minute needs
+are separated.
+
 Remaining: RLS enforcement (a parent must not be able to write to `match_events`) and
 the substitution integration path (one `player_time_logs` row closes as another opens).
 Both need a real database rather than mocks, so they follow staging.

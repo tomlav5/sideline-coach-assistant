@@ -1240,7 +1240,9 @@ export default function EnhancedMatchTracker() {
                 await supabase
                   .from('player_time_logs')
                   .update({
-                    time_off_minute: currentMinute,
+                    // DURATION, not timestamp: minutes elapsed in the period at
+                    // the substitution, so a plain floor (see src/lib/matchMinute.ts).
+                    time_off_minute: Math.floor(currentSeconds / 60),
                     is_active: false,
                   })
                   .eq('fixture_id', fixtureId)
@@ -1265,7 +1267,9 @@ export default function EnhancedMatchTracker() {
                       fixture_id: fixtureId,
                       player_id: playerIn,
                       period_id: currentPeriod.id,
-                      time_on_minute: currentMinute,
+                      // DURATION, not timestamp: minutes elapsed in the period at
+                      // the substitution, so a plain floor (see src/lib/matchMinute.ts).
+                      time_on_minute: Math.floor(currentSeconds / 60),
                       is_starter: false,
                       is_active: true,
                     });

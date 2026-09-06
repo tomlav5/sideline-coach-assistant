@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { calculateCurrentPeriodTime, calculateTotalMatchTime, type MatchPeriod } from '@/lib/matchTime';
+import { matchMinuteInProgress } from '@/lib/matchMinute';
 
 interface TimerState {
   currentPeriod?: MatchPeriod;
@@ -469,10 +470,19 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
     
   };
 
-  const getCurrentMinute = () => Math.floor(timerState.currentTime / 60);
-  const getTotalMatchMinute = () => Math.floor(timerState.totalMatchTime / 60);
+  // TIMESTAMP, not duration: the minute the match is currently IN, used for
+  // match_events.minute_in_period. 0:00–0:59 is the 1st minute, so this is
+  // floor + 1 (see matchMinuteInProgress / DEBT-003). Do NOT "align" this with
+  // the floor-only duration maths elsewhere in this file — they are different
+  // quantities.
+  const getCurrentMinute = () => matchMinuteInProgress(timerState.currentTime);
+  // TIMESTAMP, not duration: the whole-match minute currently in progress, used
+  // for match_events.total_match_minute. floor + 1, same convention as above.
+  const getTotalMatchMinute = () => matchMinuteInProgress(timerState.totalMatchTime);
 
   const formatTime = (seconds: number) => {
+    // DURATION: minutes elapsed for the MM:SS clock display. Plain floor — a
+    // + 1 here would show 01:00 at thirty seconds.
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
