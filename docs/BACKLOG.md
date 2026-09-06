@@ -8,6 +8,23 @@ Known issues and planned work. Newest findings at the top of each section.
 
 ## Bugs
 
+### BUG-005 — Event minutes counted elapsed minutes, not the minute in progress `DONE 6 Sep 2026`
+**Found:** 6 Sep 2026
+
+Minutes were derived with `Math.floor(seconds / 60)`, so a goal at 0:30 was recorded as
+0' and one at 34:47 as 34'. There is no minute zero in football: 0:00–0:59 is the 1st
+minute.
+
+Fixed in PR #70 ("fix: count event minutes as the minute in progress, not minutes
+elapsed") via a new `src/lib/matchMinute.ts` helper whose comment sets out the rule — a
+TIMESTAMP is the minute you are in (`floor + 1`), a DURATION is minutes elapsed
+(`floor`). The nine other floor sites are durations and were deliberately left alone. A
+first pass introduced a skew by feeding a timestamp into `time_off_minute` and
+`time_on_minute`, which are durations; both now use a plain floor. Seven boundary tests.
+
+**Note for future readers:** records created before 6 Sep 2026 use the old convention
+and read one minute lower than equivalent records after it.
+
 ### BUG-004 — Undo was removed from the live match screen `DONE 4 Sep 2026`
 **Found:** 31 Aug 2026, during the match screen interaction review
 **File:** `src/pages/EnhancedMatchTracker.tsx:703`
@@ -531,6 +548,39 @@ super admin).
 
 ## Design
 
+### DESIGN-004 — Brand marks are raster with no vector master `OPEN`
+Both the app icon and the favicon are 1024px rasters. That is exactly the App Store's
+minimum, so there is no headroom, and neither can be resharpened or recoloured cleanly.
+The `og-image.png` wordmark is also set in Poppins rather than Archivo. Rework from
+vector in the off-season.
+
+### DESIGN-003 — Club-configurable colour palettes `DEFERRED — post-season`
+Future requirement: a club sets its own colours, so the app can be themed to a club's
+own palette if it is ever offered beyond this club. Not built now, but it constrains how
+the Floodlight rollout is done — every colour must come from a semantically named token
+(`--action-primary`, not `--amber`), never a hard-coded Tailwind class. The 258 existing
+hard-coded classes (DESIGN-002) are the only real obstacle, and removing them is the
+same work as adopting Floodlight.
+Guardrail for when it is built: club colours drive identity (headers, badges, accents)
+only. Functional colours — on-pitch/bench, primary action, destructive — stay fixed or
+are contrast-checked against the ground before being accepted, or a club with pale
+colours gets an unreadable match screen.
+Relates to UX-005 (the 258 hard-coded classes are also the layout-consistency obstacle).
+**Blocked by:** DESIGN-002.
+
+### DESIGN-002 — 258 hard-coded colour classes bypass the design tokens `OPEN`
+`src/index.css` defines a complete shadcn token set, but 258 Tailwind colour utilities
+across the app (116 green, 76 yellow, 66 blue) set colours directly. Until these route
+through semantic tokens, a palette change means a find-and-replace rather than editing
+one file.
+
+**6 Sep 2026:** the Floodlight palette is currently declared locally inside
+`FixedMatchHeader.tsx` and `PlayerTileGrid.tsx` rather than in the shared theme tokens.
+That was deliberate for the UX-007 branches, but it means the eventual token migration
+now has two extra call sites to reconcile, and every further Floodlight component adds
+one.
+**Blocks:** DESIGN-003.
+
 ### DESIGN-001 — Floodlight adopted as the app's direction `DONE 1 Sep 2026`
 Cool light ground (#EEF1F4), deep navy ink (#101724), blue for on-pitch state (#0B5FCC),
 amber for the primary action (#F5A524). Chosen for outdoor legibility — a light ground
@@ -538,24 +588,13 @@ because dark screens become mirrors in daylight — and because blue/amber survi
 common form of colour vision deficiency. Layout validated at real size on a phone: whole
 squad, score, clock, both actions and undo on one screen with no scrolling.
 Dark theme remains available for evening fixtures; it is no longer the default.
-
-### DESIGN-002 — Club-configurable palette `DEFERRED — post-season`
-Future requirement: a club sets its own colours. Not built now, but it constrains how the
-Floodlight rollout is done — every colour must come from a semantically named token
-(--action-primary, not --amber), never a hard-coded Tailwind class. The 258 existing
-hard-coded classes are the only real obstacle, and removing them is the same work as
-adopting Floodlight.
-Guardrail for when it is built: club colours drive identity (headers, badges, accents)
-only. Functional colours — on-pitch/bench, primary action, destructive — stay fixed or
-are contrast-checked against the ground before being accepted, or a club with pale
-colours gets an unreadable match screen.
-Relates to UX-005 (the 258 hard-coded classes are also the layout-consistency obstacle).
+Full spec, contrast pairs and regeneration steps in `docs/brand/BRAND.md`.
 
 ---
 
 ## UX
 
-### UX-009 — Match clock shows seconds but only moves once a minute `OPEN`
+### UX-009 — Match clock shows seconds but only moves once a minute `DONE 6 Sep 2026`
 **Found:** 4 Sep 2026, during BUG-001 testing
 **File:** `src/pages/EnhancedMatchTracker.tsx`
 
@@ -576,6 +615,12 @@ in the current period, elapsed across the match, whole minutes for event records
 currently conflated into one pair of numbers.
 
 Estimated ~30-45 min standalone. Relates to UX-007.
+
+**Fixed in PR #69** ("feat: rebuild the match header in Floodlight and make the clock
+tick"): the header was receiving integer minutes, so the seconds digits were permanently
+`:00`. `handleTimerUpdate` now carries second-level values alongside the minutes rather
+than instead of them — `currentMinute` and `totalMatchMinute` still feed
+`match_events.minute_in_period` and `total_match_minute`, which must stay whole minutes.
 
 ### UX-008 — "Restart Match" is a data wipe sitting on the live match screen `DONE 4 Sep 2026`
 **Found:** 4 Sep 2026
@@ -643,7 +688,7 @@ Target: weekend of 5–6 September. Relates to UX-002, UX-005, DEBT-004.
 **Progress:**
 - Branch 1 (`feat/match-header-clocks`) — header rebuilt in Floodlight, clocks tick
   seconds (UX-009). Merged #69.
-- Branch 2 (`feat/match-player-tiles`) — 6 Sep. Active-player list and substitutes
+- Branch 2 (`feat/match-player-tiles`) — merged #71, 6 Sep 2026. Active-player list and substitutes
   bench replaced with the adaptive tile grid: new `PlayerTileGrid`
   (`src/components/match/PlayerTileGrid.tsx`) with sizing helper `gridSizeForSquad`
   (`src/lib/matchGrid.ts`, unit-tested). First name + minutes only — no surname, no
@@ -653,7 +698,9 @@ Target: weekend of 5–6 September. Relates to UX-002, UX-005, DEBT-004.
   to the component (DESIGN-002). Tap behaviour unchanged — bench tile still opens the
   existing substitution dialog; staging is branch 3. `ActivePlayerCard.tsx` is now
   unused (see DEBT note below).
-- Branches 3 (`feat/match-staged-subs`) and 4 (`feat/match-history-sheet`) — not started.
+- Branch 3 (`feat/match-staged-subs`) — staged substitutions, Submit, and the UX-010
+  unsubmitted-substitution guard — and branch 4 (`feat/match-history-sheet`) — pull-up
+  history sheet and undo relocation — both remain, not started as of 6 Sep 2026.
 
 ### UX-001 — Split the parent view from the coach view `OPEN`
 Currently one interface with permissions applied. They are different design problems:
@@ -723,31 +770,40 @@ the reference pattern when deciding what replaces floating dialogs elsewhere.
 
 ---
 
-## Design
+## Reporting & analytics
 
-### DESIGN-004 — Brand marks are raster with no vector master `OPEN`
-Both the app icon and the favicon are 1024px rasters. That is exactly the App Store's
-minimum, so there is no headroom, and neither can be resharpened or recoloured cleanly.
-The `og-image.png` wordmark is also set in Poppins rather than Archivo. Rework from
-vector in the off-season.
+### REPORT-001 — Fixtures have no season, so reports cannot be scoped to one `OPEN`
+**Found:** 6 Sep 2026
 
-### DESIGN-003 — Club-configurable colour palettes `DEFERRED`
-So the app can be themed to a club's own colours if it's ever offered beyond this club.
-Requires semantic token names (`--action-primary`, not `--amber`) throughout.
-**Blocked by:** DESIGN-002.
+Nothing in the schema knows about seasons; the word does not appear in the baseline.
+`analytics.mv_goal_scorers` aggregates every completed fixture for all time, grouped
+only by player and club with no date filter, and `mv_player_playing_time` is the same
+shape. Once this season has a few matches, top scorers and playing time silently blend
+2025/26 with 2026/27 with no way to separate them.
 
-### DESIGN-002 — 258 hard-coded colour classes bypass the design tokens `OPEN`
-`src/index.css` defines a complete shadcn token set, but 258 Tailwind colour utilities
-across the app (116 green, 76 yellow, 66 blue) set colours directly. Until these route
-through semantic tokens, a palette change means a find-and-replace rather than editing
-one file.
-**Blocks:** DESIGN-003.
+Deriving the season from `scheduled_date` is not sufficient on its own: off-season
+tournaments and summer friendlies would be misfiled, and the user needs to be able to
+choose. Split into capture and reporting:
 
-### DESIGN-001 — Floodlight palette adopted `DONE 1 Sep 2026`
-Navy `#101724`, Signal Amber `#F5A524`, Pitch Blue `#0B5FCC`, with Paper/Card/Slate/Edge
-neutrals. Chosen for outdoor legibility over the previous dark green. Preferred pairing
-is amber on navy (8.8:1). Full spec, contrast pairs and regeneration steps in
-`docs/brand/BRAND.md`.
+- **Capture (this item, time-sensitive)** — fixtures carry a season, defaulted from the
+  date on creation and editable by the user, so every fixture is classified correctly
+  from the first match of the season rather than backfilled later. ~45–60 min. Open
+  decision: a plain text field on `fixtures` (cheapest, but typos fragment the data and
+  it would likely be rebuilt as a table later) versus a minimal `seasons` table scoped
+  to club (`id`, `club_id`, `name`, start/end dates, `current` flag) with a `season_id`
+  on `fixtures`. The table is the better shape if the app is ever offered to other clubs
+  or other sports.
+- **Reporting** — tracked as REPORT-002.
+
+Relates to REPORT-002, ENV-006.
+
+### REPORT-002 — Season selector on Reports `OPEN`
+**Found:** 6 Sep 2026 — deferrable past 12 September.
+
+Add the season dimension to the analytics matviews' `GROUP BY` and a season selector on
+the Reports page, defaulting to the current season. ~2–3 hours, mostly the matview
+migration and re-verifying the views still populate afterwards (see ENV-006).
+**Blocked by:** REPORT-001.
 
 ---
 
