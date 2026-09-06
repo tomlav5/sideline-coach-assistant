@@ -13,7 +13,15 @@ import { useToast } from '@/hooks/use-toast';
 
 interface EnhancedMatchControlsProps {
   fixtureId: string;
-  onTimerUpdate?: (currentMinute: number, totalMinute: number, periodNumber: number) => void;
+  // currentSeconds/totalSeconds are the second-level values behind currentMinute/totalMinute —
+  // for display only (UX-009). Never derive minute_in_period/total_match_minute from them.
+  onTimerUpdate?: (
+    currentMinute: number,
+    totalMinute: number,
+    periodNumber: number,
+    currentSeconds: number,
+    totalSeconds: number
+  ) => void;
   forceRefresh?: boolean;
 }
 
@@ -35,7 +43,13 @@ export function EnhancedMatchControls({ fixtureId, onTimerUpdate, forceRefresh }
     fixtureId,
     onSaveState: () => {
       const currentPeriodNumber = timerState.currentPeriod?.period_number || 0;
-      onTimerUpdate?.(getCurrentMinute(), getTotalMatchMinute(), currentPeriodNumber);
+      onTimerUpdate?.(
+        getCurrentMinute(),
+        getTotalMatchMinute(),
+        currentPeriodNumber,
+        timerState.currentTime,
+        timerState.totalMatchTime
+      );
     }
   });
   const { toast } = useToast();
