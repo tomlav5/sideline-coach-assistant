@@ -93,6 +93,10 @@ export default function EnhancedMatchTracker() {
   const [isRestarting, setIsRestarting] = useState(false);
   const [currentMinute, setCurrentMinute] = useState(0);
   const [totalMatchMinute, setTotalMatchMinute] = useState(0);
+  // Second-level counterparts of currentMinute/totalMatchMinute, display only (UX-009).
+  // currentMinute/totalMatchMinute remain the whole-minute values written to match_events.
+  const [currentSeconds, setCurrentSeconds] = useState(0);
+  const [totalSeconds, setTotalSeconds] = useState(0);
   const [currentPeriodNumber, setCurrentPeriodNumber] = useState(0);
   const [loading, setLoading] = useState(true);
   
@@ -485,10 +489,18 @@ export default function EnhancedMatchTracker() {
     }
   };
 
-  const handleTimerUpdate = async (minute: number, totalMinute: number, periodNumber: number) => {
+  const handleTimerUpdate = async (
+    minute: number,
+    totalMinute: number,
+    periodNumber: number,
+    seconds: number,
+    totalMatchSeconds: number
+  ) => {
     setCurrentMinute(minute);
     setTotalMatchMinute(totalMinute);
     setCurrentPeriodNumber(periodNumber);
+    setCurrentSeconds(seconds);
+    setTotalSeconds(totalMatchSeconds);
 
     // Removed per-second DB writes to player_time_logs. We now only write on transitions:
     // - New period start initializes starters at time_on=0 in useEffect on period change
@@ -763,8 +775,8 @@ export default function EnhancedMatchTracker() {
         opponentName={fixture.opponent_name || 'Opponent'}
         ourScore={ourGoals}
         opponentScore={opponentGoals}
-        currentTime={formatTime(currentMinute * 60)}
-        totalTime={formatTime(totalMatchMinute * 60)}
+        currentTime={formatTime(currentSeconds)}
+        totalTime={formatTime(totalSeconds)}
         periodNumber={currentPeriodNumber}
         matchStatus={fixture.status || 'scheduled'}
       />

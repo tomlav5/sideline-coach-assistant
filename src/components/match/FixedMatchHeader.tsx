@@ -1,5 +1,3 @@
-import { Badge } from '@/components/ui/badge';
-import { Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface FixedMatchHeaderProps {
@@ -13,6 +11,16 @@ interface FixedMatchHeaderProps {
   matchStatus: string;
   className?: string;
 }
+
+// Floodlight — see docs/brand/BRAND.md. Scoped to this header rather than the shared
+// shadcn theme tokens, since the rest of the app hasn't adopted the palette yet.
+const FLOODLIGHT = {
+  navy: '#101724',
+  ink: '#EEF1F4',
+  dim: '#8D9AAC',
+  amber: '#F5A524',
+  chipBg: 'rgba(238, 241, 244, 0.12)',
+};
 
 export function FixedMatchHeader({
   teamName,
@@ -29,55 +37,84 @@ export function FixedMatchHeader({
   const isPaused = matchStatus === 'paused';
 
   return (
-    <div className={cn(
-      "sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60",
-      className
-    )}>
-      <div className="container flex h-16 items-center justify-between px-4">
-        {/* Score Display */}
-        <div className="flex items-center gap-4 flex-1">
-          {/* Our Team */}
-          <div className="flex flex-col items-center min-w-0">
-            <span className="text-xs text-muted-foreground truncate max-w-[80px]">{teamName}</span>
-            <span className="text-2xl font-bold tabular-nums">{ourScore}</span>
+    <div
+      className={cn('sticky top-0 z-40 w-full', className)}
+      style={{ backgroundColor: FLOODLIGHT.navy, color: FLOODLIGHT.ink }}
+    >
+      <div className="container px-4 pb-[11px] pt-[13px]">
+        {/* Team names */}
+        <div className="flex items-baseline justify-between gap-2.5">
+          <span
+            className="min-w-0 truncate text-[10.5px] font-bold uppercase tracking-[0.12em]"
+            style={{ color: FLOODLIGHT.dim }}
+          >
+            {teamName}
+          </span>
+          <span
+            className="min-w-0 truncate text-right text-[10.5px] font-bold uppercase tracking-[0.12em]"
+            style={{ color: FLOODLIGHT.dim }}
+          >
+            {opponentName}
+          </span>
+        </div>
+
+        {/* Score + clocks */}
+        <div className="mt-0.5 flex items-center justify-between">
+          <div
+            className="font-mono text-[2.9rem] font-semibold leading-none tracking-[-0.02em]"
+            style={{ fontVariantNumeric: 'tabular-nums' }}
+          >
+            {ourScore}–{opponentScore}
           </div>
 
-          {/* Separator */}
-          <div className="flex flex-col items-center">
-            <span className="text-xl font-bold text-muted-foreground">-</span>
-          </div>
-
-          {/* Opponent */}
-          <div className="flex flex-col items-center min-w-0">
-            <span className="text-xs text-muted-foreground truncate max-w-[80px]">{opponentName}</span>
-            <span className="text-2xl font-bold tabular-nums">{opponentScore}</span>
+          <div className="text-right">
+            <div
+              className="font-mono text-[1.85rem] font-semibold leading-none"
+              style={{ fontVariantNumeric: 'tabular-nums' }}
+            >
+              {currentTime}
+            </div>
+            <div
+              className="mt-[3px] font-mono text-[10.5px]"
+              style={{ color: FLOODLIGHT.dim, fontVariantNumeric: 'tabular-nums' }}
+            >
+              match {totalTime}
+            </div>
           </div>
         </div>
 
-        {/* Timer Display */}
-        <div className="flex flex-col items-end gap-1 flex-1">
-          <div className="flex items-center gap-2">
-            <Clock className="h-4 w-4 text-muted-foreground" />
-            <span className="text-xl font-mono font-bold tabular-nums">{currentTime}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            {periodNumber > 0 && (
-              <Badge variant="outline" className="text-xs">
-                P{periodNumber}
-              </Badge>
-            )}
-            {isLive && (
-              <div className="flex items-center gap-1">
-                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                <span className="text-xs font-medium text-red-600 dark:text-red-400">LIVE</span>
-              </div>
-            )}
-            {isPaused && (
-              <Badge variant="secondary" className="text-xs">
-                PAUSED
-              </Badge>
-            )}
-          </div>
+        {/* Period chip + live/paused status */}
+        <div className="mt-[7px] flex items-center gap-2">
+          {periodNumber > 0 && (
+            <span
+              className="inline-block rounded-[3px] px-[9px] py-1 text-[9.5px] font-bold uppercase tracking-[0.14em]"
+              style={{ backgroundColor: FLOODLIGHT.chipBg }}
+            >
+              P{periodNumber}
+            </span>
+          )}
+          {isLive && (
+            <span className="flex items-center gap-1">
+              <span
+                className="h-1.5 w-1.5 animate-pulse rounded-full"
+                style={{ backgroundColor: FLOODLIGHT.amber }}
+              />
+              <span
+                className="text-[9.5px] font-bold uppercase tracking-[0.14em]"
+                style={{ color: FLOODLIGHT.dim }}
+              >
+                Live
+              </span>
+            </span>
+          )}
+          {isPaused && (
+            <span
+              className="text-[9.5px] font-bold uppercase tracking-[0.14em]"
+              style={{ color: FLOODLIGHT.dim }}
+            >
+              Paused
+            </span>
+          )}
         </div>
       </div>
     </div>
