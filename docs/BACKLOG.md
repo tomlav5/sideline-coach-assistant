@@ -298,6 +298,12 @@ Not imported anywhere. Its event_type union declares six values the database con
 has never permitted (throw_in, corner, free_kick, penalty, goal_kick, substitution),
 which is how it drifted unnoticed. Delete, same as the Session 1 orphans.
 
+### DEBT-021 — `ActivePlayerCard.tsx` is orphaned `OPEN`
+**Found:** 6 Sep 2026, during UX-007 branch 2. `src/components/match/ActivePlayerCard.tsx`
+was the on-field player row on the match screen; branch 2 replaced it with
+`PlayerTileGrid` and nothing else imports it. Delete once branch 2 is merged (kept for
+now only so the branch is a clean single-purpose diff).
+
 ### DEBT-007 — Lovable bidirectional sync still active `DONE 4 Sep 2026`
 Pushes to this repo sync to Lovable and vice versa. Now that development happens through
 Claude Code, two tools have write access to the same branch with no awareness of each
@@ -633,6 +639,21 @@ underline on that row: larger thumb target, no occlusion of the screen underneat
 it generalises cleanly to substitution undo later.
 
 Target: weekend of 5–6 September. Relates to UX-002, UX-005, DEBT-004.
+
+**Progress:**
+- Branch 1 (`feat/match-header-clocks`) — header rebuilt in Floodlight, clocks tick
+  seconds (UX-009). Merged #69.
+- Branch 2 (`feat/match-player-tiles`) — 6 Sep. Active-player list and substitutes
+  bench replaced with the adaptive tile grid: new `PlayerTileGrid`
+  (`src/components/match/PlayerTileGrid.tsx`) with sizing helper `gridSizeForSquad`
+  (`src/lib/matchGrid.ts`, unit-tested). First name + minutes only — no surname, no
+  shirt number. Columns/name size derived from combined squad count (2col/1.2rem ≤4,
+  3col/1.05rem 5–9, 3col/0.95rem ≥10). Pitch tiles Pitch Blue on white text, bench
+  tiles Card white with Edge border, same 80px-min footprint. Palette scoped locally
+  to the component (DESIGN-002). Tap behaviour unchanged — bench tile still opens the
+  existing substitution dialog; staging is branch 3. `ActivePlayerCard.tsx` is now
+  unused (see DEBT note below).
+- Branches 3 (`feat/match-staged-subs`) and 4 (`feat/match-history-sheet`) — not started.
 
 ### UX-001 — Split the parent view from the coach view `OPEN`
 Currently one interface with permissions applied. They are different design problems:

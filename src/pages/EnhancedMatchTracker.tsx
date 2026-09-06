@@ -23,7 +23,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Clock, Users, Target, History, ArrowUpDown, Trash2, Goal, UserPlus, ChevronDown, ChevronUp } from 'lucide-react';
+import { History, Trash2, Goal, UserPlus } from 'lucide-react';
 import { useRealtimeMatchSync } from '@/hooks/useRealtimeMatchSync';
 import { useWakeLock } from '@/hooks/useWakeLock';
 import { usePlayerTimers } from '@/hooks/usePlayerTimers';
@@ -33,7 +33,7 @@ import { calculateScore } from '@/lib/matchScore';
 import { useOptimisticUpdate } from '@/hooks/useOptimisticUpdate';
 import { useSmartSuggestions } from '@/hooks/useSmartSuggestions';
 import { useMatchTrackerShortcuts } from '@/hooks/useKeyboardShortcuts';
-import { ActivePlayerCard } from '@/components/match/ActivePlayerCard';
+import { PlayerTileGrid } from '@/components/match/PlayerTileGrid';
 import { SmartSuggestionBadge } from '@/components/match/SmartSuggestionBadge';
 import { MatchTrackerSkeleton } from '@/components/ui/skeleton-loader';
 import { LiveEventsSummary } from '@/components/match/LiveEventsSummary';
@@ -112,8 +112,6 @@ export default function EnhancedMatchTracker() {
   // Edit squad state
   const [editSquadOpen, setEditSquadOpen] = useState(false);
   
-  // Substitutes bench visibility
-  const [showSubstitutes, setShowSubstitutes] = useState(true);
   // Local log of substitutions for UI only (not persisted as match_events)
   const [substitutions, setSubstitutions] = useState<{ outId: string; inId: string; minute: number; total: number }[]>([]);
   
@@ -511,7 +509,7 @@ export default function EnhancedMatchTracker() {
 
   // Real-time player timers
   const isMatchRunning = fixture?.status === 'in_progress' && currentPeriod?.is_active;
-  const { getPlayerTime, isPlayerActive, reloadTimes } = usePlayerTimers({
+  const { getPlayerTime, reloadTimes } = usePlayerTimers({
     fixtureId: fixtureId!,
     currentPeriodId: currentPeriod?.id || null,
     isTimerRunning: isMatchRunning || false,
@@ -856,82 +854,20 @@ export default function EnhancedMatchTracker() {
         </Button>
       </div>
 
-      {/* Active Players with Real-Time Timers */}
-      {activePlayersList.length > 0 && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Users className="h-5 w-5 text-green-600" />
-              Players On Field ({activePlayersList.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {activePlayersList.map((player) => (
-                <ActivePlayerCard
-                  key={player.id}
-                  player={player}
-                  playingMinutes={getPlayerTime(player.id)}
-                  isActive={isPlayerActive(player.id)}
-                />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Substitutes Bench */}
-      {substitutePlayersList.length > 0 && (
-        <Card>
-          <CardHeader className="pb-3 cursor-pointer" onClick={() => setShowSubstitutes(!showSubstitutes)}>
-            <CardTitle className="text-lg flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-blue-600" />
-                Substitutes Bench ({substitutePlayersList.length})
-              </div>
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                {showSubstitutes ? (
-                  <ChevronUp className="h-4 w-4" />
-                ) : (
-                  <ChevronDown className="h-4 w-4" />
-                )}
-              </Button>
-            </CardTitle>
-          </CardHeader>
-          {showSubstitutes && (
-            <CardContent className="pt-0">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {substitutePlayersList.map((player) => (
-                  <div
-                    key={player.id}
-                    className="flex items-center gap-3 p-3 border rounded-lg bg-blue-50 dark:bg-blue-950/20 hover:bg-blue-100 dark:hover:bg-blue-950/30 cursor-pointer transition-colors"
-                    onClick={async () => {
-                      await refreshPlayerStatusLists();
-                      setPreSelectedSubIn(player.id);
-                      setSubDialogOpen(true);
-                    }}
-                  >
-                    {player.jersey_number && (
-                      <Badge variant="outline" className="shrink-0 border-blue-600 text-blue-600">
-                        #{player.jersey_number}
-                      </Badge>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium truncate">
-                        {player.first_name} {player.last_name}
-                      </div>
-                      <div className="text-xs text-muted-foreground">Available</div>
-                    </div>
-                    <ArrowUpDown className="h-4 w-4 text-muted-foreground shrink-0" />
-                  </div>
-                ))}
-              </div>
-              <div className="mt-3 text-xs text-muted-foreground text-center">
-                Click a substitute to begin substitution
-              </div>
-            </CardContent>
-          )}
-        </Card>
+      {/* Player tiles — first name and minutes played only. Adaptive grid sized from
+          the squad count (UX-007 branch 2). Substitution behaviour is unchanged here:
+          a bench tile still opens the existing substitution dialog; staging is branch 3. */}
+      {(activePlayersList.length > 0 || substitutePlayersList.length > 0) && (
+        <PlayerTileGrid
+          activePlayers={activePlayersList}
+          benchPlayers={substitutePlayersList}
+          getPlayerTime={getPlayerTime}
+          onBenchTileTap={async (player) => {
+            await refreshPlayerStatusLists();
+            setPreSelectedSubIn(player.id);
+            setSubDialogOpen(true);
+          }}
+        />
       )}
 
       {/* Recent Substitutions (UI only) */}
