@@ -110,6 +110,27 @@ describe('summarisePlayerMinutes', () => {
     expect(Object.values(summary).some((s) => s.isActiveNow)).toBe(false);
   });
 
+  it('treats every interval as closed when currentPeriodId is null (between periods, BUG-012)', () => {
+    const summary = summarisePlayerMinutes(
+      [
+        // p1: a banked first-half interval plus an interval still open from the
+        // period that just ended (close-writes not landed yet).
+        log({ player_id: 'p1', time_on_minute: 0, time_off_minute: 20, is_active: false, period_id: P1 }),
+        log({ player_id: 'p1', time_on_minute: 20, is_active: true, period_id: P1 }),
+        // p2: a plain closed interval.
+        log({ player_id: 'p2', time_on_minute: 5, time_off_minute: 30, is_active: false, period_id: P1 }),
+      ],
+      null,
+    );
+    expect(summary.p1).toEqual({
+      closedMinutes: 20,
+      openOnMinute: null,
+      isActiveNow: false,
+    });
+    expect(summary.p2.closedMinutes).toBe(25);
+    expect(Object.values(summary).some((s) => s.isActiveNow)).toBe(false);
+  });
+
   it('takes the earliest on-minute if two open intervals exist in the current period', () => {
     const summary = summarisePlayerMinutes(
       [

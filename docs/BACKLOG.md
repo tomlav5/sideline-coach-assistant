@@ -8,6 +8,87 @@ Known issues and planned work. Newest findings at the top of each section.
 
 ## Bugs
 
+### BUG-012 — Ending a period blanks every player tile to 0m `DONE`
+**Found:** 7 Sep 2026, live-tracking test. Fixed 7 Sep 2026 on
+`fix/bug-012-tile-reset-between-periods` (PR TBD).
+
+When a period ends, every player tile drops to `0m` — except a player whose spell had
+already been closed by a substitution during that period, whose tile keeps its total. The
+database and the Match Report are correct throughout; this is a display-only regression in
+the live tiles.
+
+**Cause.** `useEnhancedMatchTimer` sets its clock to 0 the moment a period ends, so the
+`currentPeriodSeconds` the tiles derive from drops to zero. `usePlayerTimers` does not
+reload at that instant: its load was keyed only on `currentPeriodId` (unchanged — the next
+period has not started) and its poll runs only while `isTimerRunning` (now false). So the
+hook keeps the summary built during the period, in which every on-pitch player has an OPEN
+interval and no closed one, and `playerMinutesPlayed` folds that against a zero clock →
+`0m`. A player subbed off earlier already has a *closed* interval in the summary from the
+reload that followed that substitution, so their `closedMinutes` total survives — which is
+why exactly those tiles were unaffected.
+
+**Fix** — `src/hooks/usePlayerTimers.tsx` only:
+
+1. The effect that calls `loadPlayerTimes` now also depends on `isTimerRunning`, so it
+   reloads when the timer stops as well as when it starts — picking up the closed
+   intervals written by the period-end handler.
+2. The period-end handler closes those logs asynchronously, so the immediate reload can
+   read before the writes land (the same race the fast poll covers at kick-off and
+   half-time). After a stop, one delayed re-check (~2s) is scheduled as well, cleared on
+   unmount and on any further state change.
+
+The existing fast/slow poll and `needsFastPoll` phase logic are unchanged — they still
+cover the kick-off and half-time starter-row races. `src/lib/playerMinutes.ts` is
+unchanged: its arithmetic was correct, it was being handed a stale summary and a zeroed
+clock.
+
+**Checks:** `npx tsc --noEmit -p tsconfig.app.json` clean; `npm run lint` unchanged; `npm
+test` — see summary; `npm run build` — see summary. No new `playerMinutes.test.ts` case:
+this is a reload-timing bug with no new pure input to `playerMinutes.ts`, and the
+zeroed-clock arithmetic is already covered by the BUG-007 half-time test. Not tested on a
+device.
+
+**Update — 7 Sep 2026: the fix above did not work, confirmed on staging.** The
+reload-on-`isTimerRunning`-change was correct, but the props feeding `usePlayerTimers` from
+`EnhancedMatchTracker.tsx` could never carry the change:
+
+- `isTimerRunning` was `timerRunning || isMatchRunning || false`, and `isMatchRunning`
+  derived from `fixture` / `periods` — state loaded once on mount and never refreshed. When
+  a period ends the DB row goes `is_active: false` but the page's copy still says `true`, so
+  `isMatchRunning` stayed `true`, `isTimerRunning` never flipped, and the new effect never
+  re-fired.
+- `currentPeriodId` was `timerPeriodId ?? currentPeriod?.id ?? null`. On period end
+  `timerPeriodId` becomes `null`, and `??` fell straight through to the stale mount-time
+  period id — so `currentPeriodId` didn't change either and `loadPlayerTimes`' identity was
+  unchanged.
+
+Both fallbacks were left over from the DEFECT 1 fix, when the live timer values weren't yet
+available; they only ever pinned the hook in the wrong state.
+
+**Real fix:**
+
+1. `src/pages/EnhancedMatchTracker.tsx` — the timer is now the sole source of truth for
+   both props. `isTimerRunning` is passed as `timerRunning` alone; `isMatchRunning` is
+   removed (nothing else used it). `timerPeriodId` is typed `string | null | undefined` and
+   initialised `undefined`; the prop is
+   `timerPeriodId !== undefined ? timerPeriodId : (currentPeriod?.id ?? null)`, so a
+   reported `null` reaches the hook as `null` while the mount-time fallback still covers the
+   window before the timer's first update. DEFECT 1 cannot regress: while a period runs the
+   timer reports `isRunning: true` every tick, so `timerRunning` is true within ~1s of mount
+   and the load effect re-fires on that change.
+2. `src/hooks/usePlayerTimers.tsx` — `loadPlayerTimes` now handles a `null`
+   `currentPeriodId` (the legitimate between-periods state) instead of early-returning: it
+   skips the `match_periods` kick-off check, still reads all `player_time_logs` for the
+   fixture, and folds with `currentPeriodId = null` so every interval is closed — correct
+   fixture totals, nothing accruing. The transient-read-error guard, the BUG-012
+   reload-on-stop + ~2s re-check, and the fast/slow poll are all unchanged.
+3. `src/lib/playerMinutes.test.ts` — added a `summarisePlayerMinutes` case for
+   `currentPeriodId = null`: every interval closed, totals summed, no player `isActiveNow`.
+
+**Checks (real fix):** `npx tsc --noEmit -p tsconfig.app.json`, `npm run lint`, `npm test`,
+`npm run build` — see session summary for which ran and their results. Not tested on a
+device.
+
 ### BUG-011 — Fallback time-log inserts will over-count once the constraint is dropped `DONE`
 **Found:** 7 Sep 2026, review of `fix/bug-009-prepare-rolling-subs`.
 
