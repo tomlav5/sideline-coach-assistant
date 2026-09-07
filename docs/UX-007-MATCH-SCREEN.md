@@ -198,8 +198,18 @@ staging model arrives in branch 3.
 `feat/match-staged-subs`
 
 The pending stack, peel-back undo, Submit, the waiting timer and critical state, and the
-**End period / End match guard**. Substitution undo reverses `player_time_logs` and
-`match_events` writes for the pair — capture prior state before mutating.
+**End period / End match guard**.
+
+**Scope narrowed 6 September 2026.** Undo operates on the **pending stack only** — it pops
+the newest staged pair before anything has been written. Reversing an already-*submitted*
+substitution is deliberately out of scope: the staging model catches the mis-tap before it
+reaches the database, which is the case that actually happens on a touchline, and undoing a
+committed swap across `player_time_logs` and `match_events` is both the riskiest code in
+this rebuild and redundant once staging exists. Correcting a submitted substitution belongs
+in the post-match editor, not on the touchline.
+
+Submit reuses the existing write sequence in the substitution dialog's `onConfirm` handler,
+which already accepts an array of pairs — it is moved or extracted, not reimplemented.
 
 The largest and riskiest branch. Read the risk section above again before starting.
 

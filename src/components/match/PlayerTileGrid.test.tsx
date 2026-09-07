@@ -58,7 +58,7 @@ describe('PlayerTileGrid', () => {
     expect(grid.style.gridTemplateColumns).toBe('repeat(2, minmax(0, 1fr))');
   });
 
-  it('calls onBenchTileTap for a bench tile, and pitch tiles are not buttons', () => {
+  it('calls onBenchTileTap for a bench tile, and pitch tiles are not buttons without a pitch handler', () => {
     const onBenchTileTap = vi.fn();
     render(
       <PlayerTileGrid
@@ -77,6 +77,56 @@ describe('PlayerTileGrid', () => {
 
     const pitchSection = screen.getByText('On field (1)').parentElement as HTMLElement;
     expect(within(pitchSection).queryByRole('button')).toBeNull();
+  });
+
+  it('makes pitch tiles tappable and marks the selected one pressed (UX-007 branch 3)', () => {
+    const onPitchTileTap = vi.fn();
+    render(
+      <PlayerTileGrid
+        activePlayers={mk(2, 'a')}
+        benchPlayers={mk(1, 'b')}
+        getPlayerTime={() => 0}
+        onPitchTileTap={onPitchTileTap}
+        selectedId="a1"
+      />
+    );
+
+    const pitchSection = screen.getByText('On field (2)').parentElement as HTMLElement;
+    const buttons = within(pitchSection).getAllByRole('button');
+    expect(buttons).toHaveLength(2);
+
+    buttons[0].click();
+    expect(onPitchTileTap).toHaveBeenCalledWith(expect.objectContaining({ id: 'a0' }));
+
+    // a1 is selected -> aria-pressed.
+    expect(within(pitchSection).getByText('aName1').closest('button')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+  });
+
+  it('locks a pending player out of selection and shows a PENDING tag instead of minutes', () => {
+    const onPitchTileTap = vi.fn();
+    const onBenchTileTap = vi.fn();
+    render(
+      <PlayerTileGrid
+        activePlayers={mk(2, 'a')}
+        benchPlayers={mk(1, 'b')}
+        getPlayerTime={() => 12}
+        onPitchTileTap={onPitchTileTap}
+        onBenchTileTap={onBenchTileTap}
+        pendingIds={new Set(['a0'])}
+      />
+    );
+
+    // The pending tile is not a button and carries the PENDING tag.
+    const pendingTile = screen.getByText('aName0').closest('div') as HTMLElement;
+    expect(pendingTile.tagName).toBe('DIV');
+    expect(within(pendingTile).getByText('Pending')).toBeInTheDocument();
+
+    // Only the non-pending pitch player (a1) is still tappable.
+    const pitchSection = screen.getByText('On field (2)').parentElement as HTMLElement;
+    expect(within(pitchSection).getAllByRole('button')).toHaveLength(1);
   });
 
   it('renders no bench section when the bench is empty', () => {

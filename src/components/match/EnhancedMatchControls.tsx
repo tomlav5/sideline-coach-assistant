@@ -15,17 +15,38 @@ interface EnhancedMatchControlsProps {
   fixtureId: string;
   // currentSeconds/totalSeconds are the second-level values behind currentMinute/totalMinute —
   // for display only (UX-009). Never derive minute_in_period/total_match_minute from them.
+  // periodId/isRunning are the live period identity and running flag straight from
+  // useEnhancedMatchTimer — the parent's own periods/fixture state is only loaded on
+  // mount, so it needs these to drive per-player timers while a period runs (DEFECT 1).
   onTimerUpdate?: (
     currentMinute: number,
     totalMinute: number,
     periodNumber: number,
     currentSeconds: number,
-    totalSeconds: number
+    totalSeconds: number,
+    periodId?: string | null,
+    isRunning?: boolean
   ) => void;
   forceRefresh?: boolean;
+  // UX-010 guard: ending a period or the match with staged substitutions still
+  // pending would silently lose them and leave the on-screen pitch out of sync
+  // with the real one. The parent owns the pending stack; it passes the count and
+  // the two ways out (submit or discard) rather than lifting the whole stack here.
+  pendingSubCount?: number;
+  /** Commit the pending substitutions. Rejects if the batch did not fully commit. */
+  onSubmitPendingSubs?: () => Promise<void>;
+  /** Drop the pending substitutions. */
+  onDiscardPendingSubs?: () => void;
 }
 
-export function EnhancedMatchControls({ fixtureId, onTimerUpdate, forceRefresh }: EnhancedMatchControlsProps) {
+export function EnhancedMatchControls({
+  fixtureId,
+  onTimerUpdate,
+  forceRefresh,
+  pendingSubCount = 0,
+  onSubmitPendingSubs,
+  onDiscardPendingSubs,
+}: EnhancedMatchControlsProps) {
 
   const {
     timerState,
@@ -48,7 +69,9 @@ export function EnhancedMatchControls({ fixtureId, onTimerUpdate, forceRefresh }
         getTotalMatchMinute(),
         currentPeriodNumber,
         timerState.currentTime,
-        timerState.totalMatchTime
+        timerState.totalMatchTime,
+        timerState.currentPeriod?.id ?? null,
+        timerState.isRunning
       );
     }
   });
@@ -93,10 +116,62 @@ export function EnhancedMatchControls({ fixtureId, onTimerUpdate, forceRefresh }
   
   // Check if penalty shootout can be started
   const hasPenaltyShootout = timerState.periods.some(p => p.period_type === 'penalties');
-  const canStartPenaltyShootout = timerState.periods.length > 0 && 
-                                   !hasPenaltyShootout && 
+  const canStartPenaltyShootout = timerState.periods.length > 0 &&
+                                   !hasPenaltyShootout &&
                                    timerState.matchStatus !== 'completed' &&
                                    (!timerState.currentPeriod || timerState.currentPeriod.actual_end_time);
+
+  // UX-010 unsubmitted-substitution guard. When pending subs exist, "End Period" /
+  // "End Match" cannot run straight through — they open this dialog first, which
+  // forces an explicit Submit or Discard. It is deliberately not dismissible into
+  // an "end anyway": Cancel just keeps tracking.
+  const [subGuard, setSubGuard] = useState<null | 'period' | 'match'>(null);
+  const [guardBusy, setGuardBusy] = useState(false);
+
+  const requestEndPeriod = () => {
+    if (pendingSubCount > 0) {
+      setSubGuard('period');
+      return;
+    }
+    endCurrentPeriod();
+  };
+
+  const requestEndMatch = () => {
+    if (pendingSubCount > 0) {
+      setSubGuard('match');
+      return;
+    }
+    endMatch();
+  };
+
+  const runGuard = async (mode: 'submit' | 'discard') => {
+    const target = subGuard;
+    if (!target) return;
+    setGuardBusy(true);
+    try {
+      if (mode === 'submit') {
+        // Throws if the batch did not fully commit — in that case we stay on the
+        // guard so the coach can retry or discard, and nothing is ended.
+        await onSubmitPendingSubs?.();
+      } else {
+        onDiscardPendingSubs?.();
+      }
+    } catch {
+      setGuardBusy(false);
+      return;
+    }
+    setGuardBusy(false);
+    setSubGuard(null);
+    if (target === 'period') {
+      endCurrentPeriod();
+    } else {
+      endMatch();
+    }
+  };
+
+  const guardIsMatch = subGuard === 'match';
+  const guardEndLabel = guardIsMatch ? 'end match' : 'end period';
+  const guardPlural = pendingSubCount === 1 ? '' : 's';
 
   return (
     <Card>
@@ -236,7 +311,7 @@ export function EnhancedMatchControls({ fixtureId, onTimerUpdate, forceRefresh }
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={endCurrentPeriod}>
+                  <AlertDialogAction onClick={requestEndPeriod}>
                     Yes, End Period
                   </AlertDialogAction>
                 </AlertDialogFooter>
@@ -267,9 +342,53 @@ export function EnhancedMatchControls({ fixtureId, onTimerUpdate, forceRefresh }
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={endMatch} className="bg-destructive hover:bg-destructive/90">
+                <AlertDialogAction onClick={requestEndMatch} className="bg-destructive hover:bg-destructive/90">
                   Yes, End Match
                 </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          {/* UX-010 guard — shown only when a period/match end was requested with
+              substitutions still staged. Forces Submit or Discard. */}
+          <AlertDialog
+            open={subGuard !== null}
+            onOpenChange={(open) => {
+              if (!open && !guardBusy) setSubGuard(null);
+            }}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-yellow-600" />
+                  {pendingSubCount} substitution{guardPlural} still pending
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  Nothing has been written to the database yet. If you {guardEndLabel} now,
+                  {pendingSubCount === 1 ? ' it' : ' they'} will be lost and the pitch on
+                  screen will stop matching the pitch in front of you. Submit the pending
+                  substitution{guardPlural} first, or discard {pendingSubCount === 1 ? 'it' : 'them'}.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter className="flex-col gap-2 sm:flex-col sm:space-x-0">
+                <Button
+                  onClick={() => runGuard('submit')}
+                  disabled={guardBusy}
+                  className="w-full h-12 text-base font-semibold bg-yellow-600 hover:bg-yellow-700 dark:bg-yellow-700 dark:hover:bg-yellow-800"
+                >
+                  {guardBusy ? 'Submitting…' : `Submit ${pendingSubCount} & ${guardEndLabel}`}
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => runGuard('discard')}
+                  disabled={guardBusy}
+                  className="w-full h-12"
+                >
+                  Discard &amp; {guardEndLabel}
+                </Button>
+                <AlertDialogCancel disabled={guardBusy} className="w-full mt-0">
+                  Keep tracking
+                </AlertDialogCancel>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>

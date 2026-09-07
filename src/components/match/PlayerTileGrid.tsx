@@ -12,6 +12,7 @@ const FLOODLIGHT = {
   edge: '#CBD3DC',
   navy: '#101724',
   slate: '#5A6474',
+  amber: '#F5A524',
 };
 
 // A player as far as a tile is concerned. The live screen must never show a surname
@@ -27,9 +28,17 @@ interface PlayerTileGridProps {
   benchPlayers: TilePlayer[];
   /** Minutes played so far, by player id. Displayed only — never written from here. */
   getPlayerTime: (playerId: string) => number;
-  /** Tap behaviour for a bench tile, carried over unchanged from the old bench cards.
-   *  Pitch tiles keep their old behaviour too: nothing. Staging is branch 3. */
+  /**
+   * Staged substitutions (UX-007 branch 3): tap a pitch player to select them,
+   * then a bench player to stage the pair. Both grids show the EFFECTIVE lineup,
+   * so a player staged to come on is passed in `activePlayers`.
+   */
+  onPitchTileTap?: (player: TilePlayer) => void;
   onBenchTileTap?: (player: TilePlayer) => void;
+  /** Currently selected pitch player (amber ring). */
+  selectedId?: string | null;
+  /** Players caught in a pending pair: dashed amber border, PENDING tag, not tappable. */
+  pendingIds?: ReadonlySet<string>;
   className?: string;
 }
 
@@ -43,7 +52,10 @@ export function PlayerTileGrid({
   activePlayers,
   benchPlayers,
   getPlayerTime,
+  onPitchTileTap,
   onBenchTileTap,
+  selectedId,
+  pendingIds,
   className,
 }: PlayerTileGridProps) {
   const squadCount = activePlayers.length + benchPlayers.length;
@@ -54,20 +66,36 @@ export function PlayerTileGrid({
   const renderTile = (player: TilePlayer, location: 'pitch' | 'bench') => {
     const onPitch = location === 'pitch';
     const minutes = formatMinutes(getPlayerTime(player.id));
-    const tappable = !onPitch && !!onBenchTileTap;
+    const isPending = !!pendingIds?.has(player.id);
+    const isSelected = !isPending && selectedId === player.id;
+    const handler = onPitch ? onPitchTileTap : onBenchTileTap;
+    // A pending player is locked out of further selection until submitted or undone —
+    // otherwise the same player could be staged both on and off in one batch.
+    const tappable = !isPending && !!handler;
 
     // Same footprint on the bench as on the pitch (UX-007): a substitution is exactly
     // when a coach is rushing, so the target must not shrink. min-h clears UX-002's
     // 44pt floor with room to spare.
     const commonClass =
-      'flex min-h-[80px] flex-col items-center justify-center gap-1 rounded-lg px-2 py-2 text-center';
-    const style = onPitch
+      'relative flex min-h-[80px] flex-col items-center justify-center gap-1 rounded-lg px-2 py-2 text-center';
+
+    const style: React.CSSProperties = onPitch
       ? { backgroundColor: FLOODLIGHT.pitchBlue, color: FLOODLIGHT.onBlue }
       : {
           backgroundColor: FLOODLIGHT.card,
           color: FLOODLIGHT.navy,
           border: `1px solid ${FLOODLIGHT.edge}`,
         };
+
+    if (isSelected) {
+      // Amber ring, drawn outside the tile so it doesn't shift the layout.
+      style.boxShadow = `0 0 0 3px ${FLOODLIGHT.amber}`;
+    }
+    if (isPending) {
+      // Dashed amber border via outline so the tile keeps its footprint.
+      style.outline = `2px dashed ${FLOODLIGHT.amber}`;
+      style.outlineOffset = '-2px';
+    }
 
     const inner = (
       <>
@@ -77,15 +105,24 @@ export function PlayerTileGrid({
         >
           {player.first_name}
         </span>
-        <span
-          className="font-mono text-xs"
-          style={{
-            color: onPitch ? FLOODLIGHT.onBlueDim : FLOODLIGHT.slate,
-            fontVariantNumeric: 'tabular-nums',
-          }}
-        >
-          {minutes}
-        </span>
+        {isPending ? (
+          <span
+            className="rounded-sm px-1.5 py-0.5 text-[8.5px] font-bold uppercase tracking-[0.12em]"
+            style={{ backgroundColor: FLOODLIGHT.amber, color: FLOODLIGHT.navy }}
+          >
+            Pending
+          </span>
+        ) : (
+          <span
+            className="font-mono text-xs"
+            style={{
+              color: onPitch ? FLOODLIGHT.onBlueDim : FLOODLIGHT.slate,
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {minutes}
+          </span>
+        )}
       </>
     );
 
@@ -94,9 +131,10 @@ export function PlayerTileGrid({
         <button
           key={player.id}
           type="button"
+          aria-pressed={isSelected}
           className={cn(commonClass, 'transition-transform active:scale-[0.98]')}
           style={style}
-          onClick={() => onBenchTileTap!(player)}
+          onClick={() => handler!(player)}
         >
           {inner}
         </button>
