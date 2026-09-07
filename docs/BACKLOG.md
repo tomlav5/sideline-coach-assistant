@@ -8,6 +8,48 @@ Known issues and planned work. Newest findings at the top of each section.
 
 ## Bugs
 
+### BUG-013 — Heartbeat failures are silent, so a coach on poor signal can lose the lock while recording `OPEN`
+**Found:** 7 Sep 2026, reviewing multi-coach safety.
+
+Tracker liveness rests on a 30-second heartbeat: `useRealtimeMatchSync.tsx:101` calls
+`update_tracking_activity`, which sets `fixtures.last_activity_at = NOW()`. `claim_match_tracking`
+lets anyone claim once that timestamp is older than five minutes.
+
+Two ways that fails a coach who is actively tracking:
+
+- **The heartbeat swallows its own errors** (`catch { console.error }`). On poor mobile data
+  ten consecutive heartbeats can fail silently, the timestamp goes stale, and another coach can
+  take control from someone mid-match. The coach with the worse signal loses the lock — exactly
+  backwards, since they are least able to recover.
+- **The heartbeat stops when the phone sleeps.** A coach pockets the phone at half time, iOS
+  suspends the tab, and five minutes later the lock is free. This is precisely the scenario the
+  timestamp-derived match clock was designed to survive (see `CLAUDE.md` critical rules); the
+  lock has no equivalent protection, and half time is longer than five minutes at most
+  grassroots matches.
+
+Same failure class as BUG-008 — a silent write failure with match-day consequences.
+
+**Fix shape.** Count consecutive heartbeat failures and warn the coach that they may lose
+control, rather than failing silently. Consider a second liveness signal that does not depend on
+the heartbeat at all: a match with a `match_events` row written two minutes ago is obviously
+live, whatever `last_activity_at` says. See DESIGN-005 for the timeout itself.
+
+### BUG-014 — Losing the tracker lock while holding staged substitutions strands them `OPEN`
+**Found:** 7 Sep 2026, reviewing multi-coach safety.
+
+The pending substitutions stack (UX-007 branch 3) lives in one device's React state and is
+invisible to any other device. When another coach claims the match, the first coach's
+`matchTracker.isActiveTracker` flips via realtime and their UI locks out — including the Submit
+button — while their staged pairs are still held in memory and now cannot be committed.
+
+`docs/UX-007-MATCH-SCREEN.md` anticipated two coaches diverging and gated the pending panel on
+`active_tracker_id`, which is right. What it did not cover is losing the lock *while already
+holding a pending stack*.
+
+**Fix shape.** On losing the lock with a non-empty stack, say so loudly and unambiguously, and
+keep the staged pairs so they can be submitted if the coach reclaims the match. Do not discard
+them silently — a staged substitution represents a change that has already happened on the pitch.
+
 ### BUG-012 — Ending a period blanks every player tile to 0m `DONE`
 **Found:** 7 Sep 2026, live-tracking test. Fixed 7 Sep 2026 on
 `fix/bug-012-tile-reset-between-periods` (PR TBD).
@@ -921,6 +963,23 @@ super admin).
 
 ## Design
 
+### DESIGN-005 — The five-minute tracker timeout serves two incompatible purposes `OPEN`
+**Found:** 7 Sep 2026, reviewing multi-coach safety.
+
+`claim_match_tracking`'s five-minute window is doing two different jobs: recovering a match from
+a crashed or closed session, and arbitrating live contention between two coaches who both want
+to record. Those want opposite answers. Recovery wants a short window so a match is not stuck.
+Contention wants a long one, because the common real case is a pocketed phone at half time, not
+an abandoned session.
+
+Tuned for contention it is currently too short — five minutes of silence is normal mid-match
+behaviour, not evidence of abandonment.
+
+**Fix shape.** Separate the two. Lengthen the automatic window (fifteen minutes or so) so a
+live coach is not displaced by a pocketed phone, and put deliberate take-over behind the
+explicit confirmation described in UX-012 rather than behind a timer. Depends on UX-012 and
+relates to BUG-013.
+
 ### DESIGN-004 — Brand marks are raster with no vector master `OPEN`
 Both the app icon and the favicon are 1024px rasters. That is exactly the App Store's
 minimum, so there is no headroom, and neither can be resharpened or recoloured cleanly.
@@ -966,6 +1025,39 @@ Full spec, contrast pairs and regeneration steps in `docs/brand/BRAND.md`.
 ---
 
 ## UX
+
+### UX-011 — No confirmation of which match is being tracked `OPEN`
+**Found:** 7 Sep 2026, reviewing multi-coach safety before adding two more coaches.
+
+A coach who opens the wrong fixture takes an *unlocked* match and records real events into it.
+No amount of tracker locking prevents this — the lock is working correctly and the data is
+still wrong. It is also the most likely error in practice: a phone in cold hands, a list of
+fixtures, a mis-tap, and by the time anyone notices there are goals and substitutions in
+another team's match.
+
+**Fix shape.** A confirmation before the first recordable tap: our team, the opponent, the
+date and the kick-off time, large enough to read at a glance in daylight. Cheap, and it
+addresses a failure the locking model cannot.
+
+Cheapest and highest-value item in the multi-coach group (UX-011, UX-012, BUG-013, BUG-014,
+DESIGN-005). Do this one first.
+
+These five are one group. None is required before 12 Sep 2026 — the two additional coaches
+will be tracking different matches, so live contention cannot occur — and the recommended
+order is UX-011, UX-012, BUG-013, BUG-014, DESIGN-005.
+
+### UX-012 — Taking over a match from another coach happens silently `OPEN`
+**Found:** 7 Sep 2026, same review.
+
+`claim_match_tracking` returns a clear refusal while another coach's `last_activity_at` is
+within five minutes. After five minutes it simply succeeds — no confirmation, no indication
+that anyone else was ever tracking. The second coach is never told what they are about to do,
+and the first learns only when their UI locks out.
+
+**Fix shape.** When the claim would displace a previous tracker, name them and say how long
+ago they were last active, and require an explicit confirmation. The RPC already returns
+`current_tracker` and `tracking_started_at` on the refusal path; the same information should
+be surfaced on the take-over path.
 
 ### UX-009 — Match clock shows seconds but only moves once a minute `DONE 6 Sep 2026`
 **Found:** 4 Sep 2026, during BUG-001 testing
