@@ -258,3 +258,32 @@ All colors MUST be HSL.
     @apply min-h-[44px] min-w-[44px] px-4 py-2;
   }
 }
+
+/*
+ * Pending-substitution critical state (UX-007 branch 3).
+ *
+ * A slow ~1.6s breathe, deliberately NOT a flash: anything above three flashes
+ * per second is a seizure risk and fails WCAG, and a strobe reads as broken and
+ * gets filtered out within minutes. Under prefers-reduced-motion it collapses to
+ * a static red glow.
+ */
+@keyframes pending-critical-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(229, 72, 77, 0);
+  }
+  50% {
+    box-shadow: 0 0 24px 2px rgba(229, 72, 77, 0.55);
+  }
+}
+
+.pending-critical-breathe {
+  animation: pending-critical-breathe 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pending-critical-breathe {
+    animation: none;
+    box-shadow: 0 0 18px 1px rgba(229, 72, 77, 0.5);
+  }
+}

@@ -8,6 +8,160 @@ Known issues and planned work. Newest findings at the top of each section.
 
 ## Bugs
 
+### BUG-009 — Rolling substitutions are impossible: unique constraint contradicts the interval model `OPEN`
+**Found:** 7 Sep 2026, dev testing of `feat/match-staged-subs` — first Submit failed with
+`23505 duplicate key value violates unique constraint "unique_player_period_fixture"`.
+
+`player_time_logs` carries `UNIQUE (fixture_id, player_id, period_id)`, added in the Lovable
+era (`supabase/migrations-archive/lovable-era/20250915190202_*.sql`) with the comment "to
+support upsert operations". It permits exactly one row per player per period.
+
+The application's model is intervals: a player may come on, go off, and come back on within
+one period. `submitSubstitutions.applyPair` opens an interval for the incoming player unless
+one is already *active* — it does not consider a *closed* row for the same player in the same
+period. When a player who has already been substituted off returns, the insert violates the
+constraint and the pair fails. The retry added under BUG-006 cannot help: the failure is
+deterministic, not transient.
+
+The period-transition effect in `EnhancedMatchTracker` and `submitSubstitutions` both carry
+comments stating that multiple intervals per period are supported. The schema has forbidden it
+since before the constraint was inherited.
+
+**Impact.** UK grassroots youth football uses rolling substitutions as the normal pattern, not
+an exception. This fails repeatedly in a real match. Blocks the 12 Sep 2026 season start.
+
+**Two further consequences.**
+- Submit is neither atomic nor idempotently retryable for this failure. Both `player_match_status`
+  rows and the outgoing player's closed interval are written before the insert fails, leaving the
+  incoming player marked on-field with no time log while the UI still shows the pair as pending.
+  Contradicts the risk section of `docs/UX-007-MATCH-SCREEN.md`.
+- `src/lib/playerMinutes.ts` (BUG-007) sums multiple intervals per player per period. Under the
+  constraint that path is unreachable, and a returning player's single row spans both spells —
+  counting bench time as playing time.
+
+**Likely fix:** drop the constraint, since the data model is intervals and the constraint was
+added for an upsert that no longer describes how these rows are written. Verify against every
+other writer of `player_time_logs` first — the constraint may be masking duplicate-insert bugs
+elsewhere (`ensurePlayerStatuses`, the period-transition insert, `useEditMatchData`,
+`useRetrospectiveMatch`). Requires a migration on staging then production before 12 Sep 2026.
+
+### BUG-008 — Match-state writes fail silently, and the timer worker may outlive the page `OPEN`
+**Found:** 7 Sep 2026, dev testing on a poor connection while verifying the BUG-007 fix.
+
+Navigating away from the match screen and back produced a repeating console error:
+
+    useEnhancedMatchTimer.tsx:167 Error saving match state:
+    {message: 'TypeError: Failed to fetch', ...}
+
+Stack: `EnhancedMatchControls.tsx:104` → `useEnhancedMatchTimer.tsx:209` posts to a Web Worker →
+the worker's `setInterval` (lines 108-109) posts back each tick → the handler at 136 writes match
+state at 167.
+
+**Confirmed: the write fails silently.** Line 167 catches and `console.error`s. No retry, no
+queue, no user-visible warning. If the payload includes `total_paused_seconds`, a failed save
+while pausing means the pause is never recorded — and the match clock is derived from
+`actual_start_time` minus paused seconds, so it would over-count for the rest of the match.
+Grassroots pitches have poor mobile data; this is the normal case, not an edge case.
+
+**Unconfirmed: the worker may not be terminated on unmount.** The errors recurred after leaving
+and returning to the page, suggesting the interval kept running. If so, each visit spawns another
+worker writing match state on a timer. Needs verification — not established.
+
+Pre-existing. Not introduced by UX-007, which only extended `onTimerUpdate`'s arguments, not the
+worker loop. The `Failed to fetch` itself was a genuine connectivity failure (testing on a train),
+not a code fault.
+
+### BUG-007 — Tile minutes reset to 0m at half time `DONE 6 Sep 2026`
+**Found:** 6 Sep 2026, code review of `usePlayerTimers` while fixing DEFECT 1.
+
+`usePlayerTimers` scoped its `player_time_logs` query to the current period
+(`.eq('period_id', currentPeriodId).eq('is_active', true)`), so every tile read 0m for the
+first minute of the second half and only climbed from there — the first half's minutes were
+gone from the display. Playing time on the tile is meant to be a whole-match total (it is
+the app's most defensible feature, per `docs/UX-007-MATCH-SCREEN.md`), not a per-period
+count.
+
+Fixed in this commit alongside the DEFECT 1 rewrite (BUG-006): the query now pulls every
+`player_time_logs` row for the fixture and `src/lib/playerMinutes.ts` folds them into a
+per-player total — closed intervals from every period contribute their duration
+(`time_off_minute - time_on_minute`), the still-open interval in the *current* period
+accrues live from the period's elapsed seconds, and an open interval orphaned in a period
+that already ended contributes 0 (its duration is not recoverable client-side). Every
+contribution is clamped at ≥ 0. Both columns are durations, not timestamps — the
+`matchMinute.ts` "+1 minute in progress" convention is deliberately not applied here
+(BUG-005).
+
+Checks: `tsc --noEmit -p tsconfig.app.json` clean; vitest — added `src/lib/playerMinutes.test.ts`
+(16 cases covering the fold and the render-time arithmetic, including an explicit half-time
+regression case); `npm run build` clean; lint unchanged (pre-existing errors only). Not
+tested on a device. The `usePlayerTimers` DB wiring itself is not covered — no supabase mock
+harness in the repo — but the arithmetic it depends on is pure and tested.
+
+### BUG-006 — Staged-substitutions branch: four defects + two rendering bugs found on staging `DONE 6 Sep 2026`
+**Found:** 6 Sep 2026, staging test of `feat/match-staged-subs` (UX-007 branch 3).
+
+Six issues, fixed together on the branch (not yet merged):
+
+- **Player minutes stuck at 0m on the tiles.** `usePlayerTimers` was fed `currentPeriodId`
+  / `isTimerRunning` derived from `EnhancedMatchTracker`'s `periods` + `fixture` state,
+  which is only loaded in `loadMatchData` — on mount, never when the timer starts a period.
+  A period started while the screen was open left `currentPeriod = null`, so the hook's
+  per-second interval returned early and every tile read 0m until a remount. Fix:
+  `EnhancedMatchControls`' `onTimerUpdate` now also passes the live `periodId` + `isRunning`
+  from `useEnhancedMatchTimer` (fresh every second); the page prefers those, falling back to
+  the old derivation. The hook is read-only, so this was only ever a wrong number, not data.
+  **This fix did not resolve the defect.** Staging testing on 6 Sep 2026 failed the "player
+  minutes stuck at 0m" check twice — once before this pass and once after it. Passing a live
+  `periodId` actually fired `loadPlayerTimes` *earlier*, tightening a race that was the real
+  cause: the load runs on the same tick `currentPeriodId` becomes non-null, which is when
+  `EnhancedMatchTracker`'s period-transition effect starts its ~23 sequential Supabase writes
+  creating the starter `player_time_logs` rows for an 11-a-side squad. The hook read zero
+  rows, set an empty map, and its per-second interval only iterated the keys already in the
+  map — so an empty map never repopulated until half time. Fixed separately in this commit
+  under BUG-007: `usePlayerTimers` was rewritten to derive minutes from the period's elapsed
+  seconds at render (no interval), reload on a fast poll while the map is empty, and sum
+  playing time across the whole fixture rather than the current period.
+- **Substituted-off player back on the pitch after leaving and returning.** `ensurePlayerStatuses`
+  ran on every mount and, whenever status rows existed, unconditionally reset `is_on_field`
+  to the pre-match starting lineup — wiping every substitution from a prior session. Fix:
+  the reconcile-to-starters step is now skipped once the match is under way (fixture status
+  in_progress/live/paused/completed, or any `match_periods` row exists); missing rows are
+  still healed. Also `submitSubstitutions` now upserts `player_match_status` on
+  `(fixture_id, player_id)` and asserts a row came back, instead of a bare `.update()` that
+  returns success on zero matched rows.
+- **First Submit failed "N still pending", second worked.** `applyPair` makes ~7 sequential
+  Supabase writes per pair with no retry and no logging of which one failed; a lone transient
+  error failed the whole batch, and the retry succeeded because the writes are idempotent
+  (`client_event_id` upserts, insert-only-if-no-active-log). Fix: each step is now wrapped
+  with a labelled `console.error` on failure, and each pair gets one automatic retry before
+  the batch stops. The failure toast now includes the underlying error message.
+  **Correction, 7 Sep 2026:** this diagnosis was wrong. The root cause was subsequently
+  identified as BUG-009 — the `unique_player_period_fixture` constraint rejecting a second
+  interval for a player returning to the pitch within the same period. The failure is
+  deterministic, not transient, and the retry added here cannot resolve it: the second
+  attempt hits the same constraint and fails the same way. The labelled per-step logging
+  added by this same fix is what made BUG-009 diagnosable.
+- **Pending sub counted but invisible.** The old `effectiveLineup` filtered staged players
+  against "still in the committed pitch/bench list I expect"; after a partial submit or an
+  Edit-Squad the committed lists shift and the staged player passed neither filter, so it
+  had no tile while the guard still counted it. Fixed by FIX 6 below (no more filtering) plus
+  `PendingSubsPanel` hardening: the header count is taken from the exact list it maps, and an
+  unresolvable name renders as "Unknown", never as a blank row.
+- **FIX 5 — `LiveEventsSummary` blank card per `substitution_on`.** It looked the "on" player
+  up via `assist_player_id`, which is null on those rows (`player_id` holds the player). Now
+  the `substitution_off` / `substitution_on` pair collapses into one row — "Kai on · Milo
+  off" — keyed by period + minute, paired before the 5-item cut-off.
+- **FIX 6 — staged players jumped to the end of the grid.** `effectiveLineup` appended the
+  staged-in player to the pitch and the staged-out player to the bench. Now staged pairs do
+  not move anyone: both hold their committed slot (flagged pending) and the grid only
+  reshuffles when Submit commits and the lineup reloads.
+
+Checks: `tsc --noEmit -p tsconfig.app.json` clean; vitest 56/56 (added `PendingSubsPanel.test.tsx`,
+`LiveEventsSummary.test.tsx`, rewrote the `effectiveLineup` block of `pendingSubs.test.ts`);
+`npm run build` clean; lint unchanged (pre-existing errors only). Not tested on a device.
+Not covered by automated tests: the `usePlayerTimers` wiring, the `ensurePlayerStatuses`
+guard, and the `submitSubstitutions` retry/upsert (no supabase mock harness in the repo).
+
 ### BUG-005 — Event minutes counted elapsed minutes, not the minute in progress `DONE 6 Sep 2026`
 **Found:** 6 Sep 2026
 
@@ -320,6 +474,16 @@ which is how it drifted unnoticed. Delete, same as the Session 1 orphans.
 was the on-field player row on the match screen; branch 2 replaced it with
 `PlayerTileGrid` and nothing else imports it. Delete once branch 2 is merged (kept for
 now only so the branch is a clean single-purpose diff).
+
+### DEBT-022 — `EnhancedSubstitutionDialog.tsx` is orphaned `OPEN`
+**Found:** 6 Sep 2026, during UX-007 branch 3. `src/components/match/EnhancedSubstitutionDialog.tsx`
+was the tap-to-open substitution flow on the match screen; branch 3 replaced it with the
+staged model (tile taps → pending stack → Submit) and nothing else imports it. Its write
+sequence was extracted to `src/lib/submitSubstitutions.ts` rather than reimplemented. Left
+in place so the branch is a clean single-purpose diff (same treatment as DEBT-021 /
+`ActivePlayerCard.tsx` in branch 2); delete once branch 3 is merged. The older sibling
+`src/components/match/SubstitutionDialog.tsx` looks orphaned too — check and sweep both
+together.
 
 ### DEBT-007 — Lovable bidirectional sync still active `DONE 4 Sep 2026`
 Pushes to this repo sync to Lovable and vice versa. Now that development happens through
@@ -639,8 +803,16 @@ Fixed in PR #63: relabelled "Delete Match Data" with a bin icon, dialog title "D
 all match data?", confirm "Yes, delete everything". The `restart_match` RPC and
 internal identifiers are unchanged, so no migration was needed.
 
-### UX-010 — Guard period and match end against unsubmitted substitutions `OPEN`
+### UX-010 — Guard period and match end against unsubmitted substitutions `DONE 6 Sep 2026`
 **Found:** 5 Sep 2026, while designing the staged substitution model (UX-007)
+
+**Done 6 Sep 2026 (UX-007 branch 3, `feat/match-staged-subs`):** `EnhancedMatchControls`
+now takes `pendingSubCount` + submit/discard callbacks from `EnhancedMatchTracker` (the
+pending stack is not lifted). "End Period" and "End Match" route through
+`requestEndPeriod` / `requestEndMatch`: with subs staged they open a controlled
+`AlertDialog` that forces Submit-&-end or Discard-&-end — Cancel just keeps tracking,
+there is no click-past. If Submit fails mid-batch the dialog stays open (nothing is
+ended) and the committed pairs drop off the stack while the rest stay pending.
 
 Staged substitutions do not reach the database until Submit, so a coach who stages a
 change and walks away loses it — and the pitch on screen stops matching the pitch in
@@ -698,9 +870,29 @@ Target: weekend of 5–6 September. Relates to UX-002, UX-005, DEBT-004.
   to the component (DESIGN-002). Tap behaviour unchanged — bench tile still opens the
   existing substitution dialog; staging is branch 3. `ActivePlayerCard.tsx` is now
   unused (see DEBT note below).
-- Branch 3 (`feat/match-staged-subs`) — staged substitutions, Submit, and the UX-010
-  unsubmitted-substitution guard — and branch 4 (`feat/match-history-sheet`) — pull-up
-  history sheet and undo relocation — both remain, not started as of 6 Sep 2026.
+- Branch 3 (`feat/match-staged-subs`) — done 6 Sep 2026. Substitutions are staged, not
+  committed on tap: tap a pitch player (amber ring), tap a bench player, and the pair
+  joins a pending stack in component state — nothing is written until Submit. New pure
+  module `src/lib/pendingSubs.ts` (staging, peel-back order, effective-lineup calc,
+  already-staged lockout — unit-tested) with a `usePendingSubs` state wrapper. Staged
+  players hold their committed slot (they do not move until Submit — see BUG-006 FIX 6);
+  they get a dashed amber border + PENDING tag and are locked out. New `PendingSubsPanel`
+  above the action
+  bar on Floodlight Navy with an amber top rule: count, a waiting timer for the oldest
+  pair, and "Undo last" (pops the newest). At 60s it goes critical — deep red
+  (`#B4232C` / `#E5484D`), "NOT SUBMITTED", a ~1.6s breathe (`.pending-critical-breathe`
+  in `src/index.css`, static glow under `prefers-reduced-motion`, never a flash). The
+  action bar's primary becomes "Submit (N)" in amber while subs are pending; the Submit
+  button does not move and gets a static amber halo. Submit reuses the old dialog write
+  sequence, extracted to `src/lib/submitSubstitutions.ts` (period resolution,
+  `player_time_logs`, `client_event_id`-keyed `match_events` upserts) — stamped at Submit
+  time (timestamp minute for events, `floor(currentSeconds/60)` duration for time logs);
+  a mid-batch failure surfaces a toast and leaves the rest pending. Panel + Submit gated
+  on `active_tracker_id`. Footer scroll padding now derived from a measured footer
+  (ResizeObserver) since it grows per pending row. Includes the UX-010 guard (see that
+  item). `EnhancedSubstitutionDialog.tsx` now orphaned — DEBT-022.
+- Branch 4 (`feat/match-history-sheet`) — pull-up history sheet and undo relocation —
+  remains, not started as of 6 Sep 2026.
 
 ### UX-001 — Split the parent view from the coach view `OPEN`
 Currently one interface with permissions applied. They are different design problems:

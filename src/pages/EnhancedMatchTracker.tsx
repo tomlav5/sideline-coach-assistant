@@ -1,10 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { EnhancedMatchControls } from '@/components/match/EnhancedMatchControls';
 import { EnhancedEventDialog } from '@/components/match/EnhancedEventDialog';
 import { RetrospectiveMatchDialog } from '@/components/fixtures/RetrospectiveMatchDialog';
-import { EnhancedSubstitutionDialog } from '@/components/match/EnhancedSubstitutionDialog';
 import { EditSquadDialog } from '@/components/match/EditSquadDialog';
 import { MatchLockingBanner } from '@/components/match/MatchLockingBanner';
 import { QuickGoalButton } from '@/components/match/QuickGoalButton';
@@ -39,6 +38,10 @@ import { MatchTrackerSkeleton } from '@/components/ui/skeleton-loader';
 import { LiveEventsSummary } from '@/components/match/LiveEventsSummary';
 import { UndoButton } from '@/components/match/UndoButton';
 import { useUndoStack } from '@/hooks/useUndoStack';
+import { usePendingSubs } from '@/hooks/usePendingSubs';
+import { PendingSubsPanel } from '@/components/match/PendingSubsPanel';
+import { submitSubstitutions } from '@/lib/submitSubstitutions';
+import { useToast } from '@/hooks/use-toast';
 
 interface Player {
   id: string;
@@ -98,22 +101,62 @@ export default function EnhancedMatchTracker() {
   const [currentSeconds, setCurrentSeconds] = useState(0);
   const [totalSeconds, setTotalSeconds] = useState(0);
   const [currentPeriodNumber, setCurrentPeriodNumber] = useState(0);
+  // Live period id + running flag reported by useEnhancedMatchTimer (via
+  // EnhancedMatchControls' onTimerUpdate). This page's own `periods`/`fixture`
+  // state is only loaded on mount, so when a period is started while the screen
+  // is open, usePlayerTimers otherwise has no period to read and every tile
+  // sticks at 0m until the page is remounted (DEFECT 1).
+  const [timerPeriodId, setTimerPeriodId] = useState<string | null>(null);
+  const [timerRunning, setTimerRunning] = useState(false);
   const [loading, setLoading] = useState(true);
   
   // Smart suggestions based on match context (after state declarations)
   const smartSuggestions = useSmartSuggestions(players, events as any, currentPeriodNumber);
 
-  // Substitution state
-  const [subDialogOpen, setSubDialogOpen] = useState(false);
+  // Substitution state. The committed lineup (from player_match_status) lives in
+  // these two lists; the STAGED changes on top of it live in usePendingSubs and
+  // never touch the database until Submit (UX-007 branch 3).
   const [activePlayersList, setActivePlayersList] = useState<Player[]>([]);
   const [substitutePlayersList, setSubstitutePlayersList] = useState<Player[]>([]);
-  const [preSelectedSubIn, setPreSelectedSubIn] = useState<string | undefined>(undefined);
-  
+  const {
+    stack: pendingStack,
+    selectedOutId,
+    lockedIds: pendingLockedIds,
+    oldestStagedAt: oldestPendingAt,
+    selectPitchPlayer,
+    completePairWithBench,
+    undoLast: undoLastPendingSub,
+    discardAll: discardPendingSubs,
+    removeCommitted: removeCommittedPendingSubs,
+    applyToLineup,
+  } = usePendingSubs();
+  const { toast } = useToast();
+
   // Edit squad state
   const [editSquadOpen, setEditSquadOpen] = useState(false);
-  
+
   // Local log of substitutions for UI only (not persisted as match_events)
   const [substitutions, setSubstitutions] = useState<{ outId: string; inId: string; minute: number; total: number }[]>([]);
+
+  // One shared clock for the pending panel's waiting timer and the 60s critical
+  // state, so the panel and the Submit button's halo never disagree by a frame.
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    if (pendingStack.length === 0) return;
+    const id = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [pendingStack.length]);
+  const pendingWaitedSeconds =
+    oldestPendingAt === null ? 0 : Math.max(0, Math.floor((nowTick - oldestPendingAt) / 1000));
+  const pendingCritical = pendingWaitedSeconds >= 60;
+
+  // The bottom furniture is now variable-height — it grows with each pending row —
+  // so the scroll container's padding is derived from the measured footer rather
+  // than a fixed value, or the player grid ends up underneath it (UX-007).
+  const actionBarRef = useRef<HTMLDivElement>(null);
+  const footerExtrasRef = useRef<HTMLDivElement>(null);
+  const [actionBarH, setActionBarH] = useState(72);
+  const [footerPad, setFooterPad] = useState(160);
   
   // Short reversal window for a mis-tap during play (BUG-004). Declared above the
   // handlers that call pushUndo so the binding is never read before assignment.
@@ -376,6 +419,22 @@ export default function EnhancedMatchTracker() {
         return;
       }
 
+      // Once the match is under way, live tracking owns is_on_field — a
+      // substitution has moved players since kick-off. Re-running the
+      // reconcile-to-starters step below on every screen mount would revert
+      // every substitution made in a previous session (DEFECT 2). Detect "under
+      // way" from the fixture status or the existence of any match period.
+      const startedStatuses = ['in_progress', 'live', 'paused', 'completed'];
+      let matchUnderway = startedStatuses.includes(String(fixtureData?.status || ''));
+      if (!matchUnderway) {
+        const { data: anyPeriods } = await supabase
+          .from('match_periods')
+          .select('id')
+          .eq('fixture_id', fixtureId)
+          .limit(1);
+        matchUnderway = !!(anyPeriods && anyPeriods.length > 0);
+      }
+
       if (!statusRows || statusRows.length === 0) {
         // Initialize statuses based on selected squad (starters on field)
         console.log('[MatchTracker] Initializing player statuses', {
@@ -412,8 +471,12 @@ export default function EnhancedMatchTracker() {
             );
           if (insertMissingErr) throw insertMissingErr;
         }
-        // Reconcile active/inactive flags to reflect starters
-        if (desiredActiveSet.size > 0) {
+        // Reconcile active/inactive flags to reflect starters — ONLY before
+        // kick-off. After that, substitutions have moved players and this would
+        // undo them (DEFECT 2); missing rows are still healed above.
+        if (matchUnderway) {
+          console.log('[MatchTracker] Match under way — skipping reconcile-to-starters');
+        } else if (desiredActiveSet.size > 0) {
           const { error: setActivesErr } = await supabase
             .from('player_match_status')
             .update({ is_on_field: true })
@@ -492,13 +555,18 @@ export default function EnhancedMatchTracker() {
     totalMinute: number,
     periodNumber: number,
     seconds: number,
-    totalMatchSeconds: number
+    totalMatchSeconds: number,
+    periodId?: string | null,
+    isRunning?: boolean
   ) => {
     setCurrentMinute(minute);
     setTotalMatchMinute(totalMinute);
     setCurrentPeriodNumber(periodNumber);
     setCurrentSeconds(seconds);
     setTotalSeconds(totalMatchSeconds);
+    // Fresh every second while a period runs — drives usePlayerTimers (DEFECT 1).
+    if (periodId !== undefined) setTimerPeriodId(periodId);
+    if (isRunning !== undefined) setTimerRunning(isRunning);
 
     // Removed per-second DB writes to player_time_logs. We now only write on transitions:
     // - New period start initializes starters at time_on=0 in useEffect on period change
@@ -507,13 +575,122 @@ export default function EnhancedMatchTracker() {
   };
   const currentPeriod = periods.find(p => p.is_active) || (periods.length > 0 ? periods[periods.length - 1] : null);
 
-  // Real-time player timers
+  // Real-time player timers. Prefer the live period id/flag from the timer
+  // (fresh every second) over this page's mount-only `periods`/`fixture` state,
+  // which is stale for a match started while the screen was open (DEFECT 1).
   const isMatchRunning = fixture?.status === 'in_progress' && currentPeriod?.is_active;
   const { getPlayerTime, reloadTimes } = usePlayerTimers({
     fixtureId: fixtureId!,
-    currentPeriodId: currentPeriod?.id || null,
-    isTimerRunning: isMatchRunning || false,
+    currentPeriodId: timerPeriodId ?? currentPeriod?.id ?? null,
+    isTimerRunning: timerRunning || isMatchRunning || false,
+    // Elapsed seconds in the current period, pause-adjusted by the timer.
+    // Tile minutes are derived from this at render — no interval in the hook.
+    currentPeriodSeconds: currentSeconds,
   });
+
+  // Recording stays gated on active_tracker_id — a pending stack is local to this
+  // device and invisible to a second coach, so staging and Submit are only
+  // available to the active tracker (mirrors the existing action-bar gate).
+  const recordingLocked =
+    !matchTracker?.isActiveTracker &&
+    (fixture?.status === 'in_progress' || fixture?.status === 'live');
+
+  // Effective lineup = committed state with the pending pairs applied. A player
+  // staged to come on shows on the pitch immediately; a staged-out player moves
+  // to the bench. Playing time is unaffected — nothing is written until Submit.
+  const playersById = useMemo(() => new Map(players.map((p) => [p.id, p])), [players]);
+  const { effectivePitch, effectiveBench } = useMemo(() => {
+    const { pitchIds, benchIds } = applyToLineup(
+      activePlayersList.map((p) => p.id),
+      substitutePlayersList.map((p) => p.id),
+    );
+    const resolve = (ids: string[]) =>
+      ids.map((id) => playersById.get(id)).filter((p): p is Player => !!p);
+    return { effectivePitch: resolve(pitchIds), effectiveBench: resolve(benchIds) };
+  }, [applyToLineup, activePlayersList, substitutePlayersList, playersById]);
+
+  const firstNameFor = useCallback(
+    (id: string) => playersById.get(id)?.first_name ?? 'Player',
+    [playersById],
+  );
+
+  // Commit the staged substitutions. Reused by the action-bar Submit and the
+  // UX-010 end-of-period/match guard. Rejects if the batch did not fully commit,
+  // leaving any failed pair staged rather than losing it.
+  const handleSubmitPendingSubs = async () => {
+    if (recordingLocked || pendingStack.length === 0) return;
+
+    const batch = pendingStack.map((p) => ({
+      id: p.id,
+      playerOut: p.outId,
+      playerIn: p.inId,
+      offEventId: p.offEventId,
+      onEventId: p.onEventId,
+    }));
+
+    const result = await submitSubstitutions({
+      fixtureId: fixtureId!,
+      pairs: batch,
+      // Stamped at Submit time: match_events take the timestamp minute,
+      // player_time_logs take Math.floor(currentSeconds / 60) as a duration.
+      currentMinute,
+      totalMatchMinute,
+      currentSeconds,
+    });
+
+    if (result.committedPairIds.length > 0) {
+      const done = new Set(result.committedPairIds);
+      const justCommitted = pendingStack.filter((p) => done.has(p.id));
+      setSubstitutions((prev) => [
+        ...prev,
+        ...justCommitted.map((p) => ({
+          outId: p.outId,
+          inId: p.inId,
+          minute: currentMinute,
+          total: totalMatchMinute,
+        })),
+      ]);
+      removeCommittedPendingSubs(result.committedPairIds);
+    }
+
+    await refreshPlayerStatusLists();
+    await loadEvents();
+    reloadTimes();
+
+    if (result.error) {
+      const remaining = pendingStack.length - result.committedPairIds.length;
+      const detail =
+        result.error instanceof Error ? result.error.message : String(result.error);
+      console.error('[handleSubmitPendingSubs] submit incomplete', result);
+      toast({
+        title: 'Some substitutions did not submit',
+        description: `${result.committedPairIds.length} committed, ${remaining} still pending — ${detail}. Try Submit again.`,
+        variant: 'destructive',
+      });
+      // Surface it to the guard so an end-of-period/match does not proceed.
+      throw result.error;
+    }
+  };
+
+  // Measure the real footer height (action bar + pending panel + events summary)
+  // and pad the scroll area by it, so the player grid never scrolls underneath.
+  useLayoutEffect(() => {
+    const measure = () => {
+      const ab = actionBarRef.current?.offsetHeight ?? 0;
+      const ex = footerExtrasRef.current?.offsetHeight ?? 0;
+      setActionBarH(ab || 72);
+      setFooterPad(ab + ex + 16);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (actionBarRef.current) ro.observe(actionBarRef.current);
+    if (footerExtrasRef.current) ro.observe(footerExtrasRef.current);
+    window.addEventListener('resize', measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [pendingStack.length, events.length, eventsLoading]);
 
   // Ensure we initialize/close player_time_logs across period changes
   const [prevPeriodNumber, setPrevPeriodNumber] = useState<number>(0);
@@ -737,10 +914,11 @@ export default function EnhancedMatchTracker() {
         setShowEventDialog(true);
       }
     },
-    onSubstitution: async () => {
-      if (matchTracker?.isActiveTracker || fixture?.status !== 'in_progress') {
-        await refreshPlayerStatusLists();
-        setSubDialogOpen(true);
+    onSubstitution: () => {
+      // Staging is done by tapping tiles now (UX-007 branch 3); the 's' shortcut
+      // commits whatever is staged.
+      if (pendingStack.length > 0) {
+        void handleSubmitPendingSubs();
       }
     },
     onOtherEvent: () => setShowEventDialog(true),
@@ -779,8 +957,10 @@ export default function EnhancedMatchTracker() {
         matchStatus={fixture.status || 'scheduled'}
       />
 
-      {/* Scrollable Content Area */}
-      <div className="flex-1 overflow-y-auto pb-24">
+      {/* Scrollable Content Area. Bottom padding is derived from the measured
+          footer (action bar + pending panel + events summary), which is now
+          variable-height — see the useLayoutEffect above (UX-007). */}
+      <div className="flex-1 overflow-y-auto" style={{ paddingBottom: footerPad }}>
         <div className="container mx-auto p-3 sm:p-4 space-y-4 max-w-4xl">
 
       {/* Match Locking Banner */}
@@ -797,6 +977,9 @@ export default function EnhancedMatchTracker() {
         fixtureId={fixtureId!}
         onTimerUpdate={handleTimerUpdate}
         forceRefresh={matchTracker?.isActiveTracker}
+        pendingSubCount={pendingStack.length}
+        onSubmitPendingSubs={handleSubmitPendingSubs}
+        onDiscardPendingSubs={discardPendingSubs}
       />
 
       {/* Quick Action Buttons - Large, Thumb-Friendly */}
@@ -854,19 +1037,19 @@ export default function EnhancedMatchTracker() {
         </Button>
       </div>
 
-      {/* Player tiles — first name and minutes played only. Adaptive grid sized from
-          the squad count (UX-007 branch 2). Substitution behaviour is unchanged here:
-          a bench tile still opens the existing substitution dialog; staging is branch 3. */}
+      {/* Player tiles — first name and minutes played only (UX-007 branch 2).
+          Branch 3: the grid shows the EFFECTIVE lineup (committed + pending). Tap a
+          pitch player to select (amber ring), then a bench player to stage the pair
+          onto the pending stack — nothing is written until Submit. */}
       {(activePlayersList.length > 0 || substitutePlayersList.length > 0) && (
         <PlayerTileGrid
-          activePlayers={activePlayersList}
-          benchPlayers={substitutePlayersList}
+          activePlayers={effectivePitch}
+          benchPlayers={effectiveBench}
           getPlayerTime={getPlayerTime}
-          onBenchTileTap={async (player) => {
-            await refreshPlayerStatusLists();
-            setPreSelectedSubIn(player.id);
-            setSubDialogOpen(true);
-          }}
+          selectedId={selectedOutId}
+          pendingIds={pendingLockedIds}
+          onPitchTileTap={recordingLocked ? undefined : (player) => selectPitchPlayer(player.id)}
+          onBenchTileTap={recordingLocked ? undefined : (player) => completePairWithBench(player.id)}
         />
       )}
 
@@ -1067,208 +1250,6 @@ export default function EnhancedMatchTracker() {
         }}
       />
 
-      {/* Substitution Dialog */}
-      <EnhancedSubstitutionDialog
-        open={subDialogOpen}
-        onOpenChange={(open) => {
-          setSubDialogOpen(open);
-          if (!open) {
-            setPreSelectedSubIn(undefined);
-          }
-        }}
-        activePlayers={activePlayersList}
-        substitutePlayers={substitutePlayersList}
-        preSelectedPlayerIn={preSelectedSubIn}
-        onConfirm={async (pairs) => {
-          try {
-            if (!pairs || pairs.length === 0) {
-              console.error('No substitutions to make');
-              return;
-            }
-
-            // Get current period for event recording with fallbacks
-            let currentPeriod = null;
-            
-            // Try to get active period first
-            const { data: activePeriod } = await supabase
-              .from('match_periods')
-              .select('*')
-              .eq('fixture_id', fixtureId)
-              .eq('is_active', true)
-              .single();
-            
-            if (activePeriod) {
-              currentPeriod = activePeriod;
-            } else {
-              // Fallback 1: Use current_period_id from fixture
-              const { data: fixtureData } = await supabase
-                .from('fixtures')
-                .select('current_period_id')
-                .eq('id', fixtureId)
-                .single();
-              
-              if (fixtureData?.current_period_id) {
-                const { data: periodById } = await supabase
-                  .from('match_periods')
-                  .select('*')
-                  .eq('id', fixtureData.current_period_id)
-                  .single();
-                currentPeriod = periodById;
-              } else {
-                // Fallback 2: Use the most recent period
-                const { data: latestPeriod } = await supabase
-                  .from('match_periods')
-                  .select('*')
-                  .eq('fixture_id', fixtureId)
-                  .order('period_number', { ascending: false })
-                  .limit(1)
-                  .single();
-                currentPeriod = latestPeriod;
-              }
-            }
-            
-            console.log('Processing', pairs.length, 'substitution(s) for period:', currentPeriod);
-
-            // Process each substitution pair
-            for (const pair of pairs) {
-              const { playerOut, playerIn } = pair;
-              
-              // Update player statuses
-              const { error: outErr } = await supabase
-                .from('player_match_status')
-                .update({ is_on_field: false })
-                .eq('fixture_id', fixtureId)
-                .eq('player_id', playerOut);
-              if (outErr) throw outErr;
-
-              const { error: inErr } = await supabase
-                .from('player_match_status')
-                .update({ is_on_field: true })
-                .eq('fixture_id', fixtureId)
-                .eq('player_id', playerIn);
-              if (inErr) throw inErr;
-
-              // Handle player time logs for substitution
-              if (currentPeriod) {
-                // Ensure a row exists for the player going OUT
-                const { data: outRow } = await supabase
-                  .from('player_time_logs')
-                  .select('player_id')
-                  .eq('fixture_id', fixtureId)
-                  .eq('player_id', playerOut)
-                  .eq('period_id', currentPeriod.id)
-                  .maybeSingle();
-
-                if (!outRow) {
-                  await supabase
-                    .from('player_time_logs')
-                    .insert({
-                      fixture_id: fixtureId,
-                      player_id: playerOut,
-                      period_id: currentPeriod.id,
-                      time_on_minute: 0,
-                      is_starter: true,
-                      is_active: true,
-                    });
-                }
-
-                // Finalize time log for player going OUT
-                await supabase
-                  .from('player_time_logs')
-                  .update({
-                    // DURATION, not timestamp: minutes elapsed in the period at
-                    // the substitution, so a plain floor (see src/lib/matchMinute.ts).
-                    time_off_minute: Math.floor(currentSeconds / 60),
-                    is_active: false,
-                  })
-                  .eq('fixture_id', fixtureId)
-                  .eq('player_id', playerOut)
-                  .eq('period_id', currentPeriod.id)
-                  .eq('is_active', true);
-
-                // Create time log for player coming IN
-                const { data: activeInLog } = await supabase
-                  .from('player_time_logs')
-                  .select('id, is_active')
-                  .eq('fixture_id', fixtureId)
-                  .eq('player_id', playerIn)
-                  .eq('period_id', currentPeriod.id)
-                  .eq('is_active', true)
-                  .maybeSingle();
-
-                if (!activeInLog) {
-                  await supabase
-                    .from('player_time_logs')
-                    .insert({
-                      fixture_id: fixtureId,
-                      player_id: playerIn,
-                      period_id: currentPeriod.id,
-                      // DURATION, not timestamp: minutes elapsed in the period at
-                      // the substitution, so a plain floor (see src/lib/matchMinute.ts).
-                      time_on_minute: Math.floor(currentSeconds / 60),
-                      is_starter: false,
-                      is_active: true,
-                    });
-                }
-
-                // Persist substitution events (off and on)
-                try {
-                  // Record player going OFF
-                  const offEventId = generateUUID();
-                  const { error: offEventErr } = await supabase
-                    .from('match_events')
-                    .upsert({
-                      fixture_id: fixtureId,
-                      period_id: currentPeriod.id,
-                      event_type: 'substitution_off',
-                      player_id: playerOut,
-                      minute_in_period: currentMinute,
-                      total_match_minute: totalMatchMinute,
-                      is_our_team: true,
-                      notes: null,
-                      is_retrospective: false,
-                      client_event_id: offEventId,
-                    }, { onConflict: 'client_event_id' });
-                  if (offEventErr) throw offEventErr;
-
-                  // Record player coming ON
-                  const onEventId = generateUUID();
-                  const { error: onEventErr } = await supabase
-                    .from('match_events')
-                    .upsert({
-                      fixture_id: fixtureId,
-                      period_id: currentPeriod.id,
-                      event_type: 'substitution_on',
-                      player_id: playerIn,
-                      minute_in_period: currentMinute,
-                      total_match_minute: totalMatchMinute,
-                      is_our_team: true,
-                      notes: null,
-                      is_retrospective: false,
-                      client_event_id: onEventId,
-                    }, { onConflict: 'client_event_id' });
-                  if (onEventErr) throw onEventErr;
-                } catch (subEventCatch: any) {
-                  console.error('Failed to record substitution events:', subEventCatch);
-                }
-              }
-
-              // Add to UI substitutions log
-              setSubstitutions(prev => [...prev, { outId: playerOut, inId: playerIn, minute: currentMinute, total: totalMatchMinute }]);
-            }
-
-            console.log('Completed', pairs.length, 'substitution(s)');
-            setSubDialogOpen(false);
-            await refreshPlayerStatusLists();
-            await loadEvents();
-            reloadTimes();
-          } catch (e) {
-            console.error('Error making substitutions:', e);
-            console.error('Failed to make substitutions');
-          }
-        }}
-      />
-
       {/* Edit Squad Dialog */}
       <EditSquadDialog
         open={editSquadOpen}
@@ -1339,23 +1320,39 @@ export default function EnhancedMatchTracker() {
         className="bottom-[calc(148px+max(8px,env(safe-area-inset-bottom)))]"
       />
 
-      {/* Live Events Summary - Fixed above action bar */}
-      <LiveEventsSummary
-        events={events}
-        players={players}
-        loading={eventsLoading}
-        className="fixed bottom-[calc(68px+max(8px,env(safe-area-inset-bottom)))] left-0 right-0 z-30"
-      />
+      {/* Footer furniture stacked directly above the action bar: the pending-subs
+          panel (branch 3) then the events summary. This block's height feeds the
+          scroll-area padding measured in the useLayoutEffect above, so the player
+          grid is never hidden behind it however many substitutions are pending. */}
+      <div
+        ref={footerExtrasRef}
+        className="fixed left-0 right-0 z-30"
+        style={{ bottom: actionBarH }}
+      >
+        <PendingSubsPanel
+          pairs={pendingStack}
+          nameFor={firstNameFor}
+          waitedSeconds={pendingWaitedSeconds}
+          critical={pendingCritical}
+          onUndoLast={undoLastPendingSub}
+          disabled={recordingLocked}
+        />
+        <LiveEventsSummary
+          events={events}
+          players={players}
+          loading={eventsLoading}
+        />
+      </div>
 
       {/* Bottom Action Bar - Fixed */}
       <BottomActionBar
+        ref={actionBarRef}
         onQuickGoal={() => setShowGoalDialog(true)}
-        onSubstitution={async () => {
-          await refreshPlayerStatusLists();
-          setSubDialogOpen(true);
-        }}
         onOtherEvent={() => setShowEventDialog(true)}
-        disabled={!matchTracker?.isActiveTracker && (fixture?.status === 'in_progress' || fixture?.status === 'live')}
+        onSubmit={() => { void handleSubmitPendingSubs(); }}
+        pendingCount={pendingStack.length}
+        pendingCritical={pendingCritical}
+        disabled={recordingLocked}
       />
 
       {/* Goal Dialog */}
