@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Edit, Trash2, Check, X, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { hasExistingPlayerTimeLog } from '@/lib/playerTimeLogDedup';
 
 interface PlayerTime {
   id: string;
@@ -146,6 +147,18 @@ export function PlayerTimesTable({ playerTimes, periods, players, fixtureId, onU
       toast({
         title: "Missing Information",
         description: "Please select a player and period",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // BUG-009: today the unique constraint is the only thing catching this —
+    // check first so the error is specific and the dialog doesn't round-trip
+    // to the DB just to fail. See docs/BUG-009-PLAYER-TIME-LOGS.md §5/§7.
+    if (hasExistingPlayerTimeLog(playerTimes, addForm.player_id, addForm.period_id)) {
+      toast({
+        title: "Time Log Already Exists",
+        description: "This player already has a time log for that period. Edit the existing row instead of adding another.",
         variant: "destructive",
       });
       return;

@@ -8,6 +8,46 @@ Known issues and planned work. Newest findings at the top of each section.
 
 ## Bugs
 
+### BUG-011 — Fallback time-log inserts will over-count once the constraint is dropped `OPEN`
+**Found:** 7 Sep 2026, review of `fix/bug-009-prepare-rolling-subs`.
+
+`submitSubstitutions.applyPair` and `EnhancedMatchTracker.initMissingStarterLogs` both keep
+an `if (!row) insert { time_on_minute: 0, is_starter: true, is_active: true }` fallback
+beneath their (now `is_active`-filtered) read. The fallback fires when a player has no
+*open* interval in the period — which includes a returning player whose state is
+inconsistent, the exact condition a partially-failed Submit produces.
+
+While `unique_player_period_fixture` stands, that insert fails loudly with `23505`. Once it
+is dropped it succeeds, creating a second interval from minute 0 and double-counting the
+player's earlier spell. **The migration converts a loud failure into a silent wrong number
+here.**
+
+Likely fix: when a player being substituted off has no open interval, treat it as the
+inconsistent state it is — log it and surface it — rather than fabricating an interval from
+minute 0. Also `is_starter: true` is wrong for a returning player.
+
+**Blocks:** BUG-009's constraint-dropping migration — must be resolved in or before that PR.
+
+### BUG-010 — Schema drift: get_player_playing_time_v3 missing from the baseline `OPEN`
+Found 7 Sep 2026 during the BUG-009 investigation. The client calls
+get_player_playing_time_v3 first and falls back to v2; v3 does not exist in
+supabase/migrations/20260824000408_baseline.sql. Either it exists in the live database and
+the baseline is stale, or it has never existed and every call silently falls back. Either
+way the repository's picture of the schema does not match production.
+
+This is a prerequisite for the BUG-009 migration: a schema change should not be written
+against a baseline known to be inaccurate. Run a schema diff against staging and
+production, reconcile, and record what was found. Note that the constraint itself is
+confirmed present in staging by an observed 23505, independently of the baseline file.
+
+Overlaps with DEBT-013 ("`get_player_playing_time_v3` doesn't exist in production"), which
+asserts more confidently that v3 was never deployed. BUG-010 exists because the BUG-009
+investigation (`docs/BUG-009-PLAYER-TIME-LOGS.md` §3) found that claim is only inferred
+from the checked-in baseline, not confirmed by a live query — reconcile the two items (most
+likely merge into one) once someone actually runs the schema diff.
+
+Relates to ENV-006.
+
 ### BUG-009 — Rolling substitutions are impossible: unique constraint contradicts the interval model `OPEN`
 **Found:** 7 Sep 2026, dev testing of `feat/match-staged-subs` — first Submit failed with
 `23505 duplicate key value violates unique constraint "unique_player_period_fixture"`.
@@ -44,6 +84,20 @@ added for an upsert that no longer describes how these rows are written. Verify 
 other writer of `player_time_logs` first — the constraint may be masking duplicate-insert bugs
 elsewhere (`ensurePlayerStatuses`, the period-transition insert, `useEditMatchData`,
 `useRetrospectiveMatch`). Requires a migration on staging then production before 12 Sep 2026.
+
+**In progress.** The investigation (`docs/BUG-009-PLAYER-TIME-LOGS.md`) confirmed the
+constraint can be dropped and listed four preparatory code changes. Those four have shipped
+on branch `fix/bug-009-prepare-rolling-subs`: the two unguarded reads in
+`submitSubstitutions.ts` and `EnhancedMatchTracker.tsx` (`initMissingStarterLogs`) now filter
+on `is_active` instead of assuming one row per player/period, and `useRetrospectiveMatch.tsx`
+/ `PlayerTimesTable.tsx` now guard their inserts against an existing `(player_id, period_id)`
+row instead of relying on the constraint to catch it. This item stays `OPEN` — the
+constraint-dropping migration itself has not been written or applied. Shipping the code
+changes first, migration second, is deliberate: it avoids the two fixed reads throwing once
+the constraint no longer blocks duplicate rows from existing. Blocked on BUG-010 (schema
+baseline needs reconciling before a migration is written against it) and BUG-011 (the same
+two fixed reads' fallback inserts will over-count once this constraint is dropped, and must
+be resolved in or before this migration PR).
 
 ### BUG-008 — Match-state writes fail silently, and the timer worker may outlive the page `OPEN`
 **Found:** 7 Sep 2026, dev testing on a poor connection while verifying the BUG-007 fix.

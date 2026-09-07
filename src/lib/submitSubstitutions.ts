@@ -161,7 +161,12 @@ async function applyPair(
   await step('status: player out', () => setOnField(fixtureId, playerOut, false));
   await step('status: player in', () => setOnField(fixtureId, playerIn, true));
 
-  // Ensure a row exists for the player going OUT.
+  // Ensure a row exists for the player going OUT — i.e. their currently active
+  // interval in this period. Filtered on is_active (+ most-recent-first, belt
+  // and braces) rather than the bare (fixture, player, period) triple: a
+  // returning player can have a prior *closed* interval in this period, and a
+  // read with no is_active discriminator would find that row too and throw on
+  // more than one match once a player can hold >1 row per period (BUG-009).
   const outRow = await step('time log: read out row', async () => {
     const { data, error } = await supabase
       .from('player_time_logs')
@@ -169,6 +174,9 @@ async function applyPair(
       .eq('fixture_id', fixtureId)
       .eq('player_id', playerOut)
       .eq('period_id', period.id)
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
     if (error) throw error;
     return data;
