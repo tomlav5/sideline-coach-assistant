@@ -1,0 +1,41 @@
+-- Drop unique_player_period_fixture from public.player_time_logs (BUG-009).
+--
+-- The data model is INTERVALS, not one summary row per player per period.
+-- Within a single period a player may come on, go off, and come back on again
+-- (rolling substitutions -- the normal pattern in UK grassroots youth football,
+-- not an edge case). Each spell is its own row: `is_active` flags the open
+-- spell; `time_on_minute` / `time_off_minute` bound a closed one.
+--
+--   UNIQUE (fixture_id, player_id, period_id)
+--
+-- permits exactly one row per player per period, so the second time a player is
+-- substituted on in the same period the INSERT fails with 23505 and the whole
+-- substitution is rejected. This makes rolling substitutions impossible and
+-- blocks the 12 Sep 2026 season start.
+--
+-- The constraint was added in the Lovable era
+-- (supabase/migrations-archive/lovable-era/20250915190202_*.sql, with the
+-- comment "to support upsert operations") for an upsert path that no longer
+-- describes how these rows are written. No writer in the app calls .upsert()
+-- on this table today (see docs/BUG-009-PLAYER-TIME-LOGS.md section 1) -- every
+-- writer either filters on is_active or acts by primary key.
+--
+-- The analytics layer already sums per row, not per (player, period):
+-- get_player_playing_time_v2 and analytics.mv_player_playing_time both add up
+-- every player_time_logs row, so multiple intervals in one period total
+-- correctly. Returning-player intervals carry is_starter = false, so their
+-- start minute is their own time_on_minute rather than 0 and the sum does not
+-- double-count (docs/BUG-009-PLAYER-TIME-LOGS.md section 3).
+--
+-- No data migration is required: a UNIQUE constraint cannot have been satisfied
+-- by duplicate rows, so none exist, and dropping it does not rewrite or
+-- invalidate any existing row (section 6).
+--
+-- No replacement index. A partial unique index -- UNIQUE (fixture_id,
+-- player_id, period_id) WHERE is_active -- was considered (section 7) and
+-- deliberately not added here: it is explicitly non-blocking, the app already
+-- maintains "at most one open interval per player per period" by convention,
+-- and days before the season the minimal change wins.
+
+ALTER TABLE public.player_time_logs
+  DROP CONSTRAINT IF EXISTS unique_player_period_fixture;
