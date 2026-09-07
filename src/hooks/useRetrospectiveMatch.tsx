@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { generateUUID } from '@/lib/uuid';
+import { hasExistingPlayerTimeLog } from '@/lib/playerTimeLogDedup';
 
 interface RetrospectiveMatchData {
   fixture_id: string;
@@ -87,6 +88,82 @@ export function useRetrospectiveMatch() {
         insertedPeriods = [...existingPeriods || [], ...newPeriods || []];
       }
 
+      // Resolve incoming player-time rows against their period, and check for
+      // collisions with rows already saved for this fixture (BUG-009). Unlike
+      // the periods check above, a collision here is NOT silently skipped:
+      // periods are never edited once saved, but a duplicate (player_id,
+      // period_id) here can be a coach correcting a player's minutes on a
+      // second pass through this dialog, which does not re-fetch existing
+      // rows (see docs/BUG-009-PLAYER-TIME-LOGS.md §5). Silently dropping
+      // that edit would look like a successful save while quietly keeping
+      // the stale numbers, so the whole save is aborted before anything past
+      // the fixture/period writes above happens, with a specific error
+      // naming the colliding players — not a raw constraint-violation error.
+      const timeLogsToInsert = [];
+
+      for (const playerTime of data.player_times) {
+        const periodId = insertedPeriods?.find(p => p.period_number === playerTime.period_number)?.id;
+        const periodData = data.periods.find(p => p.period_number === playerTime.period_number);
+
+        if (!periodId || !periodData) continue;
+
+        // Calculate total period minutes for player
+        let totalPeriodMinutes = 0;
+        if (playerTime.is_starter && !playerTime.time_off_minute) {
+          totalPeriodMinutes = periodData.duration_minutes;
+        } else if (playerTime.is_starter && playerTime.time_off_minute) {
+          totalPeriodMinutes = playerTime.time_off_minute;
+        } else if (!playerTime.is_starter && playerTime.time_on_minute && !playerTime.time_off_minute) {
+          totalPeriodMinutes = periodData.duration_minutes - playerTime.time_on_minute;
+        } else if (!playerTime.is_starter && playerTime.time_on_minute && playerTime.time_off_minute) {
+          totalPeriodMinutes = playerTime.time_off_minute - playerTime.time_on_minute;
+        }
+
+        timeLogsToInsert.push({
+          fixture_id: data.fixture_id,
+          player_id: playerTime.player_id,
+          period_id: periodId,
+          time_on_minute: playerTime.time_on_minute,
+          time_off_minute: playerTime.time_off_minute,
+          is_starter: playerTime.is_starter,
+          is_active: false, // Match is completed
+          total_period_minutes: totalPeriodMinutes,
+        });
+      }
+
+      if (timeLogsToInsert.length > 0) {
+        const { data: existingTimeLogs } = await supabase
+          .from('player_time_logs')
+          .select('player_id, period_id')
+          .eq('fixture_id', data.fixture_id);
+
+        const collidingPlayerIds = Array.from(
+          new Set(
+            timeLogsToInsert
+              .filter(row => hasExistingPlayerTimeLog(existingTimeLogs || [], row.player_id, row.period_id))
+              .map(row => row.player_id),
+          ),
+        );
+
+        if (collidingPlayerIds.length > 0) {
+          const { data: collidingPlayers } = await supabase
+            .from('players')
+            .select('id, first_name, last_name')
+            .in('id', collidingPlayerIds);
+
+          const names = collidingPlayerIds
+            .map(id => {
+              const player = collidingPlayers?.find(p => p.id === id);
+              return player ? `${player.first_name} ${player.last_name}` : id;
+            })
+            .join(', ');
+
+          throw new Error(
+            `Minutes already saved for ${names}. Edit them in Match Data Editor, or remove them from this entry.`,
+          );
+        }
+      }
+
       // Create events with calculated total match minutes (idempotent via client_event_id)
       let totalMinutes = 0;
       const eventsToInsert = [];
@@ -130,39 +207,7 @@ export function useRetrospectiveMatch() {
         if (eventsError) throw eventsError;
       }
 
-      // Create player time logs
-      const timeLogsToInsert = [];
-
-      for (const playerTime of data.player_times) {
-        const periodId = insertedPeriods?.find(p => p.period_number === playerTime.period_number)?.id;
-        const periodData = data.periods.find(p => p.period_number === playerTime.period_number);
-        
-        if (!periodId || !periodData) continue;
-
-        // Calculate total period minutes for player
-        let totalPeriodMinutes = 0;
-        if (playerTime.is_starter && !playerTime.time_off_minute) {
-          totalPeriodMinutes = periodData.duration_minutes;
-        } else if (playerTime.is_starter && playerTime.time_off_minute) {
-          totalPeriodMinutes = playerTime.time_off_minute;
-        } else if (!playerTime.is_starter && playerTime.time_on_minute && !playerTime.time_off_minute) {
-          totalPeriodMinutes = periodData.duration_minutes - playerTime.time_on_minute;
-        } else if (!playerTime.is_starter && playerTime.time_on_minute && playerTime.time_off_minute) {
-          totalPeriodMinutes = playerTime.time_off_minute - playerTime.time_on_minute;
-        }
-
-        timeLogsToInsert.push({
-          fixture_id: data.fixture_id,
-          player_id: playerTime.player_id,
-          period_id: periodId,
-          time_on_minute: playerTime.time_on_minute,
-          time_off_minute: playerTime.time_off_minute,
-          is_starter: playerTime.is_starter,
-          is_active: false, // Match is completed
-          total_period_minutes: totalPeriodMinutes,
-        });
-      }
-
+      // player_times was already resolved and checked for collisions above.
       if (timeLogsToInsert.length > 0) {
         const { error: timeLogsError } = await supabase
           .from('player_time_logs')

@@ -828,12 +828,20 @@ export default function EnhancedMatchTracker() {
         if (!onField || onField.length === 0) return;
 
         for (const row of onField) {
+          // Filtered on is_active (+ most-recent-first): a returning player
+          // can have a prior closed interval in this period, and a read with
+          // no is_active discriminator would find that row too and throw on
+          // more than one match once a player can hold >1 row per period
+          // (BUG-009 — same fix as submitSubstitutions.ts's "read out row").
           const { data: existing } = await supabase
             .from('player_time_logs')
             .select('id')
             .eq('fixture_id', fixtureId)
             .eq('player_id', row.player_id)
             .eq('period_id', activeP.id)
+            .eq('is_active', true)
+            .order('created_at', { ascending: false })
+            .limit(1)
             .maybeSingle();
           if (!existing) {
             await supabase
