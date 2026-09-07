@@ -137,6 +137,11 @@ October project.
 - Before handing a change back, state plainly which checks were run and which were not.
   "Typecheck clean, unit suite 16/16, lint unchanged, not tested on a device" is useful.
   "All good" is not.
+- Whenever Claude recommends merging a branch, it supplies the PR title and body with that
+  recommendation, unprompted and without being asked. The body states what the change does
+  and why, what was tested and on what, what was deliberately not tested, and anything found
+  along the way that is being logged rather than fixed. A recommendation to merge that does
+  not come with that text is incomplete.
   
 ## Backlog maintenance
 
