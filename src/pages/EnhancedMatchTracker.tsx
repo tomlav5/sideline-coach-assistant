@@ -41,6 +41,7 @@ import { useUndoStack } from '@/hooks/useUndoStack';
 import { usePendingSubs } from '@/hooks/usePendingSubs';
 import { PendingSubsPanel } from '@/components/match/PendingSubsPanel';
 import { submitSubstitutions } from '@/lib/submitSubstitutions';
+import { decideMissingStarterLog } from '@/lib/missingStarterLog';
 import { useToast } from '@/hooks/use-toast';
 
 interface Player {
@@ -100,6 +101,11 @@ export default function EnhancedMatchTracker() {
   // currentMinute/totalMatchMinute remain the whole-minute values written to match_events.
   const [currentSeconds, setCurrentSeconds] = useState(0);
   const [totalSeconds, setTotalSeconds] = useState(0);
+  // Latest currentSeconds, readable from effects that must not re-run every
+  // second. Used by the missing-starter-log safety net (BUG-011) to place a
+  // returning player's healed interval at the real elapsed minute.
+  const currentSecondsRef = useRef(0);
+  currentSecondsRef.current = currentSeconds;
   const [currentPeriodNumber, setCurrentPeriodNumber] = useState(0);
   // Live period id + running flag reported by useEnhancedMatchTimer (via
   // EnhancedMatchControls' onTimerUpdate). This page's own `periods`/`fixture`
@@ -636,6 +642,8 @@ export default function EnhancedMatchTracker() {
       currentMinute,
       totalMatchMinute,
       currentSeconds,
+      // Names the player in the BUG-011 "minutes may be understated" toast.
+      resolvePlayerName: firstNameFor,
     });
 
     if (result.committedPairIds.length > 0) {
@@ -827,34 +835,73 @@ export default function EnhancedMatchTracker() {
           .eq('is_on_field', true);
         if (!onField || onField.length === 0) return;
 
+        // Elapsed minutes in the current period, from the freshest value the
+        // timer has reported. This effect can run before the timer has ticked
+        // (straight after mount, currentSeconds still 0), so treat "no positive
+        // elapsed time" as "not available" and pass null — decideMissingStarterLog
+        // then skips a returning player rather than fabricating a spell from
+        // minute 0 (BUG-011). A genuine starter (no rows at all) is still
+        // inserted at minute 0 regardless.
+        const elapsedSeconds = currentSecondsRef.current;
+        const durationMinute =
+          elapsedSeconds > 0 ? Math.floor(elapsedSeconds / 60) : null;
+
         for (const row of onField) {
-          // Filtered on is_active (+ most-recent-first): a returning player
-          // can have a prior closed interval in this period, and a read with
-          // no is_active discriminator would find that row too and throw on
-          // more than one match once a player can hold >1 row per period
-          // (BUG-009 — same fix as submitSubstitutions.ts's "read out row").
-          const { data: existing } = await supabase
+          // Read EVERY row for (fixture, player, period), active and closed, so
+          // a genuine missing starter is told apart from a returning player
+          // whose current spell was never recorded (BUG-011). A duplicate
+          // insert is no longer blocked by unique_player_period_fixture
+          // (BUG-009), so the old unconditional { minute 0, is_starter: true }
+          // fallback would double-count the bench time between spells.
+          const { data: rows, error: readErr } = await supabase
             .from('player_time_logs')
-            .select('id')
+            .select('id, is_active')
             .eq('fixture_id', fixtureId)
             .eq('player_id', row.player_id)
-            .eq('period_id', activeP.id)
-            .eq('is_active', true)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          if (!existing) {
-            await supabase
-              .from('player_time_logs')
-              .insert({
-                fixture_id: fixtureId,
-                player_id: row.player_id,
-                period_id: activeP.id,
-                time_on_minute: 0,
-                is_starter: true,
-                is_active: true,
-              });
+            .eq('period_id', activeP.id);
+          if (readErr) {
+            console.warn(
+              `[initMissingStarterLogs] could not read time logs for player ${row.player_id} ` +
+                `in period ${activeP.id}; skipping`,
+              readErr,
+            );
+            continue;
           }
+
+          const decision = decideMissingStarterLog(rows ?? [], durationMinute);
+          if (decision.insert === false) {
+            if (decision.reason === 'missing-spell-no-duration') {
+              // Rows exist but none active and no elapsed time to place the
+              // spell — do NOT fall back to minute 0 (that over-counts).
+              // Leave it for Match Data Editor.
+              console.error(
+                `[initMissingStarterLogs] player ${row.player_id} has closed player_time_logs ` +
+                  `rows in period ${activeP.id} but no active one, and no elapsed time is ` +
+                  `available to place the spell — skipping insert. This player's minutes may ` +
+                  `be understated; check Match Data Editor.`,
+              );
+            }
+            continue;
+          }
+          if (decision.missingSpell) {
+            console.error(
+              `[initMissingStarterLogs] player ${row.player_id} is on the pitch in period ` +
+                `${activeP.id} with closed time logs but no active one; their current spell ` +
+                `was never recorded. Opening an interval from minute ${decision.timeOnMinute} ` +
+                `(is_starter=false) — the un-recorded earlier minutes are lost, so this ` +
+                `player's total is understated rather than over-counted (BUG-011).`,
+            );
+          }
+          await supabase
+            .from('player_time_logs')
+            .insert({
+              fixture_id: fixtureId,
+              player_id: row.player_id,
+              period_id: activeP.id,
+              time_on_minute: decision.timeOnMinute,
+              is_starter: decision.isStarter,
+              is_active: true,
+            });
         }
       } catch (e) {
         console.warn('Failed to init missing starter logs:', e);

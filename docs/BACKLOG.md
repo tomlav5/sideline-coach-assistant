@@ -8,47 +8,71 @@ Known issues and planned work. Newest findings at the top of each section.
 
 ## Bugs
 
-### BUG-011 — Fallback time-log inserts will over-count once the constraint is dropped `OPEN`
+### BUG-011 — Fallback time-log inserts will over-count once the constraint is dropped `DONE`
 **Found:** 7 Sep 2026, review of `fix/bug-009-prepare-rolling-subs`.
 
-`submitSubstitutions.applyPair` and `EnhancedMatchTracker.initMissingStarterLogs` both keep
+`submitSubstitutions.applyPair` and `EnhancedMatchTracker.initMissingStarterLogs` both kept
 an `if (!row) insert { time_on_minute: 0, is_starter: true, is_active: true }` fallback
 beneath their (now `is_active`-filtered) read. The fallback fires when a player has no
 *open* interval in the period — which includes a returning player whose state is
 inconsistent, the exact condition a partially-failed Submit produces.
 
-While `unique_player_period_fixture` stands, that insert fails loudly with `23505`. Once it
+While `unique_player_period_fixture` stood, that insert failed loudly with `23505`. Once it
 is dropped it succeeds, creating a second interval from minute 0 and double-counting the
-player's earlier spell. **The migration converts a loud failure into a silent wrong number
-here.**
+player's earlier spell. The migration would have converted a loud failure into a silent
+wrong number here.
 
-Likely fix: when a player being substituted off has no open interval, treat it as the
-inconsistent state it is — log it and surface it — rather than fabricating an interval from
-minute 0. Also `is_starter: true` is wrong for a returning player.
+**Done — ships with the BUG-009 migration on `fix/bug-009-drop-unique-constraint` (PR
+TBD).** Both fallbacks now read *every* row for `(fixture_id, player_id, period_id)`, active
+and closed, and route the decision through a new pure function
+`src/lib/missingStarterLog.ts` (`decideMissingStarterLog`, 9 unit tests) that distinguishes
+three cases:
 
-**Blocks:** BUG-009's constraint-dropping migration — must be resolved in or before that PR.
+1. **No rows at all** — a genuine starter whose log was never written. Insert
+   `time_on_minute: 0, is_starter: true`. Unchanged.
+2. **Rows exist but none active** — the record of the player's current spell is missing and
+   its start minute is unknown. Insert `time_on_minute` = the current elapsed duration in
+   the period (the same value that closes the outgoing interval) with `is_starter: false`.
+   The caller closes it at the same minute, so it is a **zero-length spell**: the player is
+   credited *nothing* for the missing spell. This deliberately **under-states** rather than
+   over-states — over-crediting hands the player less time in later matches than they are
+   owed, the exact outcome this app exists to prevent. A `console.error` names the player,
+   period and values. In `submitSubstitutions` only, a non-blocking `toast.warning` names
+   the player and points at Match Data Editor; the pair is *not* failed (a lost
+   substitution desyncs the on-screen pitch from the real one — worse than approximate
+   minutes, per the UX-007 risk section). In `initMissingStarterLogs`, if the elapsed
+   duration is not available at that point (timer has not ticked since mount), the insert
+   is skipped entirely and logged — it never falls back to 0.
+3. **An active row exists** — no insert; the caller's existing logic closes/extends it.
 
-### BUG-010 — Schema drift: get_player_playing_time_v3 missing from the baseline `OPEN`
-Found 7 Sep 2026 during the BUG-009 investigation. The client calls
-get_player_playing_time_v3 first and falls back to v2; v3 does not exist in
-supabase/migrations/20260824000408_baseline.sql. Either it exists in the live database and
-the baseline is stale, or it has never existed and every call silently falls back. Either
-way the repository's picture of the schema does not match production.
+**Was blocking:** BUG-009's constraint-dropping migration — now resolved in the same PR.
 
-This is a prerequisite for the BUG-009 migration: a schema change should not be written
-against a baseline known to be inaccurate. Run a schema diff against staging and
-production, reconcile, and record what was found. Note that the constraint itself is
-confirmed present in staging by an observed 23505, independently of the baseline file.
+### BUG-010 — `get_player_playing_time_v3` is a dead client code path, not schema drift `DONE`
+Found 7 Sep 2026 during the BUG-009 investigation; resolved 7 Sep 2026 on
+`fix/bug-009-drop-unique-constraint`.
 
-Overlaps with DEBT-013 ("`get_player_playing_time_v3` doesn't exist in production"), which
-asserts more confidently that v3 was never deployed. BUG-010 exists because the BUG-009
-investigation (`docs/BUG-009-PLAYER-TIME-LOGS.md` §3) found that claim is only inferred
-from the checked-in baseline, not confirmed by a live query — reconcile the two items (most
-likely merge into one) once someone actually runs the schema diff.
+Read-only SQL was run against **both** databases —
+production (`crmlmnhillnnrnrxqera`) and staging (`xszbopufqchbfbqwvqbb`) — for two objects:
+`unique_player_period_fixture` and `get_player_playing_time_v3`. Result: the constraint
+exists on both with the identical definition `UNIQUE (fixture_id, player_id, period_id)`,
+and **`get_player_playing_time_v3` exists in neither**. So this was never schema drift —
+DEBT-013's stronger claim ("v3 was never deployed") was correct. The repository's baseline
+is not stale here; it matches both live databases.
 
-Relates to ENV-006.
+Reframed: `src/hooks/useReports.tsx` calls `get_player_playing_time_v3` first on every
+Reports load and only falls back to `v2` in the `catch`. That first call has always failed
+(function not found) and always will — a dead round-trip on every load, plus the
+already-noted problem of three disagreeing "minutes played" formulas. The fix is the same
+one DEBT-013 already describes: pick one implementation, deploy it as the only RPC the
+client calls, drop the others. **Folded into DEBT-013** — see there; this item exists only
+to record that the live check was run and settled the "drift vs. dead code" question.
 
-### BUG-009 — Rolling substitutions are impossible: unique constraint contradicts the interval model `OPEN`
+**Scope of the check:** these two objects only, by name, on both databases. Not a full
+schema diff — DEBT-002 covers that, and it reported local/remote reconciled as of Session 8.
+
+Relates to DEBT-013, ENV-006.
+
+### BUG-009 — Rolling substitutions are impossible: unique constraint contradicts the interval model `DONE`
 **Found:** 7 Sep 2026, dev testing of `feat/match-staged-subs` — first Submit failed with
 `23505 duplicate key value violates unique constraint "unique_player_period_fixture"`.
 
@@ -85,19 +109,29 @@ other writer of `player_time_logs` first — the constraint may be masking dupli
 elsewhere (`ensurePlayerStatuses`, the period-transition insert, `useEditMatchData`,
 `useRetrospectiveMatch`). Requires a migration on staging then production before 12 Sep 2026.
 
-**In progress.** The investigation (`docs/BUG-009-PLAYER-TIME-LOGS.md`) confirmed the
-constraint can be dropped and listed four preparatory code changes. Those four have shipped
-on branch `fix/bug-009-prepare-rolling-subs`: the two unguarded reads in
-`submitSubstitutions.ts` and `EnhancedMatchTracker.tsx` (`initMissingStarterLogs`) now filter
-on `is_active` instead of assuming one row per player/period, and `useRetrospectiveMatch.tsx`
-/ `PlayerTimesTable.tsx` now guard their inserts against an existing `(player_id, period_id)`
-row instead of relying on the constraint to catch it. This item stays `OPEN` — the
-constraint-dropping migration itself has not been written or applied. Shipping the code
-changes first, migration second, is deliberate: it avoids the two fixed reads throwing once
-the constraint no longer blocks duplicate rows from existing. Blocked on BUG-010 (schema
-baseline needs reconciling before a migration is written against it) and BUG-011 (the same
-two fixed reads' fallback inserts will over-count once this constraint is dropped, and must
-be resolved in or before this migration PR).
+**Done — `fix/bug-009-drop-unique-constraint` (PR TBD).** Two stages:
+
+- **Preparatory code changes (shipped earlier, `fix/bug-009-prepare-rolling-subs`).** The
+  two unguarded reads in `submitSubstitutions.ts` and `EnhancedMatchTracker.tsx`
+  (`initMissingStarterLogs`) were changed to filter on `is_active` instead of assuming one
+  row per player/period, and `useRetrospectiveMatch.tsx` / `PlayerTimesTable.tsx` were
+  given duplicate guards against an existing `(player_id, period_id)` row instead of
+  relying on the constraint. Shipping these first was deliberate — it stops those reads
+  throwing once duplicate rows become possible.
+- **This branch.** Migration
+  `supabase/migrations/20260907213545_drop_unique_player_period_fixture.sql` drops
+  `unique_player_period_fixture` (`ALTER TABLE ... DROP CONSTRAINT IF EXISTS`), with a
+  comment block explaining the interval model, the obsolete Lovable-era upsert rationale,
+  and that the analytics layer already sums per row. **No** partial `WHERE is_active` index
+  is added — non-blocking, and the minimal change wins this close to the season. Ships
+  alongside the BUG-011 fix (the fallback-insert over-count), which had to land in or
+  before this PR. Migration application is a **manual step** — `supabase db push` was not
+  run.
+
+Read-only SQL against both databases (see BUG-010) confirmed the constraint exists on
+production and staging with the identical definition, and that no duplicate rows can exist
+(a UNIQUE constraint cannot have been satisfied by duplicates), so there is no data
+migration.
 
 ### BUG-008 — Match-state writes fail silently, and the timer worker may outlive the page `OPEN`
 **Found:** 7 Sep 2026, dev testing on a poor connection while verifying the BUG-007 fix.
@@ -324,6 +358,22 @@ Relates to UX-001.
 
 ## Technical debt
 
+### DEBT-023 — Redundant `sideline_app` Supabase project should be retired `OPEN`
+**Found:** 7 Sep 2026, while enumerating Supabase projects for the BUG-009 migration.
+
+There is a third Supabase project, `sideline_app` (ref `pngbyspcczhzkccjxupo`, created
+23 Aug 2025), alongside the two in use — production `crmlmnhillnnrnrxqera` (`coach-asst`)
+and staging `xszbopufqchbfbqwvqbb` (`sideline-staging`). The project owner has confirmed it
+is a redundant first attempt and nothing points at it (no `.env*` in this repo references
+that ref; `config.toml` and `.temp/linked-project.json` name the other two).
+
+Before deleting: log in to the Supabase dashboard for `pngbyspcczhzkccjxupo` and check what
+it actually holds — any real rows, storage objects, edge functions, or auth users — and
+export anything worth keeping. Then delete the project. **Do this after 12 Sep 2026**, not
+during season-start week, so it cannot possibly disturb the launch.
+
+Relates to ENV-008, ENV-005.
+
 ### DEBT-020 — Lovable leftovers and repo hygiene `OPEN`
 **Found:** 4 Sep 2026
 
@@ -471,6 +521,12 @@ DEBT-001).
 The client (`src/hooks/useReports.tsx:147`) calls `get_player_playing_time_v3` first on
 every reports page load and only falls back to `v2` in the `catch` block. `v3` was never
 deployed (`docs/SCHEMA_BASELINE.md` §3) — every load silently eats a failed RPC round-trip.
+
+**Confirmed 7 Sep 2026 by read-only SQL against both databases:** `get_player_playing_time_v3`
+exists in neither production (`crmlmnhillnnrnrxqera`) nor staging (`xszbopufqchbfbqwvqbb`).
+BUG-010 (which raised the possibility that the baseline was merely stale) is folded into
+this item — it was a dead client code path, not schema drift. Check covered this function
+and `unique_player_period_fixture` only, not a full schema diff.
 Worse: there are now three different formulas for the same "minutes played" number in
 production (`get_player_playing_time`/`_v2`, the never-deployed `_v3`, and
 `analytics.mv_player_playing_time`, which is refreshed on every match write but read by
@@ -595,6 +651,24 @@ path — DEBT-012 is DONE, so this can be picked up directly.
 ---
 
 ## Environments & delivery
+
+### ENV-008 — `supabase/config.toml` default project is production; linking must be explicit `OPEN`
+**Found:** 7 Sep 2026, during the BUG-009 migration work.
+
+`supabase/config.toml` sets `project_id = "crmlmnhillnnrnrxqera"` — that is
+**production** (`coach-asst`). All schema work is done against **staging**,
+`xszbopufqchbfbqwvqbb` (`sideline-staging`). A `supabase link` that accepts the config
+default, or any CLI command that falls back to it, points the local toolchain at the live
+match database. `supabase db push` in particular would apply migrations to production.
+
+The linked project is stored in `supabase/.temp/linked-project.json` (currently staging,
+correctly), but that is easy to overwrite and not obvious. Rule going forward: every
+`supabase link` / `supabase db …` invocation must pass `--project-ref` explicitly —
+`xszbopufqchbfbqwvqbb` for staging, `crmlmnhillnnrnrxqera` for production — and never rely
+on the `config.toml` default. Consider changing the `config.toml` default to staging, or
+removing it so the CLI always demands `--project-ref`.
+
+Both refs are now recorded in `CLAUDE.md`'s Supabase section. Relates to ENV-005, ENV-001.
 
 ### ENV-007 — Auth emails send from Resend's shared sandbox domain `OPEN`
 **Found:** 4 Sep 2026
