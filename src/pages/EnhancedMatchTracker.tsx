@@ -112,7 +112,13 @@ export default function EnhancedMatchTracker() {
   // state is only loaded on mount, so when a period is started while the screen
   // is open, usePlayerTimers otherwise has no period to read and every tile
   // sticks at 0m until the page is remounted (DEFECT 1).
-  const [timerPeriodId, setTimerPeriodId] = useState<string | null>(null);
+  //
+  // `timerPeriodId` is `undefined` until the timer's first update, then the
+  // reported value — which is `null` between periods. That distinction matters:
+  // a reported `null` must reach usePlayerTimers as `null` (no active period),
+  // while `undefined` still falls back to the mount-time period id for the
+  // brief window before the timer speaks (BUG-012).
+  const [timerPeriodId, setTimerPeriodId] = useState<string | null | undefined>(undefined);
   const [timerRunning, setTimerRunning] = useState(false);
   const [loading, setLoading] = useState(true);
   
@@ -581,14 +587,21 @@ export default function EnhancedMatchTracker() {
   };
   const currentPeriod = periods.find(p => p.is_active) || (periods.length > 0 ? periods[periods.length - 1] : null);
 
-  // Real-time player timers. Prefer the live period id/flag from the timer
-  // (fresh every second) over this page's mount-only `periods`/`fixture` state,
-  // which is stale for a match started while the screen was open (DEFECT 1).
-  const isMatchRunning = fixture?.status === 'in_progress' && currentPeriod?.is_active;
+  // Real-time player timers. The timer (fresh every second via onTimerUpdate) is
+  // the source of truth for both the running flag and the current period id.
+  // This page's `periods`/`fixture` state is loaded once on mount and never
+  // refreshed, so anything derived from it is stale the moment a period ends —
+  // `isMatchRunning` could never go false, and `?? currentPeriod?.id` masked a
+  // reported `null` with the mount-time period. Both held usePlayerTimers in a
+  // mid-period state after the period ended, so the BUG-012 reload never fired.
+  //
+  // `currentPeriod?.id` is still used as the fallback only while `timerPeriodId`
+  // is `undefined` (before the timer's first update); once the timer reports,
+  // its value wins — including a `null` that means "no active period".
   const { getPlayerTime, reloadTimes } = usePlayerTimers({
     fixtureId: fixtureId!,
-    currentPeriodId: timerPeriodId ?? currentPeriod?.id ?? null,
-    isTimerRunning: timerRunning || isMatchRunning || false,
+    currentPeriodId: timerPeriodId !== undefined ? timerPeriodId : (currentPeriod?.id ?? null),
+    isTimerRunning: timerRunning,
     // Elapsed seconds in the current period, pause-adjusted by the timer.
     // Tile minutes are derived from this at render — no interval in the hook.
     currentPeriodSeconds: currentSeconds,
