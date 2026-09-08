@@ -700,7 +700,9 @@ export default function EnhancedMatchTracker() {
       const ab = actionBarRef.current?.offsetHeight ?? 0;
       const ex = footerExtrasRef.current?.offsetHeight ?? 0;
       setActionBarH(ab || 72);
-      setFooterPad(ab + ex + 16);
+      // Clamp so a tall footer stack can't eat the whole viewport.
+      const cap = Math.round(window.innerHeight * 0.55);
+      setFooterPad(Math.min(ab + ex + 16, cap));
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -1012,7 +1014,7 @@ export default function EnhancedMatchTracker() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="h-[100dvh] flex flex-col overflow-hidden">
       {/* Fixed Header with Score and Timer */}
       <FixedMatchHeader
         teamName={fixture.teams?.name || 'Team'}
@@ -1028,7 +1030,7 @@ export default function EnhancedMatchTracker() {
       {/* Scrollable Content Area. Bottom padding is derived from the measured
           footer (action bar + pending panel + events summary), which is now
           variable-height — see the useLayoutEffect above (UX-007). */}
-      <div className="flex-1 overflow-y-auto" style={{ paddingBottom: footerPad }}>
+      <div className="flex-1 min-h-0 overflow-y-auto" style={{ paddingBottom: footerPad }}>
         <div className="container mx-auto p-3 sm:p-4 space-y-4 max-w-4xl">
 
       {/* Match Locking Banner */}
@@ -1394,7 +1396,7 @@ export default function EnhancedMatchTracker() {
           grid is never hidden behind it however many substitutions are pending. */}
       <div
         ref={footerExtrasRef}
-        className="fixed left-0 right-0 z-30"
+        className="fixed left-0 right-0 z-30 max-h-[45dvh] overflow-y-auto overscroll-contain"
         style={{ bottom: actionBarH }}
       >
         <PendingSubsPanel

@@ -8,6 +8,66 @@ Known issues and planned work. Newest findings at the top of each section.
 
 ## Bugs
 
+### BUG-016 — Intermittent app-wide scroll lock `DONE 8 Sep 2026`
+**Found:** 6 Sep 2026 during staging testing of `feat/match-staged-subs`. Pre-existing on
+`main`; not introduced by UX-007. Fixed 8 Sep 2026 on `fix/app-scroll-and-footer-overflow`
+(PR TBD).
+
+Reported as "intermittent, occasionally the whole app can't scroll until reload". Two
+distinct mechanisms, and they compound — fixing either one alone leaves the symptom partly
+present:
+
+- **A duplicate hand-rolled body scroll lock in `src/components/ui/dialog.tsx`.** A
+  `React.useEffect` at the top of `DialogContent` maintained its own lock via a
+  `data-dialog-count` DOM attribute, setting `document.body.style.overflow = 'hidden'` on
+  the first open and restoring it on the last close. Radix's `react-remove-scroll` already
+  locks body scroll for modal dialogs, so this was a second, competing lock whose state
+  lived in a DOM attribute rather than in React. Any `DialogContent` whose cleanup did not
+  run (StrictMode double-invoke, an unmount race, a portal torn down out of order) left
+  `overflow: hidden` orphaned on `<body>` with no owner — and nothing to ever remove it
+  short of a reload. It also captured `originalStyle` from `getComputedStyle`, which
+  returns `"visible"` not `""`, so even the happy path wrote back an inline style that was
+  never there. Fixed by deleting the effect entirely and relying on Radix's lock. The fix
+  removes the duplicate lock rather than patching its counter.
+- **The match screen's `min-h-screen` root.** `EnhancedMatchTracker`'s outer div was
+  `min-h-screen flex flex-col`, so the root grew with its content and the
+  `flex-1 overflow-y-auto` child never actually scrolled — the document body did. Changed
+  to `h-[100dvh] … overflow-hidden` with `min-h-0` on the scroll child so the inner
+  container is the scroller, as intended.
+
+Previously worked on by Lovable and Windsurf without resolution.
+
+Also added a one-time self-heal in `src/App.tsx` that clears any orphaned
+`data-dialog-count` / `data-original-overflow` / `overflow` / `padding-right` left on
+`<body>`, so a session already stuck unlocks itself on next load rather than needing a
+manual reload.
+
+Confirmed `dialog.tsx` was the only file under `src/components/ui/` touching
+`document.body.style`; `sheet.tsx`, `alert-dialog.tsx` and `drawer.tsx` have no equivalent
+lock.
+
+Checks: `tsc --noEmit -p tsconfig.app.json` clean; `npm run lint` unchanged (pre-existing
+errors only); vitest — see note; `npm run build` clean. Not tested on a device. No database
+writes, no changes to match recording, timers or player-time logic.
+
+### BUG-015 — Footer stack overruns the viewport on iPhone `DONE 8 Sep 2026`
+**Found:** 6 Sep 2026, same staging testing session as BUG-016. Pre-existing on `main`.
+Fixed 8 Sep 2026 on `fix/app-scroll-and-footer-overflow` (PR TBD).
+
+The variable-height footer introduced by UX-007 branch 3 (the `footerExtrasRef` block —
+pending-subs panel plus events summary, `fixed left-0 right-0` with `bottom: actionBarH`)
+had no height limit and no internal scroll. With several pending substitutions plus the
+events summary it grew *upwards* past the top of the viewport, with no way to scroll it —
+reported on staging as navigation elements sitting off-screen on an iPhone.
+
+Fixed by capping that div at `max-h-[45dvh]` with `overflow-y-auto overscroll-contain`, and
+clamping the derived scroll-area padding (`setFooterPad` in the measuring `useLayoutEffect`)
+to `min(ab + ex + 16, round(window.innerHeight * 0.55))` so a tall footer can never eat the
+whole viewport.
+
+Checks: `tsc --noEmit -p tsconfig.app.json` clean; `npm run lint` unchanged (pre-existing
+errors only); vitest — see note; `npm run build` clean. Not tested on a device.
+
 ### BUG-013 — Heartbeat failures are silent, so a coach on poor signal can lose the lock while recording `OPEN`
 **Found:** 7 Sep 2026, reviewing multi-coach safety.
 
