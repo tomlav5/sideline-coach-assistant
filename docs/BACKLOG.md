@@ -990,6 +990,47 @@ on `match_events` → web push.
 
 ## Onboarding
 
+### ONBOARD-003 — Resend-code button failed silently when rate-limited `DONE 8 Sep 2026`
+**Found:** 8 Sep 2026, reviewing the first-sign-in path ahead of the 13 Sep coaches.
+Fixed 8 Sep 2026 on `fix/onboard-003-otp-resend-feedback` (PR TBD).
+
+Supabase rate-limits one-time-code requests to roughly one per 30 seconds. In
+`src/pages/Auth.tsx`, `handleResendOtp` called `signInWithOtp(otpEmail)` and discarded the
+returned error entirely — no destructure, no check, no UI. When the request was refused the
+button spun briefly and nothing else happened: no email, no message, no explanation. A user
+who couldn't find the email tapped Resend again, got the same silence, and concluded the app
+was broken.
+
+The rate limit itself is correct and is unchanged — without it the endpoint is an
+email-bombing tool aimed at any address someone types. The defect was purely that nothing
+told the user it had been hit.
+
+Compounds with ENV-007: auth emails currently send from Resend's shared sandbox domain, so
+they can land in junk. A coach who can't find the email is exactly the person who taps
+Resend repeatedly and trips the limit — then gets no feedback.
+
+Relates to ONBOARD-002: with no password-reset flow in the UI, the emailed 6-digit code is
+the only recovery route for a user who set a password at signup and forgot it. That route
+failing quietly is the difference between "check your junk folder" and a lockout.
+
+Fix (Auth.tsx only, no auth-logic or schema changes):
+- `handleResendOtp` now destructures `{ error }` and shows a destructive toast on failure.
+  A rate-limit error (`status === 429` or a matching message) gets a plain, actionable
+  message — "Wait 30 seconds, then try again — and check your junk folder." Any other error
+  shows its own message rather than being swallowed.
+- A visible 30-second cooldown, tracked in component state and counted down by an interval
+  cleared on unmount. It starts after *any* successful send, including the first one on the
+  email step (that request counts against the limit too), so the countdown is already
+  running when the user lands on the code-entry step.
+- While the cooldown runs the Resend button is disabled and its label shows the wait
+  ("Resend in 24s"), so the delay is visible in advance rather than discovered by failure.
+- Button relabelled "Resend Link" → "Resend Code" — this flow sends a 6-digit code, not a
+  link.
+
+Checks: `tsc --noEmit -p tsconfig.app.json` clean; `npm run lint` unchanged (pre-existing
+errors only); vitest — see note; `npm run build` clean. Not tested on a device and not
+tested against a live rate-limit response.
+
 ### ONBOARD-002 — No password reset flow `OPEN`
 **Found:** 4 Sep 2026, while verifying auth after the Lovable disconnect
 
