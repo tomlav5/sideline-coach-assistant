@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -16,9 +16,39 @@ export default function Auth() {
   const [otpStep, setOtpStep] = useState<'email' | 'code'>('email');
   const [otpEmail, setOtpEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
+  // Supabase rate-limits OTP requests to ~one per 30s. Track the remaining wait
+  // so the Resend button can show it in advance rather than the user discovering
+  // it by a silent failure (ONBOARD-003).
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const cooldownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { signUp, signInWithOtp, signInWithPassword, verifyOtp } = useAuth();
   const navigate = useNavigate();
   const isDev = import.meta.env.DEV;
+
+  // Every OTP send — the first one on the email step included — counts against
+  // the rate limit, so start the countdown on any successful send.
+  const startResendCooldown = () => {
+    if (cooldownIntervalRef.current) clearInterval(cooldownIntervalRef.current);
+    setResendCooldown(30);
+    cooldownIntervalRef.current = setInterval(() => {
+      setResendCooldown((seconds) => {
+        if (seconds <= 1) {
+          if (cooldownIntervalRef.current) {
+            clearInterval(cooldownIntervalRef.current);
+            cooldownIntervalRef.current = null;
+          }
+          return 0;
+        }
+        return seconds - 1;
+      });
+    }, 1000);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (cooldownIntervalRef.current) clearInterval(cooldownIntervalRef.current);
+    };
+  }, []);
 
   const handleSignUp = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -74,16 +104,36 @@ export default function Auth() {
     if (!error) {
       setOtpStep('code');
       setOtpCode('');
+      startResendCooldown();
     }
     setIsLoading(false);
   };
 
 
   const handleResendOtp = async () => {
+    if (resendCooldown > 0) return;
     setIsLoading(true);
-    await signInWithOtp(otpEmail);
-    setOtpCode('');
+    const { error } = await signInWithOtp(otpEmail);
     setIsLoading(false);
+
+    if (error) {
+      const isRateLimit =
+        error?.status === 429 ||
+        /rate limit|too many requests|after \d+ seconds|only request this/i.test(
+          error?.message ?? '',
+        );
+      toast({
+        title: isRateLimit ? 'Too many requests' : 'Could not resend code',
+        description: isRateLimit
+          ? 'Wait 30 seconds, then try again — and check your junk folder.'
+          : error.message || 'Something went wrong. Please try again.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setOtpCode('');
+    startResendCooldown();
   };
 
   const handleVerifyCode = async (code?: string) => {
@@ -280,9 +330,9 @@ export default function Auth() {
                         variant="ghost"
                         size="sm"
                         onClick={handleResendOtp}
-                        disabled={isLoading}
+                        disabled={isLoading || resendCooldown > 0}
                       >
-                        Resend Link
+                        {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend Code'}
                       </Button>
                     </div>
                   </div>
