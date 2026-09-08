@@ -32,7 +32,20 @@ const AdminApprovals = lazy(() => import("./pages/AdminApprovals"));
 const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 const AcceptInvitation = lazy(() => import("./pages/AcceptInvitation"));
 
-const App = () => (
+const App = () => {
+  // One-time self-heal for BUG-016. An earlier dialog.tsx hand-rolled a body
+  // scroll lock keyed off DOM attributes; if a DialogContent unmounted without
+  // its cleanup running, `overflow: hidden` could be orphaned on <body> with no
+  // owner, freezing the whole app until reload. That lock is gone now — this
+  // clears any residue left behind in a session that predates the fix.
+  useEffect(() => {
+    document.body.removeAttribute('data-dialog-count');
+    document.body.removeAttribute('data-original-overflow');
+    document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('padding-right');
+  }, []);
+
+  return (
   <ThemeProvider defaultTheme="dark" storageKey="sideline-theme">
     <TooltipProvider>
       <Toaster />
@@ -176,6 +189,7 @@ const App = () => (
       </BrowserRouter>
     </TooltipProvider>
   </ThemeProvider>
-);
+  );
+};
 
 export default App;
