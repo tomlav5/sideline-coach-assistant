@@ -8,6 +8,43 @@ Known issues and planned work. Newest findings at the top of each section.
 
 ## Bugs
 
+### BUG-017 — Manual Entry during a live match marks the fixture completed `OPEN — fix before 12 Sep`
+**Found:** 8 Sep 2026, on production during live match tracking. **Confirmed**, not hypothesised.
+
+Opening Manual Entry (the retrospective match dialog) part-way through a live match and adding a
+data point sets the fixture to `status: 'completed'` / `match_status: 'completed'`
+(`useRetrospectiveMatch.tsx:46-49`). The match is ended in the database while the coach is still
+recording it.
+
+Observed consequences: a toast reading "match tracking stopped / match completed" cycling in a
+loop, and the match screen unusable until the period was ended and the user navigated away and
+back. The toasts are downstream — `MatchLockingBanner` hides itself once the fixture reads
+completed (line ~24), `useEnhancedMatchTimer:442` toasts "Match completed", and
+`useRealtimeMatchSync:88` toasts "Match Tracking Released"; the loop is the fixture realtime
+subscription re-firing with no guard on whether the relevant state actually changed.
+
+The write is correct for the dialog's purpose — entering a match that has already been played.
+Nothing prevents it running against a fixture that is live, and the button is enabled for the
+active tracker precisely while a match is in progress.
+
+**Severity.** This is data damage during live recording, not a UI defect. The button sits on the
+match screen alongside Edit Squad and View Report, and two coaches unfamiliar with the app record
+their first matches on 13 Sep.
+
+**Fix shape (this week, minimal).** Disable the Manual Entry button while the fixture is
+`in_progress` / `live` / `paused`, and add a guard in `useRetrospectiveMatch` that refuses to run
+against a live fixture rather than relying on the button alone. Do not otherwise change the
+retrospective flow.
+
+**Fix shape (after the season).** A confirmation naming the fixture, and separating "record a past
+match" from "correct a match in progress" — the latter is what Match Data Editor is for. Toasts
+should fire on an actual state transition rather than on every realtime payload.
+
+**Interim mitigation, no code:** do not open Manual Entry during a live match. Tell both coaches
+when onboarding them on 13 Sep, regardless of whether the fix ships.
+
+Relates to UX-011 (nothing confirms which match you are acting on).
+
 ### BUG-016 — Intermittent app-wide scroll lock `DONE 8 Sep 2026`
 **Found:** 6 Sep 2026 during staging testing of `feat/match-staged-subs`. Pre-existing on
 `main`; not introduced by UX-007. Fixed 8 Sep 2026 on `fix/app-scroll-and-footer-overflow`
@@ -67,6 +104,11 @@ whole viewport.
 
 Checks: `tsc --noEmit -p tsconfig.app.json` clean; `npm run lint` unchanged (pre-existing
 errors only); vitest — see note; `npm run build` clean. Not tested on a device.
+
+**Amendment — 8 Sep 2026:** the fix was merged without being exercised on a device. Desktop
+testing covered the scroll lock only; the footer cap, its internal scrolling and the player grid
+remaining reachable behind it are unverified on iPhone. First real exercise is the full match dry
+run on 11 Sep 2026.
 
 ### BUG-013 — Heartbeat failures are silent, so a coach on poor signal can lose the lock while recording `OPEN`
 **Found:** 7 Sep 2026, reviewing multi-coach safety.
@@ -541,6 +583,36 @@ Relates to UX-001.
 
 ## Technical debt
 
+### DEBT-025 — No documented credentials or recovery path for the staging account `OPEN`
+**Found:** 8 Sep 2026.
+
+Staging has a single user, and that user is also the only account able to approve registrations
+(ONBOARD-001). Its password was generated in an earlier session and never recorded anywhere — not
+in a password manager, not in a notes file, not recoverable from any transcript. With email
+recovery also unavailable on staging (ENV-009), the environment became unusable until the password
+was reset through the dashboard.
+
+**Fix shape.** Record the staging credentials in a password manager. Consider seeding a second
+staging user with an approver role, so one lost password cannot lock the environment. Do not commit
+credentials to the repository.
+
+### DEBT-024 — CLAUDE.md's git rule gives a rationale that no longer matches its enforcement `OPEN`
+**Found:** 8 Sep 2026.
+
+The working agreement forbids running git commands and explains why in terms of the Cowork file
+bridge: the bridge cannot delete files, so git leaves a stale `.git/index.lock` that stops GitHub
+Desktop committing. That reasoning is correct for the bridge and does not apply to Claude Code,
+which has a real shell where git cleans up after itself.
+
+The rule is now enforced against Claude Code by `.claude/settings.json`, which denies the mutating
+git commands only. The genuine reason there is different: an agent running `git stash` or
+`git checkout` moves the working tree underneath the user, who drives branches and merges through
+GitHub Desktop.
+
+**Fix shape.** Reword the rule to separate the two rationales, and describe what the settings file
+actually denies so the next session does not inherit a reason that is untrue of the tool it is
+applied to.
+
 ### DEBT-023 — Redundant `sideline_app` Supabase project should be retired `OPEN`
 **Found:** 7 Sep 2026, while enumerating Supabase projects for the BUG-009 migration.
 
@@ -834,6 +906,25 @@ path — DEBT-012 is DONE, so this can be picked up directly.
 ---
 
 ## Environments & delivery
+
+### ENV-009 — Staging cannot exercise any email flow, and locked out its only user `OPEN`
+**Found:** 8 Sep 2026, trying to sign in to staging to test on a phone.
+
+Staging has no auth email hook configured (ENV-004), so it falls back to Supabase's built-in
+mailer, which is capped at a handful of messages an hour by design. A password recovery request
+from the dashboard failed with `email rate limit exceeded`, leaving the project's only user unable
+to sign in and blocking device testing for the evening.
+
+Consequences beyond the immediate lockout: staging cannot be used to test sign-up, invitation,
+recovery or one-time-code flows at all. Any onboarding rehearsal has to happen on production, which
+is the opposite of the working agreement.
+
+**Fix shape.** Deploy the `auth-email-hook` and `send-email` edge functions to staging with
+`supabase functions deploy`, and configure the Auth "send email" hook there, so staging sends
+through Resend like production does. That is the substance of ENV-004; this entry records the
+consequence that made it urgent.
+
+Relates to ENV-004, ENV-007, ONBOARD-002, ONBOARD-003.
 
 ### ENV-008 — `supabase/config.toml` default project is production; linking must be explicit `OPEN`
 **Found:** 7 Sep 2026, during the BUG-009 migration work.
