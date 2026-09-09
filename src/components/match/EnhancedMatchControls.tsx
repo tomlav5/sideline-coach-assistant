@@ -62,20 +62,32 @@ export function EnhancedMatchControls({
     loadMatchState,
   } = useEnhancedMatchTimer({
     fixtureId,
-    onSaveState: () => {
-      const currentPeriodNumber = timerState.currentPeriod?.period_number || 0;
-      onTimerUpdate?.(
-        getCurrentMinute(),
-        getTotalMatchMinute(),
-        currentPeriodNumber,
-        timerState.currentTime,
-        timerState.totalMatchTime,
-        timerState.currentPeriod?.id ?? null,
-        timerState.isRunning
-      );
-    }
   });
   const { toast } = useToast();
+
+  // Push timer updates to the parent from the timer's own state, not from a save
+  // callback — a failed fixtures write must never freeze the coach's clock (BUG-020).
+  // timerState.currentTime ticks every second with no database involvement, so this
+  // fires every second regardless of write success.
+  useEffect(() => {
+    onTimerUpdate?.(
+      getCurrentMinute(),
+      getTotalMatchMinute(),
+      timerState.currentPeriod?.period_number || 0,
+      timerState.currentTime,
+      timerState.totalMatchTime,
+      timerState.currentPeriod?.id ?? null,
+      timerState.isRunning,
+    );
+  }, [
+    timerState.currentTime,
+    timerState.totalMatchTime,
+    timerState.currentPeriod?.id,
+    timerState.currentPeriod?.period_number,
+    timerState.isRunning,
+    timerState.matchStatus,
+    onTimerUpdate,
+  ]);
 
   // Force refresh when control is taken
   useEffect(() => {

@@ -560,7 +560,11 @@ export default function EnhancedMatchTracker() {
     }
   };
 
-  const handleTimerUpdate = async (
+  // Stable identity: EnhancedMatchControls now fires onTimerUpdate from a useEffect
+  // keyed on timerState (BUG-020), so a new function reference here on every render
+  // would loop that effect. Only state setters are called below, which are stable
+  // across renders, so an empty dependency array is correct.
+  const handleTimerUpdate = useCallback((
     minute: number,
     totalMinute: number,
     periodNumber: number,
@@ -582,7 +586,7 @@ export default function EnhancedMatchTracker() {
     // - New period start initializes starters at time_on=0 in useEffect on period change
     // - Substitution on/off writes time_on_minute/time_off_minute
     // - Period end finalizes open intervals
-  };
+  }, []);
   const currentPeriod = periods.find(p => p.is_active) || (periods.length > 0 ? periods[periods.length - 1] : null);
 
   // Real-time player timers. The timer (fresh every second via onTimerUpdate) is

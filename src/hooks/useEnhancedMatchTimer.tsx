@@ -130,12 +130,17 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
     };
   }, [timerState.isRunning, timerState.currentPeriod?.id]);
 
-  // Save state when important changes occur
+  // Save only on the fields this write actually persists (isRunning feeds match_status's
+  // in_progress/paused split; currentPeriod?.id feeds current_period_id). totalMatchTime is
+  // NOT a dependency: it ticks every second (see the tick effect above) and match_state's
+  // total_time_seconds has no reader — loadMatchState recomputes it from match_periods rows
+  // instead of using the cached value — so depending on it fired this fixtures UPDATE once a
+  // second for the whole match (BUG-008).
   useEffect(() => {
     if (timerState.periods.length > 0) {
       saveMatchState();
     }
-  }, [timerState.isRunning, timerState.matchStatus, timerState.totalMatchTime]);
+  }, [timerState.isRunning, timerState.matchStatus, timerState.currentPeriod?.id]);
 
   const saveMatchState = async () => {
     try {
@@ -204,6 +209,11 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
           .eq('id', fixtureId);
       } catch (e) {
         console.error('Error updating fixture to in_progress:', e);
+        toast({
+          title: 'Error',
+          description: 'Period started but the match screen may be out of sync. Refresh if controls look wrong.',
+          variant: 'destructive',
+        });
       }
 
       setTimerState(prev => ({
