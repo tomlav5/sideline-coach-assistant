@@ -8,6 +8,65 @@ Known issues and planned work. Newest findings at the top of each section.
 
 ## Bugs
 
+### BUG-020 — Match screen clock was driven by a database write succeeding, not by the timer `DONE 9 Sep 2026`
+**Found:** 9 Sep 2026, testing the BUG-008 fix — the match screen's header clock sat at 0 after
+the per-second `fixtures` write was removed, while `match_events` still recorded correct times.
+Fixed 9 Sep 2026 on `fix/bug-008-per-second-fixture-write`.
+
+**Cause.** `useEnhancedMatchTimer.tsx` called `onSaveState?.()` from inside `saveMatchState`,
+*after* a successful database write. `EnhancedMatchControls.tsx`'s only call to
+`onTimerUpdate` sat inside that `onSaveState` callback. So the page's entire clock display —
+`currentSeconds`, `totalSeconds`, `currentMinute`, `totalMatchMinute`, `currentPeriodNumber`,
+`timerPeriodId`, `timerRunning` — was driven by database writes succeeding, and only ticked
+because BUG-008's bug made that write fire every second.
+
+**Latent bug this revealed.** Before this branch, any failed `saveMatchState` write froze the
+coach's clock display while the match continued underneath it — a bug on poor connections that
+BUG-008's per-second write was masking by retrying every second regardless. Fixing the coupling
+fixes both.
+
+**Fix.** `EnhancedMatchControls.tsx` no longer passes `onSaveState` to `useEnhancedMatchTimer`.
+Instead a `useEffect` pushes `onTimerUpdate` from `timerState`'s own fields (`currentTime`,
+`totalMatchTime`, `currentPeriod?.id`, `currentPeriod?.period_number`, `isRunning`,
+`matchStatus`) — `currentTime` ticks every second with no database involvement, so the clock
+now advances regardless of write success or failure. `EnhancedMatchTracker.tsx`'s
+`handleTimerUpdate` was a plain function recreated on every render; with it in that effect's
+dependency array that would have looped. Confirmed by reading it that it only calls state
+setters (all stable), so it was wrapped in `useCallback` with an empty dependency array rather
+than solved with an eslint-disable.
+
+The timer's own derivation was never affected by any of this: it computes from
+`actual_start_time` and the wall clock (`src/lib/matchTime.ts`, unchanged), and event minutes
+were correct throughout — only the on-screen display was stalled.
+
+**Checks:** typecheck clean (`npx tsc --noEmit -p tsconfig.app.json`); lint — one new expected
+warning (`react-hooks/exhaustive-deps` on the new effect in `EnhancedMatchControls.tsx`,
+missing `getCurrentMinute`/`getTotalMatchMinute`, which are plain functions recreated every
+render and deliberately not memoized here — otherwise unchanged, same pre-existing `any`-type
+errors); unit suite 87/87 passed (`npm test`, no test renders either component so this does not
+cover the render-loop risk); production build succeeded (`npm run build`). Not tested manually
+in a browser or on staging — the render-loop risk in particular is unverified outside a real
+render.
+
+Relates to BUG-008.
+
+### BUG-019 — startNewPeriod's fixture write failed silently, leaving a running period with a fixture that still reads scheduled `DONE 9 Sep 2026`
+**Found:** 9 Sep 2026, while fixing BUG-008.
+
+`startNewPeriod` (`src/hooks/useEnhancedMatchTimer.tsx`) inserts the new `match_periods` row,
+then does its own separate `fixtures` update setting `status: 'in_progress'`, `match_status`,
+`current_period_id` and `match_state`, wrapped in a `try/catch` that only `console.error`s. If
+that second write fails, the `match_periods` row already exists and is running while the
+fixture itself still reads `scheduled` with no `current_period_id` — a silent divergence on the
+period-start path, the same failure class as `saveMatchState`'s catch (BUG-008).
+
+**Fix:** added a user-visible destructive toast on that catch, matching how `saveMatchState`'s
+catch already handles failure — tells the coach the match screen may be out of sync and to
+refresh if controls look wrong. `console.error` kept. Retry/queue behaviour was deliberately
+not added; that is a larger change and remains open as a separate concern.
+
+Relates to BUG-008.
+
 ### BUG-018 — Match report back-navigation wrong on first visit from live tracking `DONE 9 Sep 2026`
 **Found:** 6 Sep 2026, during staging testing of `feat/match-staged-subs`; pre-existing on `main`.
 **File:** `src/pages/MatchReport.tsx`
@@ -106,6 +165,13 @@ messaging is needed for this specific failure mode.
 
 Relates to UX-011 (nothing confirms which match you are acting on), BUG-012 (the same stale-fixture-
 state mechanism), DEBT-026, UX-013.
+
+**Update — 9 Sep 2026:** the toast-loop mechanism left open above (the fixture realtime
+subscription re-firing with no guard on whether the relevant state actually changed) is caused
+by the per-second `fixtures` write fixed under BUG-008 — that write generated a realtime
+payload every second, so any subscriber toasted every second. Fixed as a side effect of the
+BUG-008 fix. Firing toasts on state transitions rather than on every payload remains the fuller
+fix and is still open.
 
 ### BUG-016 — Intermittent app-wide scroll lock `DONE 8 Sep 2026`
 **Found:** 6 Sep 2026 during staging testing of `feat/match-staged-subs`. Pre-existing on
@@ -420,31 +486,79 @@ production and staging with the identical definition, and that no duplicate rows
 (a UNIQUE constraint cannot have been satisfied by duplicates), so there is no data
 migration.
 
-### BUG-008 — Match-state writes fail silently, and the timer worker may outlive the page `OPEN`
-**Found:** 7 Sep 2026, dev testing on a poor connection while verifying the BUG-007 fix.
+### BUG-008 — Match-state writes fail silently, and the timer worker may outlive the page `DONE 9 Sep 2026`
+**Found:** 7 Sep 2026, dev testing on a poor connection while verifying the BUG-007 fix. Fixed
+9 Sep 2026 on `fix/bug-008-per-second-fixture-write`.
 
 Navigating away from the match screen and back produced a repeating console error:
 
     useEnhancedMatchTimer.tsx:167 Error saving match state:
     {message: 'TypeError: Failed to fetch', ...}
 
-Stack: `EnhancedMatchControls.tsx:104` → `useEnhancedMatchTimer.tsx:209` posts to a Web Worker →
-the worker's `setInterval` (lines 108-109) posts back each tick → the handler at 136 writes match
-state at 167.
+Original diagnosis (7 Sep 2026): stack `EnhancedMatchControls.tsx:104` →
+`useEnhancedMatchTimer.tsx:209` posts to a Web Worker → the worker's `setInterval` (lines
+108-109) posts back each tick → the handler at 136 writes match state at 167, with the worker
+possibly not terminated on unmount.
 
-**Confirmed: the write fails silently.** Line 167 catches and `console.error`s. No retry, no
-queue, no user-visible warning. If the payload includes `total_paused_seconds`, a failed save
-while pausing means the pause is never recorded — and the match clock is derived from
-`actual_start_time` minus paused seconds, so it would over-count for the rest of the match.
-Grassroots pitches have poor mobile data; this is the normal case, not an edge case.
+**That Web Worker mechanism was wrong.** There is no Web Worker anywhere in this codebase — a
+grep for `Worker`/`postMessage` across `src/` and `public/` returns nothing. The `postMessage`
+frames in the original stack trace were Chrome labelling React's own `MessageChannel`-based
+scheduler, not an application worker. Recorded here rather than deleted, since the wrong
+diagnosis is part of the history of this bug.
 
-**Unconfirmed: the worker may not be terminated on unmount.** The errors recurred after leaving
-and returning to the page, suggesting the interval kept running. If so, each visit spawns another
-worker writing match state on a timer. Needs verification — not established.
+**Real cause.** `useEnhancedMatchTimer.tsx`'s "save state when important changes occur"
+`useEffect` had `timerState.totalMatchTime` in its dependency array:
 
-Pre-existing. Not introduced by UX-007, which only extended `onTimerUpdate`'s arguments, not the
-worker loop. The `Failed to fetch` itself was a genuine connectivity failure (testing on a train),
-not a code fault.
+    useEffect(() => {
+      if (timerState.periods.length > 0) saveMatchState();
+    }, [timerState.isRunning, timerState.matchStatus, timerState.totalMatchTime]);
+
+`totalMatchTime` is updated every second by the tick interval, so `saveMatchState()` — a full
+`fixtures` `UPDATE` writing `match_state`, `current_period_id`, `status` and `match_status` —
+fired once per second for the whole of every match. Roughly 5,400 writes per 90 minutes.
+
+**Three consequences, all confirmed:**
+- On a poor connection the write fails once a second, producing the repeating console errors
+  originally attributed to a leaked worker.
+- `useRealtimeMatchSync` subscribes to `postgres_changes` on that `fixtures` row, so every
+  connected device received a realtime payload every second — this is what drives the toast
+  loop recorded under BUG-017.
+- Pointless database load and battery drain for a value nothing reads.
+
+**Clock derivation confirmed correct, unaffected.** `src/lib/matchTime.ts`
+(`calculateCurrentPeriodTime`/`calculateTotalMatchTime`) derives elapsed time from
+`actual_start_time` and the wall clock, per `CLAUDE.md`'s load-bearing timer rule, and was not
+touched. `loadMatchState` (lines 64-100) recomputes `totalMatchTime` from `match_periods` rows
+directly rather than reading the cached value; `match_state.total_time_seconds` is written in
+four places and read in none.
+
+**Fix:** the dependency array is now `[timerState.isRunning, timerState.matchStatus,
+timerState.currentPeriod?.id]`. Removing `totalMatchTime` stops the per-second fire; adding
+`currentPeriod?.id` makes the effect honest about `current_period_id`, which the write also
+contains. The misleading comment was replaced with one explaining what actually triggers a save
+and that `total_time_seconds` is a cache with no consumer. Only
+`src/hooks/useEnhancedMatchTimer.tsx` changed for this part — the tick interval,
+`calculateCurrentPeriodTime`/`calculateTotalMatchTime`, and the rest of the timestamp-derived
+clock were left alone.
+
+Also fixed in the same branch: BUG-019 (a related silent-failure path in `startNewPeriod`).
+
+**Regression found in testing this fix, 9 Sep 2026.** Removing the per-second write also
+removed the only thing that had been ticking the match screen's clock display: it turned out
+`onTimerUpdate` — which drives `currentSeconds`/`totalSeconds`/`currentMinute` etc. on the page
+— was called from inside `saveMatchState`'s post-write callback, not from the timer's own
+state. With writes no longer firing every second, the clock froze at 0. This also meant that,
+before this branch, any *failed* write had frozen the clock too — a latent bug the per-second
+write had been masking by retrying every second. Fixed under BUG-020, in the same branch.
+
+Pre-existing. Not introduced by UX-007, which only extended `onTimerUpdate`'s arguments. The
+`Failed to fetch` itself was a genuine connectivity failure (testing on a train), not a code
+fault — it just fired far more often than it should have.
+
+**Checks:** typecheck clean (`npx tsc --noEmit -p tsconfig.app.json`), lint unchanged (same
+pre-existing `any`-type errors and the same missing-deps warning shape on this effect, no new
+issues), unit suite 87/87 passed (`npm test`), production build succeeded (`npm run build`). Not
+tested manually in a browser or on staging.
 
 ### BUG-007 — Tile minutes reset to 0m at half time `DONE 6 Sep 2026`
 **Found:** 6 Sep 2026, code review of `usePlayerTimers` while fixing DEFECT 1.
@@ -644,6 +758,20 @@ Relates to UX-001.
 ---
 
 ## Technical debt
+
+### DEBT-027 — `useEnhancedMatchTimer`'s `onSaveState` option has no consumer `OPEN`
+**Found:** 9 Sep 2026, fixing BUG-020.
+
+`EnhancedMatchControls.tsx` no longer passes `onSaveState` to `useEnhancedMatchTimer` — the
+match clock is now driven from `timerState` directly instead of from a post-write callback. The
+`onSaveState` option and its call at the end of `saveMatchState` (`useEnhancedMatchTimer.tsx`,
+around line 170) are harmless but now dead.
+
+**Fix shape.** Remove the `onSaveState` prop from `UseEnhancedMatchTimerProps` and its call site
+in `saveMatchState`. Deliberately not done in the BUG-020 fix itself — tidy-up, not a fix, and
+not worth touching this file again four days before the season for a no-op removal.
+
+Relates to BUG-008, BUG-020.
 
 ### DEBT-026 — Retire RetrospectiveMatchDialog and useRetrospectiveMatch `OPEN`
 **Found:** 9 Sep 2026, resolving BUG-017.
