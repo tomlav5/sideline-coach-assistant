@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Calendar, Clock, MapPin, Home, Plane, Trophy, Users, Play, ArrowLeft, Settings } from 'lucide-react';
+import { Calendar, Clock, MapPin, Home, Plane, Trophy, Users, Play, ArrowLeft, Settings, Edit } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { EditFixtureDialog } from '@/components/fixtures/EditFixtureDialog';
@@ -17,6 +17,7 @@ interface Fixture {
   location: string | null;
   fixture_type: 'home' | 'away';
   status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
+  match_status: string | null;
   half_length: number;
   team_id: string;
   competition_type: 'league' | 'tournament' | 'friendly';
@@ -261,7 +262,12 @@ export default function FixtureDetail() {
   }
 
   const isUpcoming = fixture.status === 'scheduled';
-  const hasSquad = fixture.selected_squad_data && 
+  // BUG-017: Match Data Editor can build a match from nothing, but should not be reachable
+  // for a fixture that's actually being tracked live. Hidden (not disabled) while live, since
+  // the match screen's own `fixture` state was found to be stale for this same check.
+  const isLive = ['in_progress', 'live', 'paused'].includes(fixture.status)
+    || ['in_progress', 'live', 'paused'].includes(fixture.match_status || '');
+  const hasSquad = fixture.selected_squad_data &&
     (fixture.selected_squad_data.startingLineup?.length > 0 || fixture.selected_squad_data.selectedPlayerIds?.length > 0);
   const TypeIcon = fixture.fixture_type === 'home' ? Home : Plane;
 
@@ -448,6 +454,18 @@ export default function FixtureDetail() {
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
+              </div>
+            )}
+            {!isLive && (
+              <div className="border-t pt-6">
+                <Button
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  onClick={() => navigate(`/match-data-editor/${fixture.id}`)}
+                >
+                  <Edit className="h-4 w-4 mr-2" />
+                  Enter Match Data
+                </Button>
               </div>
             )}
           </CardContent>
