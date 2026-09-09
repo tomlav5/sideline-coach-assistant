@@ -8,6 +8,35 @@ Known issues and planned work. Newest findings at the top of each section.
 
 ## Bugs
 
+### BUG-018 — Match report back-navigation wrong on first visit from live tracking `DONE 9 Sep 2026`
+**Found:** 6 Sep 2026, during staging testing of `feat/match-staged-subs`; pre-existing on `main`.
+**File:** `src/pages/MatchReport.tsx`
+
+Navigating to the match report from live tracking showed "Back to Reports" and returned to
+`/reports` on the **first** visit, and only worked correctly (showed "Back to Live Tracking",
+returned to `/match-day/:fixtureId`) on a second visit.
+
+`getBackNavigation()` (line 329) and `getBackLabel()` (line 341) both gated on
+`location.state?.from === 'match-tracker' && fixture?.active_tracker_id`. `fixture` loads
+asynchronously via React Query and is `undefined` on first render, so both conditions fell
+through to the Reports branch even though `location.state?.from` was already correctly set by
+`EnhancedMatchTracker`. On a second visit React Query had the fixture cached, so it worked —
+exactly the reported symptom. The `active_tracker_id` half also failed legitimately for a coach
+who opened the report having come from live tracking but who was not (or no longer) the active
+tracker: they got sent to `/reports` instead of back to tracking.
+
+Fixed in this branch: removed `&& fixture?.active_tracker_id` from both conditions.
+`location.state?.from` alone is sufficient — it's navigation state, available synchronously on
+first render, and unaffected by the fixture's async load. `isLiveMatch` (~line 348) was left
+unchanged; its use of `active_tracker_id` there is legitimate (it drives the LIVE badge, not
+back-navigation). Also fixes the same bug in the "Match not found" fallback UI, which uses the
+same two functions.
+
+**Checks:** typecheck clean (`npx tsc --noEmit -p tsconfig.app.json`), lint unchanged (only
+pre-existing errors in unrelated files, no new issues introduced), unit suite 87/87 passed
+(`npm test`), production build succeeded (`npm run build`). Not tested manually in a browser or
+on staging.
+
 ### BUG-017 — Manual Entry during a live match marks the fixture completed `DONE 9 Sep 2026`
 **Found:** 8 Sep 2026, on production during live match tracking. **Confirmed**, not hypothesised.
 
