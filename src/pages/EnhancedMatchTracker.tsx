@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { EnhancedMatchControls } from '@/components/match/EnhancedMatchControls';
 import { EnhancedEventDialog } from '@/components/match/EnhancedEventDialog';
-import { RetrospectiveMatchDialog } from '@/components/fixtures/RetrospectiveMatchDialog';
 import { EditSquadDialog } from '@/components/match/EditSquadDialog';
 import { MatchLockingBanner } from '@/components/match/MatchLockingBanner';
 import { QuickGoalButton } from '@/components/match/QuickGoalButton';
@@ -22,7 +21,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { History, Trash2, Goal, UserPlus } from 'lucide-react';
+import { Trash2, Goal, UserPlus } from 'lucide-react';
 import { useRealtimeMatchSync } from '@/hooks/useRealtimeMatchSync';
 import { useWakeLock } from '@/hooks/useWakeLock';
 import { usePlayerTimers } from '@/hooks/usePlayerTimers';
@@ -92,7 +91,6 @@ export default function EnhancedMatchTracker() {
   const [periods, setPeriods] = useState<MatchPeriod[]>([]);
   const [showEventDialog, setShowEventDialog] = useState(false);
   const [showGoalDialog, setShowGoalDialog] = useState(false);
-  const [showRetrospectiveDialog, setShowRetrospectiveDialog] = useState(false);
   const [showRestartConfirm, setShowRestartConfirm] = useState(false);
   const [isRestarting, setIsRestarting] = useState(false);
   const [currentMinute, setCurrentMinute] = useState(0);
@@ -1069,17 +1067,6 @@ export default function EnhancedMatchTracker() {
           </Button>
           
           <Button
-            onClick={() => setShowRetrospectiveDialog(true)}
-            variant="ghost"
-            size="sm"
-            className="h-10"
-            disabled={!matchTracker?.isActiveTracker && (fixture?.status === 'in_progress' || fixture?.status === 'live')}
-          >
-            <History className="h-4 w-4 mr-2" />
-            Manual Entry
-          </Button>
-
-          <Button
             onClick={() => navigate(`/match-report/${fixtureId}`, { 
               state: { from: 'match-tracker' } 
             })}
@@ -1332,15 +1319,6 @@ export default function EnhancedMatchTracker() {
           await loadMatchData();
           await refreshPlayerStatusLists();
         }}
-      />
-
-      {/* Retrospective Dialog */}
-      <RetrospectiveMatchDialog
-        open={showRetrospectiveDialog}
-        onOpenChange={setShowRetrospectiveDialog}
-        fixtureId={fixtureId!}
-        players={players}
-        onComplete={loadMatchData}
       />
 
       {/* Delete-match-data confirmation (internally still "restart" — see UX-008) */}

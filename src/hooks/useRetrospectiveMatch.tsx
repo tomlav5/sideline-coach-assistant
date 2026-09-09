@@ -36,8 +36,30 @@ export function useRetrospectiveMatch() {
 
   const saveRetrospectiveMatch = async (data: RetrospectiveMatchData) => {
     setIsLoading(true);
-    
+
     try {
+      // BUG-017: refuse to run against a live fixture. The write below unconditionally
+      // sets status/match_status to 'completed' and overwrites match_state with a
+      // fabricated elapsed time computed from the entered durations — on a fixture that
+      // is actually being recorded live, that ends the match and destroys its real
+      // elapsed time. The button is disabled for this case too, but the guard belongs
+      // here so any other route to this hook is covered.
+      const { data: liveCheck, error: liveCheckError } = await supabase
+        .from('fixtures')
+        .select('status, match_status')
+        .eq('id', data.fixture_id)
+        .single();
+
+      if (liveCheckError) throw liveCheckError;
+
+      const liveStatuses = ['in_progress', 'live', 'paused'];
+      if (liveStatuses.includes(liveCheck?.status) || liveStatuses.includes(liveCheck?.match_status)) {
+        toast.error(
+          'This match is in progress. Manual Entry is for matches that have already been played — use Match Data Editor to correct a live match.',
+        );
+        return false;
+      }
+
       // Mark fixture as retrospective and completed
       const { error: fixtureError } = await supabase
         .from('fixtures')

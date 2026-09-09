@@ -8,42 +8,75 @@ Known issues and planned work. Newest findings at the top of each section.
 
 ## Bugs
 
-### BUG-017 — Manual Entry during a live match marks the fixture completed `OPEN — fix before 12 Sep`
+### BUG-017 — Manual Entry during a live match marks the fixture completed `DONE 9 Sep 2026`
 **Found:** 8 Sep 2026, on production during live match tracking. **Confirmed**, not hypothesised.
 
 Opening Manual Entry (the retrospective match dialog) part-way through a live match and adding a
-data point sets the fixture to `status: 'completed'` / `match_status: 'completed'`
-(`useRetrospectiveMatch.tsx:46-49`). The match is ended in the database while the coach is still
-recording it.
+data point set the fixture to `status: 'completed'` / `match_status: 'completed'`
+(`useRetrospectiveMatch.tsx:46-49`). The match was ended in the database while the coach was still
+recording it. The write is correct for the dialog's actual purpose — entering a match that has
+already been played — but nothing stopped it running against a fixture that was live, and the
+button was enabled for the active tracker precisely while a match was in progress.
 
-Observed consequences: a toast reading "match tracking stopped / match completed" cycling in a
-loop, and the match screen unusable until the period was ended and the user navigated away and
-back. The toasts are downstream — `MatchLockingBanner` hides itself once the fixture reads
-completed (line ~24), `useEnhancedMatchTimer:442` toasts "Match completed", and
-`useRealtimeMatchSync:88` toasts "Match Tracking Released"; the loop is the fixture realtime
-subscription re-firing with no guard on whether the relevant state actually changed.
+Observed consequences on production: a toast reading "match tracking stopped / match completed"
+cycling in a loop, and the match screen unusable until the period was ended and the user navigated
+away and back. The toasts are downstream — `MatchLockingBanner` hides itself once the fixture
+reads completed, `useEnhancedMatchTimer` toasts "Match completed", and `useRealtimeMatchSync`
+toasts "Match Tracking Released"; the loop is the fixture realtime subscription re-firing with no
+guard on whether the relevant state actually changed. That toast-loop mechanism itself is a
+separate, still-open problem — not fixed by anything below.
 
-The write is correct for the dialog's purpose — entering a match that has already been played.
-Nothing prevents it running against a fixture that is live, and the button is enabled for the
-active tracker precisely while a match is in progress.
+**Severity.** Data damage during live recording, not a UI defect. The button sat on the match
+screen alongside Edit Squad and View Report, and two coaches unfamiliar with the app record their
+first matches on 13 Sep.
 
-**Severity.** This is data damage during live recording, not a UI defect. The button sits on the
-match screen alongside Edit Squad and View Report, and two coaches unfamiliar with the app record
-their first matches on 13 Sep.
+**First attempt (9 Sep 2026) — a button-level guard. Did not hold.** `EnhancedMatchTracker.tsx`'s
+Manual Entry button had its disabled condition inverted — disabled for everyone *except* the
+active tracker while live, so the one person recording the match was the one person who could open
+it. This was fixed to disable for everybody while `in_progress` / `live` / `paused`. Staging
+testing then showed Manual Entry still openable during a live match anyway: `EnhancedMatchTracker`'s
+`fixture` state is loaded once in `loadMatchData` on mount and never refreshed — the same
+staleness mechanism as BUG-012. Once a period started and `useEnhancedMatchTimer` wrote
+`status: 'in_progress'` to the database, the page's own copy of `fixture.status` still read
+`'scheduled'`, so the disabled condition never tripped. A second write-level guard, added to
+`useRetrospectiveMatch.saveRetrospectiveMatch` in the same pass, reads the fixture's
+`status`/`match_status` **from the database** before any write and aborts with `toast.error` if
+either is `in_progress` / `live` / `paused` — that one held, because it doesn't depend on component
+state, and it is what actually caught the failure on staging.
 
-**Fix shape (this week, minimal).** Disable the Manual Entry button while the fixture is
-`in_progress` / `live` / `paused`, and add a guard in `useRetrospectiveMatch` that refuses to run
-against a live fixture rather than relying on the button alone. Do not otherwise change the
-retrospective flow.
+**Resolution (9 Sep 2026) — the control was removed, not re-guarded.** Once a second attempt at
+the same button condition had already failed for the same reason (stale `fixture` state the match
+screen cannot fix about itself), a comparison of the two features settled it: Match Data Editor
+(`/match-data-editor/:fixtureId`, `MatchDataEditor.tsx`) already does everything Manual Entry did
+and more — `PeriodsTable`, `EventsTable` and `PlayerTimesTable` each have "Add First …" actions
+that create periods, events and player times from an empty match, plus a validation tab Manual
+Entry never had. Manual Entry's only behaviour Match Data Editor didn't already cover was stamping
+the fixture `completed`/`is_retrospective` — which is exactly the destructive part. So:
 
-**Fix shape (after the season).** A confirmation naming the fixture, and separating "record a past
-match" from "correct a match in progress" — the latter is what Match Data Editor is for. Toasts
-should fire on an actual state transition rather than on every realtime payload.
+- The Manual Entry button, its `RetrospectiveMatchDialog` render, and its state were removed from
+  `src/pages/EnhancedMatchTracker.tsx` entirely — not relocated, not re-conditioned. Edit Squad
+  and View Report are unchanged; Edit Squad's `!isActiveTracker && live` condition is correct
+  tracker-gating for something a coach legitimately does mid-match (a late arrival, an injury) and
+  is a different situation from this bug.
+- `src/pages/FixtureDetail.tsx` gained an "Enter Match Data" button that navigates to
+  `/match-data-editor/${fixture.id}` — Match Data Editor was previously reachable only from Match
+  Report, and this was the only route in for a fixture never tracked live at all. The button is a
+  plain navigation (no fixture-status write) and is hidden, not disabled, whenever the fixture's
+  `status` or `match_status` is `in_progress` / `live` / `paused` — same reasoning as above: this
+  page's own state can go stale, so hiding rather than conditionally-enabling avoids repeating the
+  same mistake a third time.
+- The `useRetrospectiveMatch.saveRetrospectiveMatch` write-level guard from the first attempt is
+  retained as-is — it protects `RetrospectiveMatchDialog`/`useRetrospectiveMatch` for as long as
+  that code exists, which is until DEBT-026.
+- `RetrospectiveMatchDialog.tsx` and `useRetrospectiveMatch.tsx` were **not** deleted. They are
+  unreachable from the UI as of this fix but still exist as live code; deleting them is DEBT-026,
+  deliberately deferred past 12 Sep 2026 rather than done this close to the season.
 
-**Interim mitigation, no code:** do not open Manual Entry during a live match. Tell both coaches
-when onboarding them on 13 Sep, regardless of whether the fix ships.
+**Interim mitigation, no code:** the dialog is now unreachable from any screen, so no coach
+messaging is needed for this specific failure mode.
 
-Relates to UX-011 (nothing confirms which match you are acting on).
+Relates to UX-011 (nothing confirms which match you are acting on), BUG-012 (the same stale-fixture-
+state mechanism), DEBT-026, UX-013.
 
 ### BUG-016 — Intermittent app-wide scroll lock `DONE 8 Sep 2026`
 **Found:** 6 Sep 2026 during staging testing of `feat/match-staged-subs`. Pre-existing on
@@ -582,6 +615,25 @@ Relates to UX-001.
 ---
 
 ## Technical debt
+
+### DEBT-026 — Retire RetrospectiveMatchDialog and useRetrospectiveMatch `OPEN`
+**Found:** 9 Sep 2026, resolving BUG-017.
+
+Manual Entry (`RetrospectiveMatchDialog.tsx` + `useRetrospectiveMatch.tsx`) duplicated Match Data
+Editor, which can create periods, events and player times from an empty match via its "Add First
+…" flows and additionally offers a validation tab Manual Entry never had. The dialog's only unique
+behaviour was stamping the fixture `completed`/`is_retrospective`, which is what made it dangerous
+against a live match (BUG-017). It is now unreachable from the UI — the button and dialog render
+were removed from `EnhancedMatchTracker.tsx`, and `FixtureDetail.tsx` links to Match Data Editor
+instead.
+
+**Fix shape.** Delete `src/components/fixtures/RetrospectiveMatchDialog.tsx` and
+`src/hooks/useRetrospectiveMatch.tsx`, the `is_retrospective` handling on the fixtures/match_events
+tables if nothing else reads or writes it, and their associated tests. Do this **after 12 Sep
+2026** — deleting live code (even unreachable code) days before the season was deliberately
+avoided in the BUG-017 fix.
+
+Relates to BUG-017, UX-013.
 
 ### DEBT-025 — No documented credentials or recovery path for the staging account `OPEN`
 **Found:** 8 Sep 2026.
@@ -1217,6 +1269,24 @@ Full spec, contrast pairs and regeneration steps in `docs/brand/BRAND.md`.
 ---
 
 ## UX
+
+### UX-013 — No way to mark a match complete after entering data by hand `OPEN`
+**Found:** 9 Sep 2026, resolving BUG-017.
+
+Match Data Editor can build a match record from nothing — periods, events and player times, all
+via its "Add First …" flows — but has no action to mark the fixture `completed`, so a match
+entered entirely by hand never shows that status and will not appear correctly in reports. This is
+the one legitimate need Manual Entry was meeting (badly, by stamping `completed` unconditionally
+and without regard to whether the fixture was live — see BUG-017).
+
+**Interim workaround, no code.** Start the fixture in the app and end it immediately, so it exists
+as a `completed` match, then enter the real record through Match Data Editor.
+
+**Fix shape.** A "Mark match complete" action in Match Data Editor, guarded so it cannot fire on a
+fixture whose `status`/`match_status` is `in_progress` / `live` / `paused` — the same live-check
+that BUG-017 established belongs at the write, not just behind a button condition.
+
+Relates to DEBT-026, BUG-017.
 
 ### UX-011 — No confirmation of which match is being tracked `OPEN`
 **Found:** 7 Sep 2026, reviewing multi-coach safety before adding two more coaches.
