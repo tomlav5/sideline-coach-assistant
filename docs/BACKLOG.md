@@ -1855,6 +1855,9 @@ Failure mode is a mis-tap during a goalmouth scramble.
 **Instance noted 11 Sep 2026 (UX-015):** `MatchLockingBanner.tsx`'s "Release Control" and
 "Take Control" buttons use `size="sm"` (36px) — below the 44px minimum. Pre-existing, not
 introduced by UX-015; left for this audit rather than patched in isolation.
+**Fixed 10 Sep 2026:** both buttons brought up to 44px (`size="sm"` removed, height set to
+`h-11`; icons bumped `h-3 w-3` → `h-4 w-4` to stay in proportion). Colour and banner logic
+untouched. Rest of the coach UI touch-target audit remains open.
 
 ---
 
