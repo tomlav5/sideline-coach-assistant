@@ -138,11 +138,19 @@ October project.
 - Before handing a change back, state plainly which checks were run and which were not.
   "Typecheck clean, unit suite 16/16, lint unchanged, not tested on a device" is useful.
   "All good" is not.
-- Whenever Claude recommends merging a branch, it supplies the PR title and body with that
-  recommendation, unprompted and without being asked. The body states what the change does
-  and why, what was tested and on what, what was deliberately not tested, and anything found
-  along the way that is being logged rather than fixed. A recommendation to merge that does
-  not come with that text is incomplete.
+- Every branch handed over arrives as three things, in this order, unprompted and without being
+  asked: the tests, then the prompt, then the PR title and body.
+  - **Tests first**, so it is clear what "done" looks like before any work starts. A numbered
+    list, each item a single observable check with an unambiguous pass condition — "before
+    kick-off, Start Period is the only amber control on screen", not "check the colours". Say
+    which run on staging and which need a device, and say which test is the one most likely to
+    fail. Documentation-only changes have no test list; say so rather than inventing one.
+  - **Then the prompt** — the instruction for Claude Code.
+  - **Then the PR title and body.** The body states what the change does and why, what was
+    tested and on what, what was deliberately not tested, and anything found along the way that
+    is being logged rather than fixed. Leave a placeholder for the test results rather than
+    inventing them.
+  A handover missing any of the three is incomplete.
   
 ## Backlog maintenance
 
