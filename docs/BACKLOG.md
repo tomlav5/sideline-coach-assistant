@@ -759,6 +759,26 @@ Relates to UX-001.
 
 ## Technical debt
 
+### DEBT-028 — The token invitation flow exists but UserManagement bypasses it `OPEN`
+**Found:** 10 Sep 2026.
+
+The schema carries a complete club-invitation flow: a `club_invitations` table, the
+`create_club_invitation` and `accept_club_invitation` functions, and a working `AcceptInvitation`
+page that reads a token from the URL and validates expiry and prior use.
+
+`UserManagement.tsx` uses none of it. Its "Invite User" dialog looks the person up with
+`find_user_by_email` and inserts directly into `club_members` — so it only works for someone who
+already has an account, and it adds them silently with no notification and no consent step.
+
+That is acceptable while members are added face to face. It is not acceptable the first time
+someone is added who is not in the room.
+
+To finish it: point the dialog at `create_club_invitation`, send the token link by email (now
+possible — see ENV-007), and the existing accept page handles the rest. Small, because the parts
+already exist.
+
+Relates to ENV-010, UX-014.
+
 ### DEBT-027 — `useEnhancedMatchTimer`'s `onSaveState` option has no consumer `OPEN`
 **Found:** 9 Sep 2026, fixing BUG-020.
 
@@ -1116,6 +1136,21 @@ path — DEBT-012 is DONE, so this can be picked up directly.
 
 ## Environments & delivery
 
+### ENV-010 — Auth emails use Supabase's default templates, not the app's branded ones `OPEN`
+Auth email now routes through Resend via Custom SMTP (ENV-007), which means Supabase's plain
+default templates are sent. The branded templates in
+`supabase/functions/auth-email-hook/_shared/email-templates` are unused, and the
+`auth-email-hook` function is not deployed or registered.
+
+To adopt them: deploy the function (`supabase functions deploy auth-email-hook`), register it on
+Authentication → Auth Hooks as a Send Email hook, and configure the hook secret. The hook then
+takes precedence over SMTP for auth email.
+
+Deliberately not done before 12 Sep 2026: plain-but-working email beats branded-but-untested four
+days out. Do it before any rollout to parents, where a club email needs to look legitimate.
+
+Relates to ENV-007, DEBT-028.
+
 ### ENV-009 — Staging cannot exercise any email flow, and locked out its only user `OPEN`
 **Found:** 8 Sep 2026, trying to sign in to staging to test on a phone.
 
@@ -1153,18 +1188,37 @@ removing it so the CLI always demands `--project-ref`.
 
 Both refs are now recorded in `CLAUDE.md`'s Supabase section. Relates to ENV-005, ENV-001.
 
-### ENV-007 — Auth emails send from Resend's shared sandbox domain `OPEN`
-**Found:** 4 Sep 2026
+### ENV-007 — Auth emails send from Resend's shared sandbox domain `DONE 10 Sep 2026`
+**Found:** 4 Sep 2026. Diagnosis was wrong; corrected and resolved 10 Sep 2026.
 
-`supabase/functions/send-email/index.ts` sends from `'SideLine <onboarding@resend.dev>'`.
-That is Resend's shared test domain, not a verified sender. Acceptable for two coaches
-who know to look for it; a deliverability and credibility problem for parents, since
-shared sender domains attract spam filtering and a club email arriving from
-`resend.dev` does not read as legitimate.
+The original diagnosis — that `send-email/index.ts` sends from Resend's shared sandbox domain
+`onboarding@resend.dev` — was not what was actually wrong. Found on 10 Sep 2026:
 
-Fix is to verify `sidelineassist.club` with Resend and send from it — a DNS job, so do
-it well before parent rollout.
-Relates to ENV-002, PWA-003.
+- Production's Auth Hooks page was **empty**. The `auth-email-hook` edge function existed in the
+  repo but was never registered with Supabase, so it was never called.
+- Auth emails therefore fell back to Supabase's built-in mailer, capped at a handful per hour by
+  design. Nothing ever reached Resend — there were no Resend logs at all, so the sandbox-domain
+  sender address was never the cause of anything.
+- `notify.sidelineassist.club` has in fact been verified in Resend for five months — the domain
+  was never the blocker either.
+- Nothing in `src/` calls `functions.invoke` for `send-email` — that function is orphaned, which
+  is why its sender address was never the cause of anything downstream.
+
+**Fix:** configured Supabase Custom SMTP (Authentication → Emails) pointed at Resend
+(`smtp.resend.com`, port 465, username `resend`, API key as password, sending from
+`noreply@notify.sidelineassist.club`). Verified end to end: registration email received, magic
+link signed the user in. Custom SMTP also removes the built-in mailer's rate limit, which is what
+had locked staging's only user out on 8 Sep 2026 (see ENV-009).
+
+**Trade-off, tracked separately as ENV-010:** Custom SMTP sends Supabase's default email
+templates, not the branded ones in `auth-email-hook/_shared/email-templates` — that function
+remains undeployed and unregistered.
+
+The original deliverability concern for parent rollout still holds: a plain Supabase-default
+email is functional but doesn't read as coming from the club, which matters far more once
+recipients are forty parents rather than two coaches who already know to look for it.
+
+Relates to ENV-002, ENV-009, ENV-010, PWA-003.
 
 ### ENV-006 — Report views are created unpopulated and the refresh fails silently `OPEN`
 **Found:** 4 Sep 2026
@@ -1426,6 +1480,23 @@ Full spec, contrast pairs and regeneration steps in `docs/brand/BRAND.md`.
 ---
 
 ## UX
+
+### UX-014 — No club context on the home screen, and no way to switch clubs `OPEN`
+**Found:** 10 Sep 2026, during onboarding testing.
+
+A coach added to a club sees fixtures and teams appear, but nothing on the home screen tells them
+WHICH club they are looking at. Club membership is only visible on the Club Management page. A
+coach who belongs to more than one club has no way to tell which they are in, and no way to switch.
+
+The requirement is not really a switcher — it is that the club is always visible, so nobody has to
+wonder. The switcher falls out of that. Heja is a good reference for the pattern.
+
+Smaller than it looks: the data layer already supports this. `useClubs.tsx` and `Dashboard.tsx`
+both query club_members and return a LIST, with no `.single()` and no implicit "first club" —
+so this is selection and display, not a data-model change.
+
+Deferred past 12 Sep 2026: this weekend involves two coaches in a single club, both onboarded in
+person, so club ambiguity cannot arise.
 
 ### UX-013 — No way to mark a match complete after entering data by hand `OPEN`
 **Found:** 9 Sep 2026, resolving BUG-017.
