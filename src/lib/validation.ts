@@ -11,6 +11,10 @@ export const authSignUpSchema = z.object({
     .string()
     .min(6, { message: "Password must be at least 6 characters" })
     .max(128, { message: "Password must be less than 128 characters" }),
+  confirmPassword: z
+    .string()
+    .min(6, { message: "Password must be at least 6 characters" })
+    .max(128, { message: "Password must be less than 128 characters" }),
   firstName: z
     .string()
     .trim()
@@ -23,6 +27,9 @@ export const authSignUpSchema = z.object({
     .min(1, { message: "Last name is required" })
     .max(50, { message: "Last name must be less than 50 characters" })
     .regex(/^[a-zA-Z\s-']+$/, { message: "Last name can only contain letters, spaces, hyphens, and apostrophes" }),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"],
 });
 
 export const authSignInSchema = z.object({

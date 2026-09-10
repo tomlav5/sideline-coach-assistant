@@ -55,7 +55,8 @@ export default function RegistrationSuccess() {
 
             <div className="space-y-3">
               <p className="text-xs text-center text-muted-foreground">
-                Didn't receive the email? Check your spam folder or contact support.
+                Didn't receive the email? Check your spam folder. If nothing arrives within a
+                few minutes, you may already have an account — try signing in instead.
               </p>
               <Button asChild variant="outline" className="w-full">
                 <Link to="/auth">Back to Sign In</Link>
