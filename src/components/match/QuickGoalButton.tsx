@@ -10,6 +10,14 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
+// Floodlight — see docs/brand/BRAND.md. Scoped locally, per the precedent set by the
+// header/tile-grid branches (DESIGN-002 covers the app-wide token migration).
+const FLOODLIGHT = {
+  amber: '#F5A524',
+  navy: '#101724',
+  slate: '#5A6474',
+};
+
 interface Player {
   id: string;
   first_name: string;
@@ -219,7 +227,8 @@ export function QuickGoalButton({ players, onGoalScored, open, onOpenChange }: Q
             onClick={handleOpponentGoal}
             disabled={isLoading}
             size="lg"
-            className="w-full h-16 text-lg font-semibold bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800"
+            className="w-full h-16 text-lg font-semibold border-0 hover:brightness-95"
+            style={{ backgroundColor: FLOODLIGHT.amber, color: FLOODLIGHT.navy }}
           >
             <Goal className="h-6 w-6 mr-3" />
             Confirm Opponent Goal
@@ -249,11 +258,11 @@ export function QuickGoalButton({ players, onGoalScored, open, onOpenChange }: Q
                     disabled={isLoading}
                     size="lg"
                     variant="outline"
-                    className="h-14 text-left justify-start font-medium hover:bg-green-50 dark:hover:bg-green-950 hover:border-green-500"
+                    className="h-14 text-left justify-start font-medium"
                   >
-                    <Goal className="h-5 w-5 mr-3 text-green-600" />
+                    <Goal className="h-5 w-5 mr-3" style={{ color: FLOODLIGHT.slate }} />
                     <span className="flex-1">{getPlayerDisplay(player)}</span>
-                    <Check className="h-4 w-4 text-green-600" />
+                    <Check className="h-4 w-4" style={{ color: FLOODLIGHT.slate }} />
                   </Button>
                 ))}
               </div>

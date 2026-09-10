@@ -15,6 +15,10 @@ import { useEditMatchData } from '@/hooks/useEditMatchData';
 import { Edit, Trash2, Clock, Users, Calendar, AlertTriangle } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
+// Floodlight — see docs/brand/BRAND.md. Scoped locally, per the precedent set by the
+// header/tile-grid branches (DESIGN-002 covers the app-wide token migration).
+const FLOODLIGHT = { navy: '#101724', amber: '#F5A524', edge: '#CBD3DC', card: '#FFFFFF' };
+
 interface Player {
   id: string;
   first_name: string;
@@ -598,7 +602,7 @@ export function EditMatchDialog({
               <CardContent>
                 {validationWarnings.length === 0 ? (
                   <div className="text-center py-8">
-                    <div className="text-green-600 dark:text-green-400 mb-2">✓ All checks passed</div>
+                    <div className="mb-2" style={{ color: FLOODLIGHT.navy }}>✓ All checks passed</div>
                     <p className="text-sm text-muted-foreground">No data inconsistencies found</p>
                   </div>
                 ) : (
@@ -606,9 +610,13 @@ export function EditMatchDialog({
                     <p className="text-sm font-medium">Found {validationWarnings.length} warning(s):</p>
                     <ul className="space-y-2">
                       {validationWarnings.map((warning, index) => (
-                        <li key={index} className="flex items-start gap-2 text-sm p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded">
-                          <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
-                          <span>{warning}</span>
+                        <li
+                          key={index}
+                          className="flex items-start gap-2 text-sm p-2 rounded border-l-4"
+                          style={{ backgroundColor: FLOODLIGHT.card, borderLeftColor: FLOODLIGHT.amber }}
+                        >
+                          <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: FLOODLIGHT.navy }} />
+                          <span style={{ color: FLOODLIGHT.navy }}>{warning}</span>
                         </li>
                       ))}
                     </ul>

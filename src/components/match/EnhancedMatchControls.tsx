@@ -11,6 +11,22 @@ import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
+// Floodlight — see docs/brand/BRAND.md. Scoped locally to this component, per the
+// precedent set by the header/tile-grid branches (DESIGN-002 covers the app-wide
+// token migration; this is not that).
+const FLOODLIGHT = {
+  navy: '#101724',
+  amber: '#F5A524',
+  pitchBlue: '#0B5FCC',
+  card: '#FFFFFF',
+  edge: '#CBD3DC',
+  slate: '#5A6474',
+};
+
+// Semantic critical — only for "something is about to be lost" (the Discard action
+// in the UX-010 guard). Never decorative.
+const RED_DEEP = '#B4232C';
+
 interface EnhancedMatchControlsProps {
   fixtureId: string;
   // currentSeconds/totalSeconds are the second-level values behind currentMinute/totalMinute —
@@ -248,67 +264,68 @@ export function EnhancedMatchControls({
 
         {/* Control Buttons */}
         <div className="space-y-2">
-          {/* Start Period Button - Large, Green, Safe */}
+          {/* Start Period — the primary action, and the only thing on screen when it
+              appears: Signal Amber, navy text (amber on white fails contrast, so it
+              never takes white text — see docs/brand/BRAND.md). */}
           {canStartPeriod && (
             <Button
               onClick={handleStartNewPeriod}
-              className="w-full flex items-center justify-center gap-2 h-14 text-base font-semibold bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800"
+              className="w-full flex items-center justify-center gap-2 h-14 text-base font-semibold border-0 hover:brightness-95"
+              style={{ backgroundColor: FLOODLIGHT.amber, color: FLOODLIGHT.navy }}
             >
               <Play className="h-5 w-5" />
               Start Period
             </Button>
           )}
 
+          {/* Pause — reversible and low-stakes, so it stays quiet: Card ground, navy
+              text, Edge border. */}
           {canPausePeriod && (
             <Button
               onClick={pauseTimer}
-              variant="secondary"
-              className="w-full flex items-center justify-center gap-2 h-12 text-base"
+              variant="outline"
+              className="w-full flex items-center justify-center gap-2 h-12 text-base border hover:brightness-95"
+              style={{ backgroundColor: FLOODLIGHT.card, color: FLOODLIGHT.navy, borderColor: FLOODLIGHT.edge }}
             >
               <Pause className="h-5 w-5" />
               Pause Period
             </Button>
           )}
 
+          {/* Resume — same action as Start Period, same colour. */}
           {canResumePeriod && (
             <Button
               onClick={resumeTimer}
-              className="w-full flex items-center justify-center gap-2 h-14 text-base font-semibold bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800"
+              className="w-full flex items-center justify-center gap-2 h-14 text-base font-semibold border-0 hover:brightness-95"
+              style={{ backgroundColor: FLOODLIGHT.amber, color: FLOODLIGHT.navy }}
             >
               <Play className="h-5 w-5" />
               Resume Period
             </Button>
           )}
 
-          {/* Refresh State Button - for troubleshooting paused states */}
-          <Button
-            onClick={loadMatchState}
-            variant="ghost"
-            size="sm"
-            className="w-full flex items-center justify-center gap-2 text-xs"
-          >
-            <RefreshCw className="h-3 w-3" />
-            Refresh Timer State
-          </Button>
-
-          {/* Start Penalty Shootout Button */}
+          {/* Start Penalty Shootout — a distinct, rare mode: Pitch Blue. */}
           {canStartPenaltyShootout && (
             <Button
               onClick={startPenaltyShootout}
-              className="w-full flex items-center justify-center gap-2 h-12 text-base font-semibold bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800"
+              className="w-full flex items-center justify-center gap-2 h-12 text-base font-semibold border-0 hover:brightness-95"
+              style={{ backgroundColor: FLOODLIGHT.pitchBlue, color: '#FFFFFF' }}
             >
               <Target className="h-5 w-5" />
               Start Penalty Shootout
             </Button>
           )}
 
-          {/* End Period Button - Yellow, Requires Confirmation */}
+          {/* End Period — navy outline, navy text. Yellow-as-warning would fight
+              amber-as-action; the confirmation dialog below carries the caution,
+              not this button. */}
           {canEndPeriod && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button
                   variant="outline"
-                  className="w-full flex items-center justify-center gap-2 h-12 border-yellow-600 text-yellow-700 hover:bg-yellow-50 dark:border-yellow-500 dark:text-yellow-400 dark:hover:bg-yellow-950"
+                  className="w-full flex items-center justify-center gap-2 h-12 border-2 hover:brightness-95"
+                  style={{ borderColor: FLOODLIGHT.navy, color: FLOODLIGHT.navy, backgroundColor: FLOODLIGHT.card }}
                 >
                   <AlertTriangle className="h-5 w-5" />
                   End Period
@@ -361,6 +378,20 @@ export function EnhancedMatchControls({
             </AlertDialogContent>
           </AlertDialog>
 
+          {/* Refresh Timer State — a troubleshooting escape hatch, not a primary
+              control. Moved below the other buttons and shrunk so it can't be
+              mistaken for one of them on a screen used one-handed in weather. */}
+          <Button
+            onClick={loadMatchState}
+            variant="ghost"
+            size="sm"
+            className="w-full flex items-center justify-center gap-1.5 text-[11px] mt-3 opacity-70 hover:opacity-100"
+            style={{ color: FLOODLIGHT.slate, minHeight: 44 }}
+          >
+            <RefreshCw className="h-3 w-3" />
+            Refresh Timer State
+          </Button>
+
           {/* UX-010 guard — shown only when a period/match end was requested with
               substitutions still staged. Forces Submit or Discard. */}
           <AlertDialog
@@ -386,15 +417,16 @@ export function EnhancedMatchControls({
                 <Button
                   onClick={() => runGuard('submit')}
                   disabled={guardBusy}
-                  className="w-full h-12 text-base font-semibold bg-yellow-600 hover:bg-yellow-700 dark:bg-yellow-700 dark:hover:bg-yellow-800"
+                  className="w-full h-12 text-base font-semibold border-0 hover:brightness-95"
+                  style={{ backgroundColor: FLOODLIGHT.amber, color: FLOODLIGHT.navy }}
                 >
                   {guardBusy ? 'Submitting…' : `Submit ${pendingSubCount} & ${guardEndLabel}`}
                 </Button>
                 <Button
-                  variant="destructive"
                   onClick={() => runGuard('discard')}
                   disabled={guardBusy}
-                  className="w-full h-12"
+                  className="w-full h-12 border-0 hover:brightness-110"
+                  style={{ backgroundColor: RED_DEEP, color: '#FFFFFF' }}
                 >
                   Discard &amp; {guardEndLabel}
                 </Button>
@@ -413,7 +445,10 @@ export function EnhancedMatchControls({
           </div>
         )}
         {timerState.matchStatus === 'paused' && timerState.currentPeriod && (
-          <div className="text-sm text-muted-foreground text-center p-4 bg-yellow-100 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+          <div
+            className="text-sm text-center p-4 rounded-lg border-l-4"
+            style={{ backgroundColor: FLOODLIGHT.card, borderColor: FLOODLIGHT.edge, borderLeftColor: FLOODLIGHT.amber, color: FLOODLIGHT.navy }}
+          >
             Period {timerState.currentPeriod.period_number} is paused. Click "Resume Period" to continue.
           </div>
         )}
