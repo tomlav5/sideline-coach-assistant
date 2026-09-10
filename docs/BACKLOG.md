@@ -759,6 +759,33 @@ Relates to UX-001.
 
 ## Technical debt
 
+### DEBT-030 — The match screen no longer responds to the dark theme `OPEN`
+**Found:** 11 Sep 2026, after UX-015.
+
+Floodlight is applied across the match screen as local constants and inline styles, following the
+precedent of UX-007 branches 1-3. In doing so every `dark:` variant in those components was removed,
+so the match screen now renders identical colours in both themes.
+
+This matters because dark theme is explicitly supported for evening fixtures (see DESIGN-001). A
+coach tracking under floodlights in January gets the light-theme match screen inside an otherwise
+dark app.
+
+Resolved by DESIGN-002, the app-wide token migration — tokens respond to the theme where inline hex
+cannot. Recorded separately so the consequence is visible rather than buried in a migration entry.
+
+### DEBT-029 — `src/pages/Index.tsx` is dead code `OPEN`
+**Found:** 11 Sep 2026, while scoping the palette work.
+
+`src/App.tsx` line 15 reads `const Index = lazy(() => import("./pages/OptimizedIndex"))`. The route
+named `Index` renders **OptimizedIndex**. `src/pages/Index.tsx` is never rendered by anything.
+
+It carries 58 hard-coded colour utilities — the largest single concentration in the codebase — which
+means it inflates the apparent size of the DESIGN-002 migration and would waste an evening for anyone
+styling the home screen without checking first.
+
+Delete it, or rename OptimizedIndex to Index and delete the old one, so the live file has an honest
+name. Related to DEBT-020.
+
 ### DEBT-028 — The token invitation flow exists but UserManagement bypasses it `OPEN`
 **Found:** 10 Sep 2026.
 
@@ -1484,6 +1511,21 @@ super admin).
 
 ## Design
 
+### DESIGN-006 — Home and sign-in screens need a design pass, not a recolour `OPEN`
+**Found:** 11 Sep 2026.
+
+The signed-in home screen presents three large coloured tiles that do not communicate what they are
+for, and the sign-in screen has had no design attention. Recolouring them to Floodlight would produce
+a better-looking version of the same confusion — the problem is content and hierarchy, not palette.
+
+This is the first thing a new coach sees, so it carries disproportionate weight for adoption.
+
+Do it the way the match screen was done: a prototype first, argued over before any code. See
+UX-007's process, which is the reason branches 1-3 landed well.
+
+**Note before starting:** confirm which file is live — see DEBT-029. `src/pages/Index.tsx` is not
+rendered.
+
 ### DESIGN-005 — The five-minute tracker timeout serves two incompatible purposes `OPEN`
 **Found:** 7 Sep 2026, reviewing multi-coach safety.
 
@@ -1546,6 +1588,49 @@ Full spec, contrast pairs and regeneration steps in `docs/brand/BRAND.md`.
 ---
 
 ## UX
+
+### UX-018 — "You are actively tracking" is permanent furniture for a transient message `OPEN`
+**Found:** 11 Sep 2026, after the UX-015 palette pass.
+
+The active-tracker state of `MatchLockingBanner` is a full alert card carrying five things: a lock
+icon, a heading, an "Active Tracker" badge, a "started N minutes ago" timestamp, and a full-height
+Release Control button. It sits at the top of the match screen for the whole match.
+
+The UX-015 palette pass made it quiet in colour — Paper ground, navy text — which is right in intent
+but reads as a large pale slab against a near-white page. Quiet was executed as *pale* when it should
+have been *small*.
+
+The underlying point is the same one that motivates branch 4: "you are tracking this match" is
+reassurance needed once, not permanently, and it is consuming vertical space at the top of the same
+screen where branch 4 reclaims ~120px at the bottom.
+
+**Question for the design review, not a colour fix:** should this be a card at all, or a slim status
+line — or should it disappear once tracking is under way, with Release Control living somewhere less
+prominent? Deferred to the post-season design review alongside branch 4.
+
+### UX-017 — Events summary shows surnames and overflows the viewport on multiple subs `OPEN`
+**Found:** 11 Sep 2026, on mobile during testing.
+
+Two faults in the same row of `LiveEventsSummary`.
+
+**Surnames on the live match screen.** `nameOf` returns `first_name last_name`. UX-007 locks the
+live match screen to first names only — these are minors, and surnames are personal data the screen
+does not need to display. The player tiles honour this; this component never did. It should use
+first names only, matching `firstNameFor` in `EnhancedMatchTracker`.
+
+**Horizontal overflow.** With three or more substitutions at the same minute, the row bleeds off the
+side of the viewport on mobile. The row is `flex items-center gap-2 p-2 ... text-sm` (~line 157) with
+no `min-w-0` on the text child and no wrapping or truncation, so a long string cannot shrink below
+its content width and pushes the row wider than its container.
+
+The two compound: BUG-006's FIX 5 collapses every substitution at a given minute into a single row to
+stop blank cards rendering, so a triple substitution produces one row carrying six full names.
+
+**Fix shape.** First names only — roughly halving the string — plus `min-w-0` on the text child and
+either wrapping or truncation. Both small. Branch 4 gives these rows more room and makes the resting
+state a single truncated line, so resolve it there rather than patching twice.
+
+Relates to UX-007's locked decisions, BUG-006, branch 4.
 
 ### UX-016 — "Opponent" event-type toggle uses red for a non-critical selection `OPEN`
 **Found:** 11 Sep 2026, during UX-015 (Floodlight colour pass on the live match screen)
