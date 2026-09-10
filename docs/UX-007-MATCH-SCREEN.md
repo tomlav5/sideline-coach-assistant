@@ -219,6 +219,21 @@ The largest and riskiest branch. Read the risk section above again before starti
 Collapse the stacked event cards into a pull-up sheet. Move the goal undo out of its
 floating card and onto the last event row (UX-006). Fix the variable-height footer padding.
 
+**Design questions raised by an interactive prototype built 11 Sep 2026**, so the post-season
+session starts from them rather than a blank page:
+
+- Should the sheet auto-close when an event is recorded while it is open? Auto-closing keeps
+  the pitch visible; being moved around under your thumb is annoying.
+- Does undo belong inside the sheet at all? A mis-tapped goal needs undoing in seconds, and
+  inside the sheet that is two taps under pressure. The alternative is undo on the resting bar
+  itself while the latest event is fresh — one tap, no sheet.
+- How much of the screen should the sheet occupy? More history versus keeping the pitch in view.
+- Should opponent goals be de-emphasised, or shown with equal weight?
+
+The resting state the prototype assumes: a single 44px bar showing the most recent event and a
+total count, replacing the current header line plus 96px scroller — around 120px returned to
+the pitch.
+
 ---
 
 ## What must not change
