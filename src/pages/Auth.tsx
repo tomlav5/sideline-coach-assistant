@@ -58,6 +58,7 @@ export default function Auth() {
     const rawData = {
       email: formData.get('email') as string,
       password: formData.get('password') as string,
+      confirmPassword: formData.get('confirmPassword') as string,
       firstName: formData.get('firstName') as string,
       lastName: formData.get('lastName') as string,
     };
@@ -385,9 +386,20 @@ export default function Auth() {
                       minLength={6}
                     />
                   </div>
-                  <Button 
-                    type="submit" 
-                    className="w-full touch-target" 
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-confirm-password">Confirm Password</Label>
+                    <Input
+                      id="signup-confirm-password"
+                      name="confirmPassword"
+                      type="password"
+                      required
+                      className="touch-target"
+                      minLength={6}
+                    />
+                  </div>
+                  <Button
+                    type="submit"
+                    className="w-full touch-target"
                     disabled={isLoading}
                   >
                     {isLoading ? 'Creating account...' : 'Create Account'}

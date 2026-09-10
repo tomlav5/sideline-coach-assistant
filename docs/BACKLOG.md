@@ -1344,6 +1344,32 @@ on `match_events` → web push.
 
 ## Onboarding
 
+### ONBOARD-005 — Registration gives no signal when the address is already registered `DONE 10 Sep 2026`
+**Found:** 10 Sep 2026 during onboarding testing on production: registering with an existing
+address showed the success screen and sent no email, with nothing to indicate why.
+
+Supabase's behaviour is deliberate anti-enumeration and is unchanged; the fix is copy on the
+success screen pointing a stuck user at sign-in. Note that the same testing found the address had
+indeed been used before, and that Gmail +alias addresses (`name+coach1@gmail.com`) are a practical
+way to test registration repeatedly.
+
+Fixed in `src/pages/RegistrationSuccess.tsx`: replaced "Didn't receive the email? Check your spam
+folder or contact support." with wording that gives a stuck user their next step and leaks
+nothing — "you may already have an account — try signing in instead", pointing at the existing
+"Back to Sign In" button on the same screen. No detection of whether the address exists was added,
+client-side or otherwise.
+
+### ONBOARD-004 — No password confirmation on signup `DONE 10 Sep 2026`
+**Found:** 10 Sep 2026, onboarding testing.
+
+A typo in the single password field left the account unreachable, with no password reset in the
+UI (ONBOARD-002) and the emailed code as the only recovery route.
+
+Fixed: `authSignUpSchema` (`src/lib/validation.ts`) gained a `confirmPassword` field and a
+`.refine()` asserting it matches `password`, with the error attached to `confirmPassword` rather
+than the whole form. `src/pages/Auth.tsx`'s signup form gained a matching "Confirm Password"
+input; `confirmPassword` is validation-only and is not sent to Supabase.
+
 ### ONBOARD-003 — Resend-code button failed silently when rate-limited `DONE 8 Sep 2026`
 **Found:** 8 Sep 2026, reviewing the first-sign-in path ahead of the 13 Sep coaches.
 Fixed 8 Sep 2026 on `fix/onboard-003-otp-resend-feedback` (PR TBD).
