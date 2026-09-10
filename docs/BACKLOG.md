@@ -1359,6 +1359,46 @@ nothing — "you may already have an account — try signing in instead", pointi
 "Back to Sign In" button on the same screen. No detection of whether the address exists was added,
 client-side or otherwise.
 
+**Update — 10 Sep 2026: the copy-only mitigation proved insufficient.** Tested on both staging and
+production: a coach registering with an already-registered address was still sent to the success
+screen and left waiting for an email that would never arrive, with the corrective copy only
+reachable if they happened to read it before giving up.
+
+The case is now detected rather than only hinted at. With email confirmation enabled, Supabase's
+`signUp` response for an address that already has a confirmed account returns no error but a
+`data.user` whose `identities` array is empty — a documented tell, built entirely from information
+the client already receives back from the call it already makes. `useAuth.tsx`'s `signUp` now
+returns `{ error, alreadyRegistered }`, where `alreadyRegistered` is true when there is no error,
+`data.user` exists, and `data.user.identities?.length === 0`. `Auth.tsx`'s `handleSignUp` checks
+this: when true, it does not navigate to `/registration-success` and instead shows "An account
+already exists for this email. Try signing in, or use the emailed code if you've forgotten your
+password." on the auth screen itself, where the Sign In tab is already reachable. Genuine new
+registrations are unaffected. **No lookup function, RPC or endpoint reporting whether an address
+exists was added, and none should be** — that would be a real, scriptable user-enumeration surface,
+materially worse than what existed before; the empty-identities check adds no surface beyond what
+the signup form already has. The success-screen copy from the first fix is kept unchanged, as the
+fallback for if the empty-identities tell ever stops firing — it depends on email confirmation
+being enabled, which is a project setting, not something this code controls.
+
+**Why the position changed.** User enumeration is a genuine concern and the reason Supabase
+obfuscates signup responses by default. For this app specifically — a small, mutually-known group
+of grassroots coaches, where club membership is not sensitive information — the cost of a coach
+stranded on match day with no way to recover outweighs that concern. This is a considered
+trade-off, not a dismissal of the risk: the app holds children's first names and playing-time data,
+and account recovery is already weak (ONBOARD-002, no password reset in the UI). If the user base
+ever broadens beyond coaches — parents self-registering, say, rather than being added by a coach —
+this trade should be revisited.
+
+**Update — 10 Sep 2026 (second pass): detection alone left two contradictory toasts firing
+together.** `signUp`'s existing "Check your email" success toast still fired whenever `error` was
+null, including the `alreadyRegistered` case — so the user saw that toast and the new "Account
+already exists" message at the same time, one telling them to wait for an email that would never
+arrive and the other telling them to sign in instead. Worse than the original dead end. Fixed in
+`useAuth.tsx`: the "Check your email" toast is now suppressed when `alreadyRegistered` is true.
+Genuine new registrations are unaffected — that toast still fires exactly as before whenever there
+is no error and the address is new. The "Sign up failed" error toast is untouched, since that
+branch is only reached when there is an error. One message now reaches the user, not two.
+
 ### ONBOARD-004 — No password confirmation on signup `DONE 10 Sep 2026`
 **Found:** 10 Sep 2026, onboarding testing.
 

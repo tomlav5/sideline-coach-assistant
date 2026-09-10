@@ -7,7 +7,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signUp: (email: string, password: string, firstName: string, lastName: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, firstName: string, lastName: string) => Promise<{ error: any; alreadyRegistered: boolean }>;
   signInWithOtp: (email: string) => Promise<{ error: any }>;
   signInWithPassword: (email: string, password: string) => Promise<{ error: any }>;
   verifyOtp: (email: string, token: string) => Promise<{ error: any }>;
@@ -45,7 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUp = async (email: string, password: string, firstName: string, lastName: string) => {
     const redirectUrl = `${window.location.origin}/`;
     
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -57,20 +57,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
+    // With email confirmation enabled, signing up with an address that already has a
+    // confirmed account returns no error but a user whose identities array is empty —
+    // Supabase's documented tell for this case, since it deliberately does not error.
+    const alreadyRegistered = !error && !!data.user && data.user.identities?.length === 0;
+
     if (error) {
       toast({
         title: "Sign up failed",
         description: error.message,
         variant: "destructive",
       });
-    } else {
+    } else if (!alreadyRegistered) {
       toast({
         title: "Check your email",
         description: "We've sent you a confirmation link.",
       });
     }
 
-    return { error };
+    return { error, alreadyRegistered };
   };
 
 

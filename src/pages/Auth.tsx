@@ -76,12 +76,17 @@ export default function Auth() {
     }
 
     const { email, password, firstName, lastName } = validation.data;
-    const { error } = await signUp(email, password, firstName, lastName);
-    
-    if (!error) {
+    const { error, alreadyRegistered } = await signUp(email, password, firstName, lastName);
+
+    if (alreadyRegistered) {
+      toast({
+        title: "Account already exists",
+        description: "An account already exists for this email. Try signing in, or use the emailed code if you've forgotten your password.",
+      });
+    } else if (!error) {
       navigate('/registration-success');
     }
-    
+
     setIsLoading(false);
   };
 
