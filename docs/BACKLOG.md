@@ -1547,6 +1547,97 @@ Full spec, contrast pairs and regeneration steps in `docs/brand/BRAND.md`.
 
 ## UX
 
+### UX-016 — "Opponent" event-type toggle uses red for a non-critical selection `OPEN`
+**Found:** 11 Sep 2026, during UX-015 (Floodlight colour pass on the live match screen)
+
+`src/components/match/EnhancedEventDialog.tsx`'s Team selection toggle sets
+`variant="destructive"` on the "Opponent" button when selected. `docs/brand/BRAND.md` and
+`docs/UX-007-MATCH-SCREEN.md` both reserve the critical reds for "something is about to be
+lost" only — selecting "Opponent" to log their goal is a benign, fully reversible choice,
+not a data-loss moment, so red is the wrong signal here.
+
+Left unfixed in UX-015 because it needs an actual design decision (Pitch Blue, to match the
+informational treatment used elsewhere? A navy outline, matching the unselected/secondary
+toggle state?) rather than a mechanical recolour. Deferred past 12 Sep 2026.
+
+### UX-015 — Finish the Floodlight colour migration on the live match screen `DONE 11 Sep 2026`
+**Found:** 6 Sep 2026, expected follow-on once UX-007 branches 1-3 landed
+
+UX-007 branches 1-3 restyled `FixedMatchHeader`, `PlayerTileGrid`, `PendingSubsPanel` and
+`BottomActionBar`'s amber Submit button in Floodlight, but left the rest of the live match
+screen — controls, banners, dialogs — in Lovable-era green/yellow/blue, so the screen read
+as half-migrated. This item is colour only: no restructuring, no data/timer/handler changes.
+
+**Done 11 Sep 2026 (`feat/match-screen-floodlight`):**
+- **Controls & Goal button** — `EnhancedMatchControls.tsx`: Start/Resume Period → Signal
+  Amber/navy text (was `bg-green-600`); Pause → Card/navy/Edge outline (was
+  `variant="secondary"`); End Period → navy outline (was a yellow outline — yellow-as-warning
+  was fighting amber-as-action); Start Penalty Shootout → Pitch Blue (was `bg-blue-600`); the
+  UX-010 guard's "Submit N & end" → amber/navy (was `bg-yellow-600`), "Discard & end" →
+  red-deep/white (was `variant="destructive"`, now the deliberate critical colour instead of
+  the generic theme one); the paused notice → a neutral Card panel with an amber left rule
+  (was `bg-yellow-100`). Also moved "Refresh Timer State" below the primary control stack and
+  shrank it (kept at a full 44px tap target) — it's a troubleshooting escape hatch that used
+  to sit directly under Pause, where a rushed one-handed tap in weather could hit it by
+  mistake. `BottomActionBar.tsx`'s Goal button → Signal Amber/navy text (was `bg-green-600`),
+  reusing the file's existing `AMBER`/`NAVY` constants. `QuickGoalButton.tsx` (9 sites):
+  Confirm Opponent Goal → Signal Amber/navy text (was `bg-red-600` — not a data-loss case, so
+  red was the wrong colour per BRAND.md); Recent Scorers quick-tap accents → Slate /
+  theme-default hover (was green) — these are player-selection taps, not the primary action.
+- **Banners** — `MatchLockingBanner.tsx` (28 sites): "You are actively tracking" → quiet
+  navy-on-Paper statement of fact (was green); "Another user is tracking" → Pitch Blue
+  informational (was yellow); "Available for tracking" → Pitch Blue informational banner with
+  an amber "Take Control" button in navy text (was a blue banner with a theme-default button)
+  — the one state that IS an action, so only the button takes amber, per the
+  one-amber-thing-on-screen rule. `LiveEventsSummary.tsx` (7 sites): converted to a neutral
+  card — navy text, Slate for secondary detail; substitution icon → Slate (was yellow); goal
+  icon → navy for our team / Slate for opponent (was green/red — red was decorative here, not
+  data-loss); yellow-card swatch → navy-outlined Card swatch, red-card swatch → solid navy
+  swatch (both card-colour swatches deliberately desaturated, since BRAND.md reserves the red
+  tokens for data-loss only — a card event doesn't lose data, and the "Yellow Card"/"Red Card"
+  text label still carries the meaning). No undo affordance exists in this component yet
+  (that's UX-007 branch 4's history sheet still to come), so no amber was introduced here.
+- **Dialogs & chips** — `EnhancedEventDialog.tsx` (16 sites): the "Recording Goal Event" and
+  "Penalty Shootout" notice panels → Pitch Blue informational treatment (was blue-tinted
+  Lovable classes — effectively a literal recolour to the Floodlight equivalent of the same
+  idea). `SmartSuggestionBadge.tsx` (12 sites): high/medium/low confidence badges → a
+  navy/Slate/muted-Slate weight scale on a Card ground (was green/blue/gray) — deliberately
+  never amber, since this is decoration next to a suggestion, not the screen's one primary
+  action. `EditMatchDialog.tsx` (6 sites): "All checks passed" → navy text (was green);
+  validation warning rows → a neutral Card panel with an amber left rule, navy text and icon
+  (was a yellow-filled row), reusing the same "attention accent without a yellow field"
+  pattern as the paused-notice panel above.
+
+Palette values were declared as local per-component constants throughout, matching the
+precedent set by UX-007 branches 1-3 (`PendingSubsPanel`, `BottomActionBar`,
+`FixedMatchHeader`, `PlayerTileGrid`) — not a migration to shared CSS tokens, which is
+tracked separately as DESIGN-002. This branch knowingly adds a handful more components to
+that token-migration debt in exchange for a screen that now reads as one consistent design
+rather than half-Lovable, half-Floodlight.
+
+**Fixed 11 Sep 2026, same branch:** the initial pass left three states where the one-amber
+rule broke. `BottomActionBar`'s Goal button only dropped out of amber when substitutions were
+pending, so it was amber alongside `EnhancedMatchControls`' amber "Start Period" before
+kick-off, alongside amber "Resume Period" while paused, and — when the match was unclaimed —
+alongside `MatchLockingBanner`'s amber claim button, three amber elements on screen at once.
+Goal is only the screen's actual primary action while a period is running. `BottomActionBar`
+now takes an `isPeriodRunning` prop (default `true`, so any other caller is unaffected) and
+Goal is amber only when `isPeriodRunning && !hasPending`; every other case reuses the existing
+`variant="outline"` secondary path rather than adding a third visual state.
+`EnhancedMatchTracker.tsx` passes its existing `timerRunning` value — the same one already fed
+to `usePlayerTimers` — rather than deriving a new signal from fixture/period state, which is
+stale by design (BUG-012). The Goal button itself is not disabled pre-kick-off; only its
+colour changed.
+
+Not touched: `FixedMatchHeader`, `PlayerTileGrid`, `PendingSubsPanel` (already Floodlight
+from branches 1-3); `EnhancedSubstitutionDialog` and `ActivePlayerCard` (orphaned per
+DEBT-021/DEBT-022 — not worth styling dead code). One breach noticed along the way and
+deliberately left unfixed: UX-016, filed above. A pre-existing sub-44px touch target on two
+`MatchLockingBanner.tsx` buttons was also noticed and left for UX-002 rather than fixed here
+— see the note on that item.
+
+Relates to UX-007, DESIGN-002.
+
 ### UX-014 — No club context on the home screen, and no way to switch clubs `OPEN`
 **Found:** 10 Sep 2026, during onboarding testing.
 
@@ -1760,6 +1851,10 @@ second, often not at the ground. Parent view needs its own route and layout.
 Used one-handed, outdoors, possibly in rain, possibly with gloves, eyes mostly on the
 pitch. Minimum 44x44pt targets, thumb-reachable placement, unambiguous tap feedback.
 Failure mode is a mis-tap during a goalmouth scramble.
+
+**Instance noted 11 Sep 2026 (UX-015):** `MatchLockingBanner.tsx`'s "Release Control" and
+"Take Control" buttons use `size="sm"` (36px) — below the 44px minimum. Pre-existing, not
+introduced by UX-015; left for this audit rather than patched in isolation.
 
 ---
 

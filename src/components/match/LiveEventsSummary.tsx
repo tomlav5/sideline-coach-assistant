@@ -3,6 +3,16 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Goal, ArrowUpDown, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+// Floodlight — see docs/brand/BRAND.md. Scoped locally, per the precedent set by the
+// header/tile-grid branches (DESIGN-002 covers the app-wide token migration). This
+// row is a neutral card: navy text, Slate for secondary detail, no undo affordance
+// here yet so no amber (that arrives with UX-007 branch 4's history sheet).
+const FLOODLIGHT = {
+  navy: '#101724',
+  card: '#FFFFFF',
+  slate: '#5A6474',
+};
+
 interface Player {
   id: string;
   first_name: string;
@@ -151,7 +161,7 @@ export function LiveEventsSummary({
                     <Badge variant="secondary" className="text-xs font-mono shrink-0 px-2 py-0.5">
                       {item.minute}'
                     </Badge>
-                    <ArrowUpDown className="h-4 w-4 text-yellow-600 shrink-0" />
+                    <ArrowUpDown className="h-4 w-4 shrink-0" style={{ color: FLOODLIGHT.slate }} />
                     <div className="flex-1 min-w-0">
                       <div className="font-medium truncate">
                         {onNames && <span>{onNames} on</span>}
@@ -188,10 +198,10 @@ export function LiveEventsSummary({
                   {/* Event Icon & Details */}
                   {event.event_type === 'goal' && (
                     <>
-                      <Goal className={cn(
-                        "h-4 w-4 shrink-0",
-                        event.is_our_team ? "text-green-600" : "text-red-600"
-                      )} />
+                      <Goal
+                        className="h-4 w-4 shrink-0"
+                        style={{ color: event.is_our_team ? FLOODLIGHT.navy : FLOODLIGHT.slate }}
+                      />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-semibold truncate">
@@ -215,7 +225,10 @@ export function LiveEventsSummary({
 
                   {event.event_type === 'yellow_card' && (
                     <>
-                      <div className="h-4 w-3 bg-yellow-400 border border-yellow-600 rounded-sm shrink-0" />
+                      <div
+                        className="h-4 w-3 border-2 rounded-sm shrink-0"
+                        style={{ backgroundColor: FLOODLIGHT.card, borderColor: FLOODLIGHT.navy }}
+                      />
                       <div className="flex-1 min-w-0">
                         <div className="font-medium truncate">
                           {scorer || 'Unknown'}
@@ -227,7 +240,10 @@ export function LiveEventsSummary({
 
                   {event.event_type === 'red_card' && (
                     <>
-                      <div className="h-4 w-3 bg-red-600 border border-red-800 rounded-sm shrink-0" />
+                      <div
+                        className="h-4 w-3 rounded-sm shrink-0"
+                        style={{ backgroundColor: FLOODLIGHT.navy }}
+                      />
                       <div className="flex-1 min-w-0">
                         <div className="font-medium truncate">
                           {scorer || 'Unknown'}

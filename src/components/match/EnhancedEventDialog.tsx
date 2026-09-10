@@ -10,6 +10,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import { PlayerSelector } from '@/components/match/PlayerSelector';
 
+// Floodlight — see docs/brand/BRAND.md. Scoped locally, per the precedent set by the
+// header/tile-grid branches (DESIGN-002 covers the app-wide token migration). These
+// notice panels are informational, not the dialog's action, so Pitch Blue — matching
+// the same informational treatment used in MatchLockingBanner.
+const INFO_BG = 'rgba(11, 95, 204, 0.08)';
+const INFO_BORDER = 'rgba(11, 95, 204, 0.35)';
+const INFO_TEXT = '#0B5FCC';
+
 interface Player {
   id: string;
   first_name: string;
@@ -179,9 +187,9 @@ export function EnhancedEventDialog({
   const content = (
     <div className="space-y-4 px-1">
           {/* Event Type - Only Goal (assists are recorded as attributes of goals) */}
-          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-            <div className="text-sm font-medium text-blue-900 dark:text-blue-100">⚽ Recording Goal Event</div>
-            <div className="text-xs text-blue-700 dark:text-blue-300 mt-1">Assists are recorded below as part of the goal</div>
+          <div className="p-3 rounded-lg border" style={{ backgroundColor: INFO_BG, borderColor: INFO_BORDER }}>
+            <div className="text-sm font-medium" style={{ color: INFO_TEXT }}>⚽ Recording Goal Event</div>
+            <div className="text-xs mt-1" style={{ color: INFO_TEXT }}>Assists are recorded below as part of the goal</div>
           </div>
 
           {/* Team Selection */}
@@ -261,9 +269,9 @@ export function EnhancedEventDialog({
 
           {/* Penalty shootout indicator */}
           {resolvedPeriod?.period_type === 'penalties' && (
-            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-              <div className="text-sm font-medium text-blue-900 dark:text-blue-100">⚽ Penalty Shootout</div>
-              <div className="text-xs text-blue-700 dark:text-blue-300">All goals are automatically marked as penalties</div>
+            <div className="p-3 rounded-lg border" style={{ backgroundColor: INFO_BG, borderColor: INFO_BORDER }}>
+              <div className="text-sm font-medium" style={{ color: INFO_TEXT }}>⚽ Penalty Shootout</div>
+              <div className="text-xs" style={{ color: INFO_TEXT }}>All goals are automatically marked as penalties</div>
             </div>
           )}
 

@@ -17,16 +17,33 @@ interface BottomActionBarProps {
   pendingCount?: number;
   /** Oldest pending pair has waited 60s: give Submit a stronger static amber halo. */
   pendingCritical?: boolean;
+  /**
+   * Goal is only the screen's primary action while a period is actually running —
+   * pre-kick-off and while paused, "Start"/"Resume Period" in EnhancedMatchControls
+   * is amber instead, and the one-amber rule means Goal can't be too. Defaults to
+   * true so a caller that doesn't pass it keeps the previous behaviour.
+   */
+  isPeriodRunning?: boolean;
   disabled?: boolean;
   className?: string;
 }
 
 export const BottomActionBar = forwardRef<HTMLDivElement, BottomActionBarProps>(
   function BottomActionBar(
-    { onQuickGoal, onOtherEvent, onSubmit, pendingCount = 0, pendingCritical = false, disabled = false, className },
+    {
+      onQuickGoal,
+      onOtherEvent,
+      onSubmit,
+      pendingCount = 0,
+      pendingCritical = false,
+      isPeriodRunning = true,
+      disabled = false,
+      className,
+    },
     ref,
   ) {
     const hasPending = pendingCount > 0;
+    const goalIsPrimary = isPeriodRunning && !hasPending;
 
     return (
       <div
@@ -60,16 +77,17 @@ export const BottomActionBar = forwardRef<HTMLDivElement, BottomActionBarProps>(
               </Button>
             )}
 
-            {/* Goal — primary when nothing is pending, secondary when Submit takes over. */}
+            {/* Goal — primary only while a period is running and nothing is pending;
+                secondary (variant="outline") in every other case, including pre-kick-off
+                and paused, when EnhancedMatchControls' Start/Resume Period is the amber
+                action instead. Same outline path Submit already uses — no third visual
+                state. */}
             <Button
               onClick={onQuickGoal}
               disabled={disabled}
-              variant={hasPending ? 'outline' : 'default'}
-              className={cn(
-                'h-14 flex flex-col items-center justify-center gap-1',
-                !hasPending &&
-                  'bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-800',
-              )}
+              variant={goalIsPrimary ? 'default' : 'outline'}
+              className={cn('h-14 flex flex-col items-center justify-center gap-1', goalIsPrimary && 'border-0 hover:brightness-95')}
+              style={goalIsPrimary ? { backgroundColor: AMBER, color: NAVY } : undefined}
             >
               <Goal className="h-5 w-5" />
               <span className="text-xs font-semibold">Goal</span>

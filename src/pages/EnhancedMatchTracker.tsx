@@ -1404,6 +1404,7 @@ export default function EnhancedMatchTracker() {
         onSubmit={() => { void handleSubmitPendingSubs(); }}
         pendingCount={pendingStack.length}
         pendingCritical={pendingCritical}
+        isPeriodRunning={timerRunning}
         disabled={recordingLocked}
       />
 
