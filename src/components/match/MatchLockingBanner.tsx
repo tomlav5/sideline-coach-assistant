@@ -65,12 +65,11 @@ export function MatchLockingBanner({
           </div>
           <Button
             variant="outline"
-            size="sm"
             onClick={onReleaseTracking}
-            className="w-full sm:w-auto hover:brightness-95"
+            className="w-full sm:w-auto h-11 hover:brightness-95"
             style={{ borderColor: FLOODLIGHT.navy, color: FLOODLIGHT.navy, backgroundColor: FLOODLIGHT.card }}
           >
-            <Unlock className="h-3 w-3 mr-1" />
+            <Unlock className="h-4 w-4 mr-1" />
             Release Control
           </Button>
         </AlertDescription>
@@ -132,11 +131,10 @@ export function MatchLockingBanner({
           <Button
             onClick={onClaimTracking}
             disabled={isClaimingMatch}
-            size="sm"
-            className="w-full sm:w-auto border-0 hover:brightness-95"
+            className="w-full sm:w-auto h-11 border-0 hover:brightness-95"
             style={{ backgroundColor: FLOODLIGHT.amber, color: FLOODLIGHT.navy }}
           >
-            <Lock className="h-3 w-3 mr-1" />
+            <Lock className="h-4 w-4 mr-1" />
             {isClaimingMatch ? 'Claiming...' : 'Take Control'}
           </Button>
         </AlertDescription>
