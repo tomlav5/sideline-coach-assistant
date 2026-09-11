@@ -8,6 +8,79 @@ Known issues and planned work. Newest findings at the top of each section.
 
 ## Bugs
 
+### BUG-031 — Deletes never refresh the report views `OPEN`
+**Found:** 11 Sep 2026.
+
+No delete path calls `refresh_report_views()`, so a successfully deleted match persists as
+a ghost row in the Matches and Scorers tabs until an unrelated `endMatch()` happens to
+refresh the views. The Playing Time tab is unaffected — it falls through to
+`get_player_playing_time_v2`, which reads `public.player_time_logs` directly (see
+DEBT-013).
+
+**Fix:** call `refresh_report_views()` after a successful delete, and invalidate the three
+report query keys.
+
+Relates to BUG-029, DEBT-013.
+
+### BUG-030 — Match Reports delete silently destroyed match data `DONE 11 Sep 2026`
+**Found:** 11 Sep 2026, during pre-season data cleanup, before any non-admin account
+existed.
+
+Deleting a match from Match Reports could irreversibly destroy match events and player
+time logs while reporting success and leaving the fixture in place.
+
+`deleteMatch` (`src/pages/Reports.tsx:96-138`) performed three sequential deletes —
+`player_time_logs`, `match_events`, `fixtures` — checking only for thrown errors. RLS
+permits a club 'official' to delete `match_events` and `player_time_logs`, but restricts
+`fixtures` DELETE to 'admin'. A PostgREST delete blocked by RLS returns 200 with zero rows
+affected and throws nothing. So for a non-admin coach the first two deletes succeeded, the
+third silently did nothing, and the UI reported "Match deleted" — leaving a fixture whose
+entire contents (goals, assists, substitutions, every playing-time record) had been
+destroyed, with no indication anything was wrong. Because the fixture remained listed, the
+natural response was to try again.
+
+Resolved by removing the delete action from Match Reports entirely and making
+`deleteFixture` check rows actually affected. That also retires one of the two duplicate
+delete implementations noted in UX-024.
+
+**Status check, 11 Sep 2026:** `src/pages/Reports.tsx` has no delete handler, menu item or
+dialog left in it (confirmed by grep) — the fix is already shipped. This describes the same
+bug already recorded above as BUG-024 (`DONE`, PR #97, commit `e08c4bf`). Marked DONE here
+to match, rather than left OPEN as a duplicate.
+
+### BUG-029 — Deleting from Match Reports does not update the list `OPEN`
+**Found:** 11 Sep 2026.
+
+Deleting a record from Match Reports leaves it displayed until a manual refresh — and,
+because the Matches and Scorers tabs read materialized views that no delete path refreshes,
+it persists beyond a refresh too. See BUG-031 for the view-refresh cause and DEBT-032 for
+the invalidation pattern.
+
+### BUG-028 — Deleting a player from their own dialog blanks the screen `OPEN`
+**Found:** 11 Sep 2026.
+
+In a player's dialog, clicking the settings cog then delete causes the screen to go blank;
+a manual refresh is required to recover. Selecting the player and using the delete button
+at the top of the list works correctly.
+
+Likely shape: the delete succeeds, the dialog remains mounted, and the next render reads a
+property off a player that no longer exists, throwing during render.
+
+**Wider concern** — the blank screen suggests there may be no React error boundary catching
+render errors. If true, any unhandled error anywhere in the app takes the entire UI away
+with no explanation and no route back but a manual refresh. During a live match that would
+leave a coach with a dead screen; match state is safe in the database and a refresh would
+recover it, but the coach would have no way of knowing that. Unverified — investigation
+pending. Confirm whether a top-level boundary exists and whether the match screen sits
+inside one, before assuming either way.
+
+### BUG-027 — Team assignment changes require a page refresh `OPEN`
+**Found:** 11 Sep 2026.
+
+Adding a player to a team, or removing them from one, does not update the UI until the page
+is manually refreshed. The write succeeds; the displayed list does not change. Instance of
+the systemic pattern in DEBT-032.
+
 ### BUG-026 — Deleting a fixture leaves ghost rows in the report materialized views `OPEN`
 **Found:** 11 Sep 2026, while fixing BUG-024.
 
@@ -888,6 +961,50 @@ Relates to UX-001.
 
 ## Technical debt
 
+### DEBT-034 — Duplicate foreign key constraints on fixtures.team_id `OPEN`
+**Found:** 11 Sep 2026.
+
+`fixtures_team_id_fkey` and `fk_fixtures_team_id` are two separate constraints with
+identical cascade behaviour. Harmless today, but worth resolving before anyone modifies
+that relationship.
+
+### DEBT-033 — Inaccurate comment about view refresh triggers `OPEN`
+**Found:** 11 Sep 2026.
+
+`useEnhancedMatchTimer.tsx:444` states "Views will be refreshed by triggers or next manual
+refresh". There are no such triggers, and no manual refresh is reachable from the Reports
+UI — `useRefreshReports` and `useManualReportRefresh` in `useReports.tsx` appear to have no
+caller. Correct the comment, and decide whether a real fallback is needed given
+`endMatch()` is currently the only reliable refresh trigger and has no retry on failure.
+
+### DEBT-032 — Mutations do not invalidate their queries (systemic) `OPEN`
+**Found:** 11 Sep 2026.
+
+Confirmed in three separate places on 11 Sep, all found within an hour of ordinary use:
+
+- BUG-023 — `claim_match_tracking`, `release_match_tracking` and `endMatch` never
+  invalidate `['live-match-detection']`.
+- BUG-027 — player team assignment changes do not update the list.
+- BUG-029 — deleting from Match Reports does not update the list.
+
+The only correct examples found are fixture deletion (`useFixtures.tsx:145`,
+`Fixtures.tsx:341`), suggesting invalidation was applied where someone happened to notice
+rather than as a convention.
+
+Fix as one piece of work, not one bug at a time:
+
+1. Enumerate every mutation in `src/` — every Supabase insert, update, delete and RPC that
+   changes state. For each, report the query keys holding the affected data and whether
+   invalidation runs after success. Treat this as a standalone read-only audit before any
+   code is written.
+2. Apply the convention: invalidate on success only, never optimistically, never on
+   failure. A write that fails must leave the cache alone.
+3. **Caution** — the match screen is not like the rest of the app. `usePlayerTimers` runs a
+   deliberately tuned fast/slow poll (2s / 15s), and BUG-008 was caused by a write firing
+   once per second against the fixtures table. Do not add invalidations to match-screen
+   mutations without stating what each will refetch and how often under match conditions. A
+   refetch storm during a live match is worse than a stale list on a settings page.
+
 ### DEBT-031 — Live-match localStorage fallback never verifies ownership `OPEN`
 **Found:** 11 Sep 2026, during the BUG-023 investigation.
 
@@ -1183,6 +1300,10 @@ exists in neither production (`crmlmnhillnnrnrxqera`) nor staging (`xszbopufqchb
 BUG-010 (which raised the possibility that the baseline was merely stale) is folded into
 this item — it was a dead client code path, not schema drift. Check covered this function
 and `unique_player_period_fixture` only, not a full schema diff.
+
+**Confirmed again, 11 Sep 2026 (independent investigation):** `get_player_playing_time_v3`
+does not exist in the applied schema. Every Reports load calls it, throws, is swallowed by
+the try/catch in `useReports.tsx:147`, and falls through to v2.
 Worse: there are now three different formulas for the same "minutes played" number in
 production (`get_player_playing_time`/`_v2`, the never-deployed `_v3`, and
 `analytics.mv_player_playing_time`, which is refreshed on every match write but read by
@@ -1289,6 +1410,32 @@ Several recent commits are named "Changes". Enable branch protection requiring a
 ---
 
 ## Security
+
+### SEC-002 — Permission model inconsistent across related tables `OPEN`
+**Found:** 11 Sep 2026.
+
+`fixtures` DELETE requires 'admin'; `match_events` and `player_time_logs` DELETE require
+only 'official'. That mismatch is what turned unchecked sequential deletes into silent
+partial data loss (BUG-030).
+
+Settle the intended model before changing any policy. The blocking question: does in-match
+correction depend on `match_events` DELETE? If undoing a goal or a substitution is
+implemented as a DELETE on `match_events`, restricting that to admin would remove a coach's
+ability to correct a mis-tap during their own match — a worse outcome than the bug it
+fixes.
+
+Stated requirement (11 Sep 2026): only admin account holders should be able to delete data.
+The boundary proposed: deleting a fixture, player, team or club member is admin-only;
+editing and correcting events within a match you are actively tracking stays open to the
+tracking coach. Destroying a record versus fixing one.
+
+Also to settle:
+- Is club membership the same as team coaching? Can a member who coaches no teams delete
+  data belonging to a team they have nothing to do with?
+- Delete Team cascades to every fixture that team has ever had. It is the most destructive
+  action in the app and currently sits behind a team settings page.
+
+Both RLS and UI gating required. UI gating alone is not a permission.
 
 ### SEC-001 — Storage policy grants every authenticated user full access to every bucket `OPEN`
 **Found:** 24 Aug 2026, during the Session 8 baseline reconciliation
@@ -1413,6 +1560,12 @@ this repo has working reports — without it a rebuilt production loses Reports
 silently. Also consider whether `refresh_report_views()` should surface failures
 rather than swallow them.
 Relates to ONBOARD-001, ENV-004.
+
+**Confirmed, 11 Sep 2026 (independent investigation):** `REFRESH MATERIALIZED VIEW
+CONCURRENTLY` fails silently against a view created `WITH NO DATA` and never populated,
+which is the state of any freshly built database. Production works only because its views
+were populated once historically. A new environment would have permanently broken report
+views with no visible error.
 
 ### ENV-005 — Production and staging use different Supabase key formats `OPEN`
 **Found:** 31 Aug 2026, while splitting Vercel environment variables (ENV-002)
@@ -1794,6 +1947,123 @@ Full spec, contrast pairs and regeneration steps in `docs/brand/BRAND.md`.
 ---
 
 ## UX
+
+### UX-026 — No record of sign-in activity `OPEN`
+**Found:** 11 Sep 2026.
+
+Extends UX-025. An admin cannot see whether an account is actually being used, or who is
+active now. Three distinct things, in increasing cost:
+
+1. **Last sign-in** — `auth.users.last_sign_in_at` already exists. Nearly free once
+   UX-025's view exists, and answers the common question: has this coach ever got in, and
+   when did they last use it?
+2. **Sign-in history** — logins over time, not just the latest. Supabase keeps
+   `auth.audit_log_entries` internally (service_role only, own retention); the durable
+   alternative is writing our own row per successful sign-in. Decide which before building
+   — the audit log is free but not ours and not permanent; our own table is permanent but
+   is one more place personal data lives.
+3. **Who is active now** — genuine presence needs Supabase Realtime presence channels.
+   `auth.sessions` is not a reliable proxy for having the app open.
+
+**Recommended first cut:** (1) plus something we already have. `fixtures.active_tracker_id`
+already records who is tracking which match, so "which coaches are currently tracking a
+match" is available today with no new infrastructure — and on a Sunday morning that is the
+question a club admin actually wants answered. Surface that alongside last sign-in, and (2)
+and (3) may never be needed.
+
+Same constraints as UX-025.
+
+### UX-025 — Admins cannot see registered account details in the app `OPEN`
+**Found:** 11 Sep 2026.
+
+There is no way for an admin to see who has registered. Checking requires logging into the
+Supabase dashboard — the person administering a grassroots football club should not need
+database access to answer "has this coach signed up yet?".
+
+Proposed: an admin-only view listing registered accounts with email, registration date,
+last sign-in, and email-confirmed status.
+
+**Implementation constraints:**
+- `auth.users` is not readable from the client. Needs either an edge function using the
+  `service_role` key server-side, or a `SECURITY DEFINER` view/RPC exposing only
+  whitelisted columns. The `service_role` key must never reach the client.
+- Expose the minimum: `email`, `created_at`, `last_sign_in_at`, `confirmed_at`. Never
+  tokens, recovery hashes, or raw metadata blobs without auditing contents.
+- Gate at both layers — the function or policy must refuse non-admins, and the UI must not
+  render for them. UI gating alone is not a permission.
+- These are adult coaches' email addresses: personal data, unlike the children's records
+  which are deliberately first-name-and-initial only. Display the minimum needed, and be
+  able to justify each field shown.
+
+Pairs with UX-019 (remove the meaningless user ID from Club Members rows). Depends on the
+admin role model being settled — see SEC-002.
+
+### UX-024 — Completed Matches and Match Reports are two screens over one dataset `OPEN`
+**Found:** 11 Sep 2026.
+
+Completed fixtures and Match Reports present the same underlying data through two
+interfaces. Match Reports has the better one — keyword search, clearer layout — but neither
+supports multi-select, and maintaining both means every improvement is duplicated or lands
+on only one.
+
+The duplication also existed in code: match deletion was implemented twice, in
+Fixtures.tsx and Reports.tsx, inconsistently. BUG-030's fix removed the Reports
+implementation, so one path now remains — but two screens over one dataset is still the
+underlying problem.
+
+Proposed: one screen, built on the Match Reports interface, absorbing anything Completed
+Matches offers that Reports does not.
+
+Before removing either screen, audit both and list every capability each has that the
+other lacks — filters, sort orders, status handling, actions, navigation entry points, deep
+links. Nothing should be lost silently, and entry points into the retired screen need
+redirecting.
+
+**Sequencing** — this should come before:
+- BUG-022 (dropdown persisting above the delete dialog) — do not fix a screen being
+  absorbed.
+- UX-023 (multi-select) — build it once, on the surviving screen.
+
+### UX-023 — No bulk operations in match data management `OPEN`
+**Found:** 11 Sep 2026.
+
+Deleting or correcting match records is one at a time through a row menu. Clearing a set of
+matches means repeating a destructive action dozens of times, which is both tedious and the
+condition under which mistakes happen.
+
+Proposed: an explicit "data mode" on the match list exposing multi-select and bulk actions.
+The mode separation is itself a safety feature — destructive tools should require
+deliberate entry, not sit one tap from normal browsing.
+
+Requirements:
+- Filter first, then select. Select-all should mean select-all-within-current-filter, and
+  say so. Filtering by date range, team and competition type has to exist before select-all
+  is useful.
+- Confirmation must state true scope: the count of matches AND what goes with them ("12
+  matches, 47 goals, 310 player time records"), not a generic "are you sure". Above a small
+  threshold, require typed confirmation.
+- No undo exists — no soft delete, no archive, no export. Consider exporting the selection
+  before deletion so a mistake is recoverable outside the app.
+- Bulk edit is lower value than bulk delete and can follow later.
+
+**Relationship to REPORT-001:** the recurring version of this need is not "delete many
+matches" but "start a new season". Once fixtures carry a season identifier, clearing last
+year becomes a scoping change rather than a destructive one. Bulk delete is the interim
+tool for test data and mistakes; it must not become the mechanism by which seasons are
+managed.
+
+### UX-022 — Player list shows no record count `OPEN`
+**Found:** 11 Sep 2026.
+
+The player view gives no count of records displayed, and no indication of how many exist in
+total. Filtered to a team, a coach must count by eye to confirm a squad is complete — the
+exact check most likely to be done in a hurry before a match.
+
+Display a count that responds to the active filter:
+- Unfiltered: "24 players"
+- Filtered to a team: "10 of 24 players"
+
+Both counts when filtered confirms the filter is applied and preserves context.
 
 ### UX-021 — Sign-in code entry slots invisible in dark mode `DONE 11 Sep 2026`
 **Found and fixed 11 Sep 2026**, PR #95 (commit `70b61e5`).
@@ -2270,6 +2540,15 @@ choose. Split into capture and reporting:
 - **Reporting** — tracked as REPORT-002.
 
 Relates to REPORT-002, ENV-006.
+
+**Confirmed, 11 Sep 2026 (independent investigation):** no season concept exists anywhere
+in the schema. A grep for "season" across migrations, `src/`, functions and generated types
+returns only calendar references in comments. `competitions` is not a table — it is
+`competition_type` (league/tournament/friendly) and `competition_name` on `fixtures`, plus
+a materialized view listing distinct pairs for a filter dropdown. It is a match-type
+classifier, not a season boundary. All three report materialized views aggregate every
+completed fixture with no date filter, and their RPCs take no parameters. Deferring is low
+cost: every fixture carries `scheduled_date`, so a future backfill is a date comparison.
 
 ### REPORT-002 — Season selector on Reports `OPEN`
 **Found:** 6 Sep 2026 — deferrable past 12 September.
