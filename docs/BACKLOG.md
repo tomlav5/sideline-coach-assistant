@@ -1563,7 +1563,7 @@ colours gets an unreadable match screen.
 Relates to UX-005 (the 258 hard-coded classes are also the layout-consistency obstacle).
 **Blocked by:** DESIGN-002.
 
-### DESIGN-002 — 258 hard-coded colour classes bypass the design tokens `OPEN`
+### DESIGN-002 — 258 hard-coded colour classes bypass the design tokens `IN PROGRESS`
 `src/index.css` defines a complete shadcn token set, but 258 Tailwind colour utilities
 across the app (116 green, 76 yellow, 66 blue) set colours directly. Until these route
 through semantic tokens, a palette change means a find-and-replace rather than editing
@@ -1574,6 +1574,23 @@ one file.
 That was deliberate for the UX-007 branches, but it means the eventual token migration
 now has two extra call sites to reconcile, and every further Floodlight component adds
 one.
+
+**Phase one `DONE 11 Sep 2026`, branch `feat/floodlight-tokens`.** `src/index.css`'s
+`:root` and `.dark` blocks now declare the full Floodlight token set (background,
+foreground, card, primary, secondary, muted, accent, destructive, border, input, ring,
+and their sidebar equivalents) in place of the old football-green/blue tokens — a
+token-only change, no component touched. One deviation from the literal Floodlight
+mapping: `--destructive` uses Red-deep (`#B4232C`, `356 67% 42%`) rather than plain Red
+(`#E5484D`, `358 75% 59%`) — plain Red against white destructive-foreground text measures
+~3.9:1, below the 4.5:1 AA floor, where Red-deep reaches the ~6.5:1 BRAND.md documents for
+exactly this pairing.
+
+**What remains (phase two, still open):** the 258 hard-coded Tailwind colour utilities in
+individual components are unchanged by this branch and still bypass the new tokens.
+`DEBT-030` (the match screen not responding to the theme) is unaffected and still open —
+`EnhancedMatchTracker`'s match-screen components use local Floodlight constants and inline
+styles (UX-007 branches 1-3, UX-015) and bypass tokens entirely; this branch deliberately
+did not touch them.
 **Blocks:** DESIGN-003.
 
 ### DESIGN-001 — Floodlight adopted as the app's direction `DONE 1 Sep 2026`
