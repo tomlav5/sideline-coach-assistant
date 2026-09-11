@@ -1956,6 +1956,25 @@ Full spec, contrast pairs and regeneration steps in `docs/brand/BRAND.md`.
 
 ## UX
 
+### UX-027 — Club admins can't see other members' names, only their own `OPEN`
+**Found:** 11 Sep 2026, while fixing UX-019.
+
+`profiles` SELECT RLS is `auth.uid() = user_id` only — no policy lets a club admin read
+the profile rows of the members they administer. After UX-019, the Club Members page
+correctly shows the viewing admin's own name/email (fetched via a second client-side
+query, since `club_members`/`profiles` have no FK for PostgREST to embed), but every other
+member still renders "Unknown User" because their profile rows are invisible under current
+RLS.
+
+**Fix shape** (either, not both): a new RLS SELECT policy on `profiles` scoped to "club
+admins can view profiles of members of clubs they administer" (checked via
+`club_members`/`user_has_club_access`), or a `SECURITY DEFINER` RPC that returns club
+members joined with name/email, admin-gated server-side. Either is a security-surface
+change and needs explicit sign-off — not something to fold into a display-layer branch.
+
+Same underlying gap as UX-025 (no admin-safe read path to other users' account data at
+all) — worth solving both with one mechanism rather than two.
+
 ### UX-026 — No record of sign-in activity `OPEN`
 **Found:** 11 Sep 2026.
 
@@ -2101,13 +2120,26 @@ On a fixture being tracked by another user, the Take Control button sits off-cen
 relative to the buttons below it. Likely caused by a sibling element consuming width
 rather than by the button itself — diagnose the container before changing the button.
 
-### UX-019 — User ID displayed on Club Members rows `OPEN`
-**Found:** 11 Sep 2026.
+### UX-019 — User ID displayed on Club Members rows `DONE 11 Sep 2026`
+**Found:** 11 Sep 2026. **Fixed:** 11 Sep 2026, branch `fix/club-members-unknown-user` (PR TBD).
 
 The Club Members list renders the raw user ID alongside each member. It carries no
 meaning for a coach and adds visual noise. Display name, role and status only.
 
-**Fix shape.** Display-layer change only — do not alter the query or types.
+**What was actually wrong.** Not display-layer only as originally scoped — every row
+showed "Unknown User" (not just an extra ID) because `UserManagement.tsx`'s `fetchMembers`
+never fetched profile data at all: `club_members` and `profiles` both reference
+`auth.users` independently with no FK between them, so PostgREST couldn't auto-embed a
+`profiles` relation even if the query had asked for one.
+
+**Fix.** `fetchMembers` now runs a second query fetching `profiles` by `user_id` and merges
+client-side; display falls back to email if no name is set, then "Unknown User" only if
+neither is reachable. Raw user ID line removed. No RLS or migration changes.
+
+**Known limitation, not fixed here:** `profiles` SELECT RLS only allows `auth.uid() =
+user_id`, so an admin now sees their *own* name/email correctly but still sees "Unknown
+User" for every other member — their profile rows aren't readable under current policy.
+See UX-027.
 
 ### UX-018 — "You are actively tracking" is permanent furniture for a transient message `OPEN`
 **Found:** 11 Sep 2026, after the UX-015 palette pass.
