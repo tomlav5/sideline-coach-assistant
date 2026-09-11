@@ -8,6 +8,66 @@ Known issues and planned work. Newest findings at the top of each section.
 
 ## Bugs
 
+### BUG-023 — Dashboard live-match banner misreports tracking state `OPEN`
+**Found:** 11 Sep 2026, investigated by static read (no live repro).
+
+The dashboard banner can claim "You're Tracking This Match" when the user is not the
+active tracker, and can surface the wrong match entirely. Two distinct causes:
+
+1. **Stale cache.** The `['live-match-detection']` query is never invalidated on
+   `claim_match_tracking`, `release_match_tracking`, or `endMatch` — only on fixture
+   deletion (`useFixtures.tsx:145`, `Fixtures.tsx:341`). With `staleTime` 30s /
+   `refetchInterval` 60s, the banner can lie for up to a poll interval, and longer while
+   backgrounded — which on a touchline PWA is the normal state, not the edge case.
+2. **Wrong match selected.** Discovery (`useLiveMatchDetection.tsx:27-55`) is club-wide
+   and takes the single most-recent in-progress fixture by `scheduled_date` via
+   `.limit(1)`. With several club matches in progress on the same date — the normal
+   Sunday case — the tie-break is arbitrary, so a coach actively tracking their own match
+   can see another team's instead, and not see their own.
+
+**No takeover risk.** The per-user check (`match.active_tracker_id === user.id`,
+`useLiveMatchDetection.tsx:61`) is correct. "Resume Match" is pure client-side navigation
+(`OptimizedIndex.tsx:31-35`) with no RPC and no write to `active_tracker_id`. On arrival,
+`useRealtimeMatchSync` re-reads `active_tracker_id` fresh from the database (lines
+233-270) and `EnhancedMatchTracker` gates all mutating controls behind
+`matchTracker?.isActiveTracker` (lines 1067, 1092). A non-tracker arriving via the banner
+gets a read-only view.
+
+**Fix shape.** Invalidate `['live-match-detection']` on success after claim, release and
+`endMatch`; and prefer a fixture where `active_tracker_id` equals the current user over
+any other in-progress fixture. Keep discovery club-wide — seeing club activity is
+intended.
+
+Blocks confident multi-coach use.
+
+### BUG-022 — Dropdown menu persists above the dialog it opens `OPEN`
+**Found:** 11 Sep 2026.
+
+On Completed Matches, selecting "Delete Match" from the row overflow menu opens the
+confirmation dialog but leaves the dropdown rendered above it, overlapping the dialog
+body text.
+
+**Cause.** The `AlertDialog` is nested inside `DropdownMenuContent`, so opening the
+dialog does not unmount the menu, and the menu's portal stacks higher.
+
+**Fix shape.** Lift the dialog to the parent component and close the menu on select
+(`preventDefault` on `onSelect`, then open the dialog once the menu has closed).
+
+**Check first:** does the persisting menu intercept taps? If it does, this is not
+cosmetic — the overlay sits directly adjacent to an irreversible delete action, so a
+mis-tap has real consequences. Raise severity accordingly.
+
+### BUG-021 — Navigation menu renders misaligned on open `OPEN`
+**Found:** 11 Sep 2026.
+
+The top-left navigation pull-out renders too high and too far left when opened, making
+items difficult to select. A page refresh corrects it. Affects every screen.
+
+Likely a portal computing its position against a stale measurement. Possible interactions
+to check: the `h-[100dvh]` root introduced in BUG-015/016, and the dialog scroll-lock
+self-heal added in `src/App.tsx`. Investigate the measurement timing before changing any
+positioning values — do not adjust offsets to compensate for a measurement bug.
+
 ### BUG-020 — Match screen clock was driven by a database write succeeding, not by the timer `DONE 9 Sep 2026`
 **Found:** 9 Sep 2026, testing the BUG-008 fix — the match screen's header clock sat at 0 after
 the per-second `fixtures` write was removed, while `match_events` still recorded correct times.
@@ -759,6 +819,16 @@ Relates to UX-001.
 
 ## Technical debt
 
+### DEBT-031 — Live-match localStorage fallback never verifies ownership `OPEN`
+**Found:** 11 Sep 2026, during the BUG-023 investigation.
+
+The localStorage-fallback branch of `useLiveMatchDetection` (step 4 of the hook) never
+checks server-side `active_tracker_id`, so it could imply tracking ownership without
+verification. Not reached on the paths exercised during the 11 Sep investigation, but it
+should not be able to assert ownership from client state alone.
+
+Relates to BUG-023.
+
 ### DEBT-030 — The match screen no longer responds to the dark theme `OPEN`
 **Found:** 11 Sep 2026, after UX-015.
 
@@ -772,6 +842,12 @@ dark app.
 
 Resolved by DESIGN-002, the app-wide token migration — tokens respond to the theme where inline hex
 cannot. Recorded separately so the consequence is visible rather than buried in a migration entry.
+
+**Update — 11 Sep 2026:** confirmed this explicitly includes the "You are actively tracking this
+match" panel (`MatchLockingBanner.tsx`). UX-015 gave it a Paper-ground, navy-text treatment via the
+same local Floodlight constants as the rest of the match screen, with no `dark:` variant — so like
+every other match-screen component it renders the same light-card colours regardless of theme, and
+under floodlights sits as a pale panel inside an otherwise dark app.
 
 ### DEBT-029 — `src/pages/Index.tsx` is dead code `OPEN`
 **Found:** 11 Sep 2026, while scoping the palette work.
@@ -1511,6 +1587,43 @@ super admin).
 
 ## Design
 
+### DESIGN-008 — Toast strategy: success silent, failure loud `OPEN`
+**Found:** 11 Sep 2026.
+
+Toasts are too intrusive and linger too long, obstructing a proficient user moving quickly
+through actions. A toast reading "Goal recorded" tells the user something the screen has
+already told them — the score changed. Meanwhile a failed write currently gets the same
+treatment as a successful one: same size, same position, same duration, gone before it has
+been read. That is backwards.
+
+Three changes, in sequence:
+
+1. Remove success toasts wherever the UI already shows the result — goal scored, sub
+   submitted, period ended, match deleted. The score changes, the row disappears; the toast
+   is redundant.
+2. Where the result is NOT visible, replace with a transient inline confirmation line (the
+   UX-007 branch 4 pattern): appears in place, holds ~1.2s, fades. Occupies
+   already-reserved space, so nothing moves and nothing is covered.
+3. Errors become the only true toasts and stop auto-dismissing — they persist until
+   acknowledged. A failed write during a match must not disappear on a timer.
+
+**Sequencing constraint — do not start at step 1.** Some match-screen toasts are
+load-bearing, not decorative: "1 substitution still pending" is the app preventing a
+mistake. And the undo affordance currently lives inside a toast, so removing toasts before
+the inline confirmation line exists would remove undo. Step 2 must be built first.
+
+Relates to UX-007.
+
+### DESIGN-007 — End Match button colour never specified `OPEN`
+**Found:** 11 Sep 2026.
+
+The UX-015 colour mapping covered End Period but not End Match, so End Match inherits
+`variant="destructive"`. Red is appropriate — it is the one irreversible action on the
+match screen — but confirm it resolves to Red-deep `#B4232C` (6.5:1 against white) and not
+`#E5484D` (~3.9:1).
+
+Relates to UX-015, DESIGN-002.
+
 ### DESIGN-006 — Home and sign-in screens need a design pass, not a recolour `OPEN`
 **Found:** 11 Sep 2026.
 
@@ -1591,6 +1704,13 @@ individual components are unchanged by this branch and still bypass the new toke
 `EnhancedMatchTracker`'s match-screen components use local Floodlight constants and inline
 styles (UX-007 branches 1-3, UX-015) and bypass tokens entirely; this branch deliberately
 did not touch them.
+
+**Update — 11 Sep 2026:** the two most visible remaining sites, confirmed by name: the
+**dashboard stat cards** (Upcoming Fixtures / Teams / Players) and the green "You're
+Tracking This Match" panel — both use hard-coded blue, green and purple gradients entirely
+outside the Floodlight palette, and both sit on the app's landing screen, the first thing
+any coach or parent sees.
+
 **Blocks:** DESIGN-003.
 
 ### DESIGN-001 — Floodlight adopted as the app's direction `DONE 1 Sep 2026`
@@ -1605,6 +1725,42 @@ Full spec, contrast pairs and regeneration steps in `docs/brand/BRAND.md`.
 ---
 
 ## UX
+
+### UX-021 — Sign-in code entry slots invisible in dark mode `DONE 11 Sep 2026`
+**Found and fixed 11 Sep 2026**, PR #95 (commit `70b61e5`).
+
+On the sign-in screen's code step, the six OTP slots used `--border` (214 25% 20%) against
+a card at 217 32% 13% — roughly five points of lightness apart, effectively invisible in
+dark mode. The disabled "Verify Code" button was the most prominent element on the screen
+while the input it depends on was the least — inverted visual hierarchy on the one screen
+where a first-time user has exactly one thing to do.
+
+**Fix.** Code slots (`src/components/ui/input-otp.tsx`) take a sunken fill
+(`bg-background`) and a stronger border (`border-muted-foreground`); the focused slot's
+Pitch Blue ring via `--ring` was already correct and untouched. The Verify Code button
+(`src/pages/Auth.tsx`), once six digits are entered, becomes Signal Amber with Navy text —
+on this screen it is the single action, per the one-amber rule; the disabled state stays
+recessed. Visual only — no changes to OTP generation, verification, submission, resend,
+cooldown, or input state handling. Verified end to end by completing a real sign-in and a
+resend on staging.
+
+This item shipped without a backlog record; added here so the record matches reality
+rather than duplicating it as a new open item.
+
+### UX-020 — "Take Control" button off-centre `OPEN`
+**Found:** 11 Sep 2026.
+
+On a fixture being tracked by another user, the Take Control button sits off-centre
+relative to the buttons below it. Likely caused by a sibling element consuming width
+rather than by the button itself — diagnose the container before changing the button.
+
+### UX-019 — User ID displayed on Club Members rows `OPEN`
+**Found:** 11 Sep 2026.
+
+The Club Members list renders the raw user ID alongside each member. It carries no
+meaning for a coach and adds visual noise. Display name, role and status only.
+
+**Fix shape.** Display-layer change only — do not alter the query or types.
 
 ### UX-018 — "You are actively tracking" is permanent furniture for a transient message `OPEN`
 **Found:** 11 Sep 2026, after the UX-015 palette pass.
