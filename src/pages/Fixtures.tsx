@@ -327,14 +327,33 @@ export default function Fixtures() {
 
   const deleteFixture = async (fixtureId: string) => {
     try {
-      const { error } = await supabase
+      // RLS restricts fixtures DELETE to admins. A delete blocked by RLS
+      // still returns 200 with zero rows affected and throws nothing, so
+      // count rows actually deleted rather than trusting the absence of
+      // an error.
+      const { error, count } = await supabase
         .from('fixtures')
-        .delete()
+        .delete({ count: 'exact' })
         .eq('id', fixtureId);
 
       if (error) throw error;
+
+      if (!count) {
+        toast({
+          title: "Unable to delete match",
+          description: "You do not have permission to delete matches",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({
+        title: "Match deleted",
+        description: "The fixture has been removed",
+      });
+
       fetchFixtures();
-      
+
       // Invalidate all relevant caches to trigger auto-refresh
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
@@ -343,6 +362,11 @@ export default function Fixtures() {
       queryClient.invalidateQueries({ queryKey: ['fixtures'] });
     } catch (error) {
       console.error('Error deleting fixture:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete match",
+        variant: "destructive",
+      });
     }
   };
 

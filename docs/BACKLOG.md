@@ -8,6 +8,67 @@ Known issues and planned work. Newest findings at the top of each section.
 
 ## Bugs
 
+### BUG-026 — Deleting a fixture leaves ghost rows in the report materialized views `OPEN`
+**Found:** 11 Sep 2026, while fixing BUG-024.
+
+`deleteFixture` (`src/pages/Fixtures.tsx`) deletes only the `fixtures` row and relies on
+`ON DELETE CASCADE` to remove `match_events`, `player_time_logs`, `player_match_status` and
+`match_periods` — correct, and deliberately not changed by BUG-024's fix. But nothing in
+that path calls `refresh_report_views()`, so a deleted match can keep appearing in the
+Reports materialized views (`mv_completed_matches`, `mv_goal_scorers`,
+`mv_player_playing_time`) until something else triggers a refresh. Non-destructive — no data
+is wrong, just stale — but worth closing. There is a DB trigger
+(`trigger_fixtures_refresh_reports`, fires on fixtures INSERT/DELETE/UPDATE) that calls
+`pg_notify('refresh_reports', ...)`, but whether anything in the current stack listens on
+that channel and actually runs the refresh was not verified this session. Related to
+ENV-006, which covers `refresh_report_views()` failing silently on an unpopulated view —
+this is the same function's reliability, different trigger path.
+
+### BUG-025 — Deleting a fixture has no confirmation step `OPEN`
+**Found:** 11 Sep 2026, while fixing BUG-024.
+
+`deleteFixture`'s menu item (`src/pages/Fixtures.tsx`, "Delete" in the row overflow menu)
+calls the delete immediately on click — no `AlertDialog`, no "are you sure". This is
+inconsistent with the project rule that destructive actions always confirm, and more
+consequential now that BUG-024 made Fixtures the *only* place a match can be deleted from.
+Low priority relative to the September launch list, but should be closed before general
+coach rollout.
+
+### BUG-024 — Match Reports delete could silently destroy match data for non-admin coaches `DONE 11 Sep 2026`
+**Found:** 11 Sep 2026.
+
+`deleteMatch` in `src/pages/Reports.tsx` ran three sequential deletes — `player_time_logs`,
+then `match_events`, then `fixtures` — checking only for thrown errors. RLS lets a club
+`official` delete `player_time_logs` and `match_events`, but restricts `fixtures` DELETE to
+`admin` ("Club admins can delete fixtures" policy). A PostgREST delete blocked by RLS
+returns 200 with zero rows affected and throws nothing, so for a non-admin coach the first
+two deletes destroyed real match data while the fixtures delete silently no-op'd — and the
+UI still reported "Match deleted".
+
+**Fix**, branch `fix/reports-delete-data-loss`: removed the delete action from Match
+Reports entirely — handler, menu item, confirmation dialog, and the imports that became
+unused as a result. Deletion is now reachable only from Completed Fixtures
+(`deleteFixture`, `src/pages/Fixtures.tsx`), which deletes only the `fixtures` row and
+relies on the existing `ON DELETE CASCADE` foreign keys (`match_events`,
+`player_time_logs`, `player_match_status`, `match_periods` all cascade from `fixtures`) —
+so a delete is now all-or-nothing, never partial.
+
+Also fixed on the same branch: `deleteFixture` had the identical blind spot — RLS restricts
+`fixtures` DELETE to admins, and a blocked delete returned 200 with no error, so a
+non-admin's click reported success while nothing was removed. It now uses
+`.delete({ count: 'exact' })` and only reports success when a row was actually removed; a
+zero-row result surfaces "You do not have permission to delete matches" instead of a false
+success toast. Verified a genuine admin delete still reports success by confirming the RLS
+policy's `USING` clause is what gates the row (not the response shape) and that
+`count: 'exact'` reports rows actually deleted, independent of any `SELECT` policy — not
+verified against a live admin session.
+
+Deliberately not touched: `refresh_report_views()` (tracked separately as BUG-026), RLS
+policies, and the match/undo/in-match correction paths. Filed BUG-025 for the missing
+confirmation dialog on Fixtures' delete, found while making this the sole delete path.
+
+Supersedes BUG-022, which described a defect in the UI this fix removed.
+
 ### BUG-023 — Dashboard live-match banner misreports tracking state `OPEN`
 **Found:** 11 Sep 2026, investigated by static read (no live repro).
 
@@ -40,7 +101,7 @@ intended.
 
 Blocks confident multi-coach use.
 
-### BUG-022 — Dropdown menu persists above the dialog it opens `OPEN`
+### BUG-022 — Dropdown menu persists above the dialog it opens `DONE 11 Sep 2026 (moot)`
 **Found:** 11 Sep 2026.
 
 On Completed Matches, selecting "Delete Match" from the row overflow menu opens the
@@ -50,12 +111,20 @@ body text.
 **Cause.** The `AlertDialog` is nested inside `DropdownMenuContent`, so opening the
 dialog does not unmount the menu, and the menu's portal stacks higher.
 
-**Fix shape.** Lift the dialog to the parent component and close the menu on select
-(`preventDefault` on `onSelect`, then open the dialog once the menu has closed).
+**Resolved by removal, not by the fix shape below.** BUG-024 removed the "Delete Match"
+action from Match Reports entirely (it was the client-side symptom of a real data-loss
+bug), so this dropdown/dialog stacking defect no longer has an affected UI to occur in.
+Deleting a match is now only reachable from Completed Fixtures, which has no confirmation
+dialog at all yet (tracked as BUG-025) and so cannot exhibit this particular stacking bug.
+Leaving the original write-up below for reference in case a future confirmation dialog on
+Fixtures reintroduces the same nesting pattern.
 
-**Check first:** does the persisting menu intercept taps? If it does, this is not
+~~**Fix shape.** Lift the dialog to the parent component and close the menu on select
+(`preventDefault` on `onSelect`, then open the dialog once the menu has closed).~~
+
+~~**Check first:** does the persisting menu intercept taps? If it does, this is not
 cosmetic — the overlay sits directly adjacent to an irreversible delete action, so a
-mis-tap has real consequences. Raise severity accordingly.
+mis-tap has real consequences. Raise severity accordingly.~~
 
 ### BUG-021 — Navigation menu renders misaligned on open `OPEN`
 **Found:** 11 Sep 2026.
