@@ -1956,8 +1956,19 @@ Full spec, contrast pairs and regeneration steps in `docs/brand/BRAND.md`.
 
 ## UX
 
-### UX-027 — Club admins can't see other members' names, only their own `OPEN`
+### UX-027 — Club admins can't see other members' names, only their own `DONE 11 Sep 2026`
 **Found:** 11 Sep 2026, while fixing UX-019.
+
+**Done:** Added a `profiles` SELECT RLS policy (migration
+`20260911120000_add_profiles_club_member_select_policy.sql`), not an RPC — a new
+`SECURITY DEFINER` helper `public.user_shares_club_with(target_user_id)` checks shared
+club membership to avoid RLS recursion, following the existing
+`user_has_club_access`/`user_is_club_member` pattern. Deliberately scoped wider than the
+"Fix shape" below: any club member can see any other member's profile (any role), not just
+admins viewing the members they administer — a coach needs to see another coach's name
+too, e.g. for a future active-tracker display. Applied to staging (`xszbopufqchbfbqwvqbb`)
+only, not production. On branch `fix/profiles-club-visibility`, not yet merged — no PR
+number yet.
 
 `profiles` SELECT RLS is `auth.uid() = user_id` only — no policy lets a club admin read
 the profile rows of the members they administer. After UX-019, the Club Members page
