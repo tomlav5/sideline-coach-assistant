@@ -3,13 +3,16 @@ import { scheduleMatchDataCleanup } from '@/utils/matchStorageCleanup';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useParams } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/hooks/useTheme";
 import { Layout } from "@/components/layout/Layout";
 import { EnvironmentBanner } from "@/components/layout/EnvironmentBanner";
 import { OptimizedLazyLoader } from "@/components/ui/optimized-lazy-loader";
 import { LazyLoader } from "@/components/ui/lazy-loader";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { AppErrorFallback } from "@/components/AppErrorFallback";
+import { MatchErrorBoundary } from "@/components/match/MatchErrorBoundary";
 
 // Lazy load pages for better performance
 const Index = lazy(() => import("./pages/OptimizedIndex"));
@@ -31,6 +34,22 @@ const PendingApproval = lazy(() => import("./pages/PendingApproval"));
 const AdminApprovals = lazy(() => import("./pages/AdminApprovals"));
 const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 const AcceptInvitation = lazy(() => import("./pages/AcceptInvitation"));
+
+// Keyed by fixtureId so navigating from one fixture's match day to another's
+// remounts the boundary cleanly, instead of leaving a tripped fallback stuck
+// on screen until a hard refresh.
+const MatchDayRoute = () => {
+  const { fixtureId } = useParams<{ fixtureId: string }>();
+  return (
+    <Layout>
+      <MatchErrorBoundary key={fixtureId}>
+        <LazyLoader>
+          <EnhancedMatchTracker />
+        </LazyLoader>
+      </MatchErrorBoundary>
+    </Layout>
+  );
+};
 
 const App = () => {
   // One-time self-heal for BUG-016. An earlier dialog.tsx hand-rolled a body
@@ -62,6 +81,7 @@ const App = () => {
             }
             return null;
           })()}
+          <ErrorBoundary fallback={<AppErrorFallback />}>
           <Routes>
             <Route path="/auth" element={
               <LazyLoader>
@@ -130,13 +150,7 @@ const App = () => {
                 </LazyLoader>
               </Layout>
             } />
-            <Route path="/match-day/:fixtureId" element={
-              <Layout>
-                <LazyLoader>
-                  <EnhancedMatchTracker />
-                </LazyLoader>
-              </Layout>
-            } />
+            <Route path="/match-day/:fixtureId" element={<MatchDayRoute />} />
             <Route path="/reports" element={
               <Layout>
                 <LazyLoader>
@@ -185,6 +199,7 @@ const App = () => {
               </LazyLoader>
             } />
           </Routes>
+          </ErrorBoundary>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
