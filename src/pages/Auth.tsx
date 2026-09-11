@@ -10,6 +10,7 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp
 import { Shield, Users, BarChart3, Mail, ArrowLeft } from 'lucide-react';
 import { authSignUpSchema, otpEmailSchema } from '@/lib/validation';
 import { toast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 export default function Auth() {
   const [isLoading, setIsLoading] = useState(false);
@@ -305,7 +306,12 @@ export default function Auth() {
                       </div>
                       <Button
                         type="button"
-                        className="w-full touch-target"
+                        className={cn(
+                          "w-full touch-target",
+                          otpCode.length === 6 &&
+                            !isLoading &&
+                            "bg-accent text-accent-foreground hover:bg-accent/90"
+                        )}
                         onClick={() => handleVerifyCode()}
                         disabled={isLoading || otpCode.length !== 6}
                       >
