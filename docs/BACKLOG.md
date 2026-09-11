@@ -74,6 +74,14 @@ recover it, but the coach would have no way of knowing that. Unverified — inve
 pending. Confirm whether a top-level boundary exists and whether the match screen sits
 inside one, before assuming either way.
 
+**Wider concern addressed** (branch `fix/error-boundaries`, PR pending) — confirmed there
+was no error boundary anywhere in the app. Added a reusable `ErrorBoundary`
+(`src/components/ErrorBoundary.tsx`), a `MatchErrorBoundary` wrapping `/match-day/:fixtureId`
+(keyed by `fixtureId`, reassures the coach match data is safe and offers Reload), and a
+top-level backstop in `App.tsx` around every other route. An uncaught render error no longer
+blanks the whole app. The delete-in-own-dialog crash itself is still unfixed — this bug stays
+`OPEN` for that.
+
 ### BUG-027 — Team assignment changes require a page refresh `OPEN`
 **Found:** 11 Sep 2026.
 
