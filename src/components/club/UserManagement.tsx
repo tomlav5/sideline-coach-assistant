@@ -20,6 +20,7 @@ interface ClubMember {
   profile?: {
     first_name: string | null;
     last_name: string | null;
+    email: string | null;
   } | null;
 }
 
@@ -59,7 +60,27 @@ export function UserManagement({ clubId, currentUserRole }: UserManagementProps)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setMembers((data || []) as ClubMember[]);
+
+      const memberRows = (data || []) as ClubMember[];
+
+      // club_members and profiles both reference auth.users independently
+      // (no FK between them), so PostgREST can't embed this — fetch profiles
+      // separately and merge. RLS means this will only return rows the
+      // current user is allowed to read (currently just their own).
+      const userIds = [...new Set(memberRows.map((m) => m.user_id))];
+      const { data: profiles, error: profilesError } = userIds.length
+        ? await supabase
+            .from('profiles')
+            .select('user_id, first_name, last_name, email')
+            .in('user_id', userIds)
+        : { data: [], error: null };
+
+      if (profilesError) throw profilesError;
+
+      const profileByUserId = new Map((profiles || []).map((p) => [p.user_id, p]));
+      setMembers(
+        memberRows.map((m) => ({ ...m, profile: profileByUserId.get(m.user_id) ?? null }))
+      );
     } catch (error) {
       console.error('Error fetching members:', error);
       toast({
@@ -303,17 +324,17 @@ export function UserManagement({ clubId, currentUserRole }: UserManagementProps)
         <div className="space-y-4">
           {members.map((member) => {
             const RoleIcon = getRoleIcon(member.role);
-            const memberName = member.profile 
+            const fullName = member.profile
               ? `${member.profile.first_name || ''} ${member.profile.last_name || ''}`.trim()
-              : 'Unknown User';
-            
+              : '';
+            const memberName = fullName || member.profile?.email || 'Unknown User';
+
             return (
               <div key={member.id} className="flex items-center justify-between p-3 border rounded-lg">
                 <div className="flex items-center space-x-3">
                   <RoleIcon className="h-5 w-5 text-muted-foreground" />
                   <div>
-                    <p className="font-medium">{memberName || 'Unknown User'}</p>
-                    <p className="text-sm text-muted-foreground">User ID: {member.user_id.slice(0, 8)}...</p>
+                    <p className="font-medium">{memberName}</p>
                   </div>
                 </div>
                 
