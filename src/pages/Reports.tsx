@@ -8,14 +8,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Trophy, Calendar, Target, Clock, MoreVertical, Trash2, Search } from 'lucide-react';
+import { Trophy, Calendar, Target, Clock, MoreVertical, Search } from 'lucide-react';
 import { format } from 'date-fns';
-import { useToast } from '@/hooks/use-toast';
 import { ResponsiveWrapper } from '@/components/ui/responsive-wrapper';
-import { useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { ExportDialog } from '@/components/reports/ExportDialog';
 import { VirtualList } from '@/components/ui/virtual-list';
 import { MatchItem } from '@/components/reports/MatchItem';
@@ -70,8 +66,6 @@ export default function Reports() {
     limit: 50
   });
   const { data: competitions = [] } = useCompetitions();
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
 
   // Enable automatic report refresh when data changes
   useReportRefresh();
@@ -91,54 +85,6 @@ export default function Reports() {
     if (ourScore < opponentScore) return { result: 'L', color: 'bg-red-500' };
     return { result: 'D', color: 'bg-yellow-500' };
   }, []);
-
-  // Memoized delete function with optimized cache invalidation
-  const deleteMatch = useCallback(async (matchId: string) => {
-    try {
-      // Delete player time logs
-      const { error: timeLogsError } = await supabase
-        .from('player_time_logs')
-        .delete()
-        .eq('fixture_id', matchId);
-
-      if (timeLogsError) throw timeLogsError;
-
-      // Delete match events (goals, assists, etc.)
-      const { error: eventsError } = await supabase
-        .from('match_events')
-        .delete()
-        .eq('fixture_id', matchId);
-
-      if (eventsError) throw eventsError;
-
-      // Finally delete the fixture
-      const { error: fixtureError } = await supabase
-        .from('fixtures')
-        .delete()
-        .eq('id', matchId);
-
-      if (fixtureError) throw fixtureError;
-
-      toast({
-        title: "Match deleted",
-        description: "The match and all associated data have been removed",
-      });
-
-      // Optimized cache invalidation - only invalidate relevant queries
-      queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
-      queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
-      queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
-      // Don't invalidate all queries - be more targeted
-      queryClient.invalidateQueries({ queryKey: ['fixtures'], exact: false });
-    } catch (error) {
-      console.error('Error deleting match:', error);
-      toast({
-        title: "Error",
-        description: "Failed to delete match",
-        variant: "destructive",
-      });
-    }
-  }, [toast, queryClient]);
 
   // Distinct teams available across the loaded completed matches
   const availableTeams = useMemo(() => {
@@ -426,31 +372,6 @@ export default function Reports() {
                                 View Report
                               </a>
                             </DropdownMenuItem>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Delete Match
-                                </DropdownMenuItem>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete Match</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Are you sure you want to delete this match? This will permanently remove all match data including events, player times, and statistics. This action cannot be undone.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => deleteMatch(match.id)}
-                                    className="bg-destructive hover:bg-destructive/90"
-                                  >
-                                    Delete Match
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
