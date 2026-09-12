@@ -1844,13 +1844,19 @@ the inline confirmation line exists would remove undo. Step 2 must be built firs
 
 Relates to UX-007.
 
-### DESIGN-007 — End Match button colour never specified `OPEN`
-**Found:** 11 Sep 2026.
+### DESIGN-007 — End Match button colour never specified `DONE 11 Sep 2026`
+**Found:** 11 Sep 2026. **Checked:** 11 Sep 2026, branch `fix/floodlight-polish` (PR TBD).
 
 The UX-015 colour mapping covered End Period but not End Match, so End Match inherits
 `variant="destructive"`. Red is appropriate — it is the one irreversible action on the
 match screen — but confirm it resolves to Red-deep `#B4232C` (6.5:1 against white) and not
 `#E5484D` (~3.9:1).
+
+**No code change needed.** `--destructive` in `src/index.css` (`356 67% 42%`) resolves to
+`#B3232D` — the same colour as Red-deep `#B4232C` to within HSL-to-hex rounding, not the
+old `#E5484D`. `EnhancedMatchControls.tsx`'s End Match button and its confirm-dialog action
+both inherit it correctly already. Presumably fixed as a side effect of the Floodlight
+token swap (DESIGN-002 phase one) without this item being closed out.
 
 Relates to UX-015, DESIGN-002.
 
@@ -1955,6 +1961,38 @@ Full spec, contrast pairs and regeneration steps in `docs/brand/BRAND.md`.
 ---
 
 ## UX
+
+### UX-028 — Sidebar nav icons invisible against sidebar background `DONE 11 Sep 2026`
+**Found and fixed:** 11 Sep 2026, branch `fix/floodlight-polish` (PR TBD).
+
+In the left navigation panel, the nav icons could not be seen against the sidebar
+background. A prior token audit had correctly found the sidebar CSS custom properties
+themselves clean (`--sidebar-accent` distinct from `--sidebar-background`, all
+`*-foreground` pairs checked) — the bug was in component wiring, not the tokens.
+
+**What was actually wrong.** `AppSidebar.tsx` passed react-router's `NavLink` a
+function-valued `className` prop (`getNavCls`, for active-route highlighting) through a
+Radix `asChild`/`Slot` boundary (`SidebarMenuButton asChild`). Radix Slot's prop merging
+only knows how to merge string classNames — for a function it falls back to
+`[stringProp, functionProp].filter(Boolean).join(" ")`, which stringifies the function via
+`Function.prototype.toString()` and concatenates it straight into the DOM `className`
+attribute. The function's source text happens to contain the literal, space-delimited
+substring `text-primary-foreground` (from its ternary body), so that class landed on every
+nav `NavLink` unconditionally — regardless of actual active state — as a real, matching
+Tailwind class. In light mode `--primary-foreground` (`210 21% 95%`) is the exact same
+value as `--sidebar-background` (`210 21% 95%`), so anything that inherited this accidental
+text colour — the nav icons, which carry no colour class of their own and rely on inherited
+`color` — became invisible. The text label next to each icon was unaffected only because it
+carries its own explicit `text-sidebar-foreground` class, which as a directly-applied
+property wins over the colour inherited from its `NavLink` parent.
+
+**Fix.** Removed `getNavCls` entirely. `AppSidebar` now computes active state itself
+(reusing the `isActive(path)` helper that was already defined but unused) and passes it to
+`SidebarMenuButton`'s own `isActive` prop, which drives its existing
+`data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground
+data-[active=true]:font-medium` styling — sidebar-token-driven, matching the existing hover
+treatment, and no function ever crosses the Slot boundary again. Checked light and dark;
+active state remains distinguishable (accent background + bold) and hover still applies.
 
 ### UX-027 — Club admins can't see other members' names, only their own `DONE 11 Sep 2026`
 **Found:** 11 Sep 2026, while fixing UX-019.
@@ -2090,8 +2128,8 @@ year becomes a scoping change rather than a destructive one. Bulk delete is the 
 tool for test data and mistakes; it must not become the mechanism by which seasons are
 managed.
 
-### UX-022 — Player list shows no record count `OPEN`
-**Found:** 11 Sep 2026.
+### UX-022 — Player list shows no record count `DONE 11 Sep 2026`
+**Found:** 11 Sep 2026. **Fixed:** 11 Sep 2026, branch `fix/floodlight-polish` (PR TBD).
 
 The player view gives no count of records displayed, and no indication of how many exist in
 total. Filtered to a team, a coach must count by eye to confirm a squad is complete — the
@@ -2102,6 +2140,10 @@ Display a count that responds to the active filter:
 - Filtered to a team: "10 of 24 players"
 
 Both counts when filtered confirms the filter is applied and preserves context.
+
+**Fix.** Added a count line to `src/pages/Players.tsx` next to the team filter dropdown,
+driven by `players.length` and `filteredPlayers.length` — exactly the two formats above.
+Display only; no change to filtering logic.
 
 ### UX-021 — Sign-in code entry slots invisible in dark mode `DONE 11 Sep 2026`
 **Found and fixed 11 Sep 2026**, PR #95 (commit `70b61e5`).
@@ -2124,12 +2166,25 @@ resend on staging.
 This item shipped without a backlog record; added here so the record matches reality
 rather than duplicating it as a new open item.
 
-### UX-020 — "Take Control" button off-centre `OPEN`
-**Found:** 11 Sep 2026.
+### UX-020 — "Take Control" button off-centre `DONE 11 Sep 2026`
+**Found:** 11 Sep 2026. **Fixed:** 11 Sep 2026, branch `fix/floodlight-polish` (PR TBD).
 
 On a fixture being tracked by another user, the Take Control button sits off-centre
 relative to the buttons below it. Likely caused by a sibling element consuming width
 rather than by the button itself — diagnose the container before changing the button.
+
+**What was actually wrong.** The shared `Alert` primitive (`src/components/ui/alert.tsx`)
+applies `[&>svg~*]:pl-7` to clear its content from the icon — a rule whose `svg` type
+selector out-specifies a plain `pl-0` override. In `MatchLockingBanner.tsx`'s "available
+for tracking" banner, that padding landed on the whole flex row (`AlertDescription`)
+holding both the label and the Take Control button, shifting the button ~28px right of
+where the controls in `EnhancedMatchControls` below it (plain, symmetric `Card` padding)
+sit. Most visible on mobile, where the button is full-width and stacks under the label.
+
+**Fix.** In `MatchLockingBanner.tsx`, cancelled the inherited padding on `AlertDescription`
+via an inline style (needed to actually beat the `svg~*` rule's specificity) and moved the
+icon clearance onto the label `<span>` only, so the button stays flush with the card edge
+like the controls below it. Visual only; claim/release tracking logic untouched.
 
 ### UX-019 — User ID displayed on Club Members rows `DONE 11 Sep 2026`
 **Found:** 11 Sep 2026. **Fixed:** 11 Sep 2026, branch `fix/club-members-unknown-user` (PR TBD).

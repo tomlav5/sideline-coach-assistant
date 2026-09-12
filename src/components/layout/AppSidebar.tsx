@@ -55,6 +55,7 @@ export function AppSidebar() {
     }
   }, [currentPath, isMobile, setOpenMobile]);
 
+<<<<<<< Updated upstream
   // NavLink's function-form `className` prop is never invoked here: SidebarMenuButton's
   // `asChild` hands NavLink to Radix's Slot, which merges className via
   // `[slotClassName, childClassName].filter(Boolean).join(" ")` — for a function that
@@ -66,6 +67,9 @@ export function AppSidebar() {
   const isNavActive = (url: string, exact: boolean) =>
     exact ? currentPath === url : currentPath === url || currentPath.startsWith(`${url}/`);
   const navLinkCls = "text-sidebar-foreground";
+=======
+  const isActive = (path: string) => currentPath === path;
+>>>>>>> Stashed changes
 
   const collapsed = state === "collapsed";
 
@@ -90,6 +94,7 @@ export function AppSidebar() {
           )}
           <SidebarGroupContent>
             <SidebarMenu>
+<<<<<<< Updated upstream
               {navigationItems.map((item) => {
                 const exact = item.url === "/";
                 const active = isNavActive(item.url, exact);
@@ -106,6 +111,24 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                 );
               })}
+=======
+              {navigationItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActive(item.url)}
+                    tooltip={collapsed ? item.title : undefined}
+                  >
+                    <NavLink to={item.url} end>
+                      <item.icon className="h-4 w-4 flex-shrink-0" />
+                      {!collapsed && (
+                        <span className="text-sidebar-foreground truncate">{item.title}</span>
+                      )}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+>>>>>>> Stashed changes
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -116,6 +139,7 @@ export function AppSidebar() {
           )}
           <SidebarGroupContent>
             <SidebarMenu>
+<<<<<<< Updated upstream
               {settingsItems.map((item) => {
                 const active = isNavActive(item.url, false);
                 return (
@@ -131,6 +155,24 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                 );
               })}
+=======
+              {settingsItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActive(item.url)}
+                    tooltip={collapsed ? item.title : undefined}
+                  >
+                    <NavLink to={item.url}>
+                      <item.icon className="h-4 w-4 flex-shrink-0" />
+                      {!collapsed && (
+                        <span className="text-sidebar-foreground truncate">{item.title}</span>
+                      )}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+>>>>>>> Stashed changes
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

@@ -283,7 +283,13 @@ export default function Players() {
               </SelectContent>
             </Select>
           </div>
-          
+
+          <div className="text-sm text-muted-foreground">
+            {teamFilter === 'all'
+              ? `${players.length} player${players.length !== 1 ? 's' : ''}`
+              : `${filteredPlayers.length} of ${players.length} player${players.length !== 1 ? 's' : ''}`}
+          </div>
+
           {selectedPlayers.length > 0 && (
             <div className="text-sm text-muted-foreground">
               {selectedPlayers.length} player(s) selected

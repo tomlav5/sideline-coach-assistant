@@ -124,8 +124,15 @@ export function MatchLockingBanner({
         style={{ backgroundColor: 'rgba(11, 95, 204, 0.08)', borderColor: 'rgba(11, 95, 204, 0.35)' }}
       >
         <User className="h-4 w-4" style={{ color: FLOODLIGHT.pitchBlue }} />
-        <AlertDescription className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <span className="font-medium" style={{ color: FLOODLIGHT.pitchBlue }}>
+        {/* alert.tsx's `[&>svg~*]:pl-7` (icon clearance) targets this element directly —
+            its `svg` type selector out-specifies a plain `pl-0` override, so it needs an
+            inline style to actually win. The clearance itself moves onto the label only,
+            so the button below stays flush with the card edge like the controls beneath it. */}
+        <AlertDescription
+          className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+          style={{ paddingLeft: 0 }}
+        >
+          <span className="font-medium pl-7" style={{ color: FLOODLIGHT.pitchBlue }}>
             This match is available for tracking
           </span>
           <Button
