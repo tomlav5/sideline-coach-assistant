@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -12,6 +13,7 @@ export function useRealtimeMatchSync(fixtureId: string | undefined) {
   const [matchTracker, setMatchTracker] = useState<MatchTracker | null>(null);
   const [isClaimingMatch, setIsClaimingMatch] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   // Claim match tracking
   const claimMatchTracking = useCallback(async () => {
@@ -55,6 +57,8 @@ export function useRealtimeMatchSync(fixtureId: string | undefined) {
         trackerStartedAt: result.tracking_started_at
       });
 
+      queryClient.invalidateQueries({ queryKey: ['live-match-detection'] });
+
       return true;
     } catch (error) {
       console.error('Error claiming match tracking:', error);
@@ -67,7 +71,7 @@ export function useRealtimeMatchSync(fixtureId: string | undefined) {
     } finally {
       setIsClaimingMatch(false);
     }
-  }, [fixtureId, toast]);
+  }, [fixtureId, toast, queryClient]);
 
   // Release match tracking
   const releaseMatchTracking = useCallback(async () => {
@@ -88,10 +92,12 @@ export function useRealtimeMatchSync(fixtureId: string | undefined) {
         title: "Match Tracking Released",
         description: "You are no longer the active tracker",
       });
+
+      queryClient.invalidateQueries({ queryKey: ['live-match-detection'] });
     } catch (error) {
       console.error('Error releasing match tracking:', error);
     }
-  }, [fixtureId, toast]);
+  }, [fixtureId, toast, queryClient]);
 
   // Send heartbeat to maintain active status
   const sendHeartbeat = useCallback(async () => {

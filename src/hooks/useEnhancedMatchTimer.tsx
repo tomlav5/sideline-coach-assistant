@@ -449,6 +449,7 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
       queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
       queryClient.invalidateQueries({ queryKey: ['player-playing-time'] });
       queryClient.invalidateQueries({ queryKey: ['competitions'] });
+      queryClient.invalidateQueries({ queryKey: ['live-match-detection'] });
       toast({ title: 'Match completed', description: 'Match has been marked as completed.' });
     } catch (error: any) {
       console.error('Error ending match:', error);
