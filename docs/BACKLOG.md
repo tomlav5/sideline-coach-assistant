@@ -969,6 +969,32 @@ Relates to UX-001.
 
 ## Technical debt
 
+### DEBT-035 — Function-valued className across a Radix asChild boundary `OPEN`
+**Found:** 12 Sep 2026, as the root cause of UX-028.
+
+Radix's Slot merges props, but only knows how to merge string classNames. Given a function
+it falls back to `[stringProp, functionProp].filter(Boolean).join(" ")`, which stringifies
+the function via `Function.prototype.toString()` and concatenates its source text into the
+DOM `className` attribute. Any Tailwind class name appearing as a space-delimited
+substring of that source is then applied unconditionally, regardless of the condition it
+was written inside.
+
+In UX-028 this put `text-primary-foreground` on every sidebar `NavLink`. In light mode
+`--primary-foreground` is identical to `--sidebar-background`, so the icons — which carry
+no colour class and rely on inherited colour — became invisible. The labels survived only
+because their own explicit class beat the inherited value.
+
+**Action:** grep the codebase for every `asChild` usage and check whether any receives a
+function-valued `className`, or any other function-valued prop that Slot would stringify.
+The symptom is arbitrary and depends entirely on which class names happen to appear in the
+function body, so it will not present consistently and is very unlikely to be found by
+looking at rendered output.
+
+Fix the pattern rather than the symptom: compute state in the parent and pass a boolean to
+the child component's own prop, as UX-028 did with `SidebarMenuButton`'s `isActive`.
+
+Relates to UX-028.
+
 ### DEBT-034 — Duplicate foreign key constraints on fixtures.team_id `OPEN`
 **Found:** 11 Sep 2026.
 
@@ -1962,6 +1988,27 @@ Full spec, contrast pairs and regeneration steps in `docs/brand/BRAND.md`.
 
 ## UX
 
+### UX-029 — Goal scorer list is global and unordered `OPEN`
+**Found:** 12 Sep 2026, staging testing.
+
+The scorer list persists across matches and presents names in an unstable order, so a
+coach recording a goal has to scan an arbitrary list under time pressure — at exactly the
+moment they least want to.
+
+Two problems, one fix. Scope the list to the current match, and order it stably: show the
+players currently on the pitch, in a fixed order, rather than a "recent scorers" list.
+
+**Rationale.** A recency heuristic optimises for a large squad. At seven-a-side there are
+seven candidates, so simply showing the seven on is faster than any ranking and —
+critically — never reorders between goals. A list that moves between taps is worse than no
+list.
+
+Also consider whether bench players should be reachable from the goal dialog at all, or
+only behind a secondary action. Recording a goal for a player who is not on the pitch is
+almost always a mis-tap, and the app already knows who is on.
+
+Relates to UX-007.
+
 ### UX-028 — Sidebar nav icons invisible against sidebar background `DONE 11 Sep 2026`
 **Found and fixed:** 11 Sep 2026, branch `fix/floodlight-polish` (PR TBD).
 
@@ -2663,6 +2710,27 @@ Add the season dimension to the analytics matviews' `GROUP BY` and a season sele
 the Reports page, defaulting to the current season. ~2–3 hours, mostly the matview
 migration and re-verifying the views still populate afterwards (see ENV-006).
 **Blocked by:** REPORT-001.
+
+### REPORT-003 — Shareable match report for WhatsApp `OPEN`
+**Found:** 12 Sep 2026.
+
+Sharing a result currently means screenshotting the match report card and cropping it —
+fiddly, and done after every game.
+
+**Phase 1 — copy as text.** A "Copy result" action producing formatted plain text: teams,
+final score, scorers with minutes, optionally minutes played. Pastes cleanly into
+WhatsApp, stays searchable, scales on any screen, and costs a fraction of the effort of an
+image. For most sends this is better than a screenshot, not a compromise.
+
+**Phase 2 — share as image.** Render a branded score card (Floodlight palette, club crest)
+to canvas and offer it through `navigator.share({ files: [...] })`, which iOS Safari
+supports from a PWA. Fall back to a download where it is unsupported.
+
+Build phase 1 first and then reassess whether phase 2 is still wanted. It may not be.
+
+**Data note:** anything shared carries the same naming convention as the app — first name
+and last initial only. A shared card travels further than a screen does, so the
+minimal-naming decision matters more here, not less.
 
 ---
 
