@@ -195,7 +195,7 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
 
       // Reflect in DB immediately so other screens show LIVE
       try {
-        await supabase
+        const { error: fixtureUpdateError } = await supabase
           .from('fixtures')
           .update({
             status: 'in_progress' as any,
@@ -207,6 +207,8 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
             },
           })
           .eq('id', fixtureId);
+
+        if (fixtureUpdateError) throw fixtureUpdateError;
       } catch (e) {
         console.error('Error updating fixture to in_progress:', e);
         toast({
@@ -411,15 +413,18 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
       await endCurrentPeriod();
     }
 
+    // Stop the clock locally, but do NOT mark matchStatus 'completed' until the
+    // fixtures write below actually succeeds — flipping it early would hide the
+    // End Match button (canEndMatch) and strand the coach with no way to retry
+    // after a failed write.
     setTimerState(prev => ({
       ...prev,
-      matchStatus: 'completed',
       isRunning: false,
     }));
 
     try {
       // Explicitly set fixture status to completed for consistency
-      await supabase
+      const { error } = await supabase
         .from('fixtures')
         .update({
           status: 'completed' as any,
@@ -435,6 +440,13 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
         })
         .eq('id', fixtureId);
 
+      if (error) throw error;
+
+      setTimerState(prev => ({
+        ...prev,
+        matchStatus: 'completed',
+      }));
+
       // Refresh materialized views for reports (Phase 2: Re-enabled with analytics infrastructure)
       try {
         await supabase.rpc('refresh_report_views');
@@ -443,7 +455,7 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
         console.warn('Failed to refresh report views (non-critical):', refreshError);
         // Views will be refreshed by triggers or next manual refresh
       }
-      
+
       // Invalidate relevant query caches
       queryClient.invalidateQueries({ queryKey: ['completed-matches'] });
       queryClient.invalidateQueries({ queryKey: ['goal-scorers'] });
@@ -451,26 +463,13 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
       queryClient.invalidateQueries({ queryKey: ['competitions'] });
       queryClient.invalidateQueries({ queryKey: ['live-match-detection'] });
       toast({ title: 'Match completed', description: 'Match has been marked as completed.' });
-    } catch (error: any) {
-      console.error('Error ending match:', error);
-      const errorMessage = error?.message || 'Failed to end match';
-      toast({ 
-        title: 'Error', 
-        description: errorMessage.includes('relationship') 
-          ? 'Match completed but report update failed. Reports will update automatically.' 
-          : errorMessage, 
-        variant: 'destructive' 
-      });
-    } finally {
-      isFinalizingRef.current = false;
-    }
 
-    // Clear any localStorage match session to avoid lingering "active" indicators
-    try {
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem(`match_${fixtureId}`);
-      }
-    } catch {}
+      // Clear any localStorage match session to avoid lingering "active" indicators
+      try {
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem(`match_${fixtureId}`);
+        }
+      } catch {}
 
       // Navigate to match report after successful completion
       if (typeof window !== 'undefined') {
@@ -478,7 +477,16 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
           window.location.href = `/match-report/${fixtureId}`;
         }, 1000);
       }
-    
+    } catch (error: any) {
+      console.error('Error ending match:', error);
+      toast({
+        title: 'Match did not end',
+        description: 'The match is still in progress on the server — check your connection and press End Match again.',
+        variant: 'destructive',
+      });
+    } finally {
+      isFinalizingRef.current = false;
+    }
   };
 
   // TIMESTAMP, not duration: the minute the match is currently IN, used for
