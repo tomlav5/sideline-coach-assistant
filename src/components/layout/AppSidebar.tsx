@@ -55,9 +55,17 @@ export function AppSidebar() {
     }
   }, [currentPath, isMobile, setOpenMobile]);
 
-  const isActive = (path: string) => currentPath === path;
-  const getNavCls = ({ isActive }: { isActive: boolean }) =>
-    isActive ? "bg-primary text-primary-foreground font-medium" : "";
+  // NavLink's function-form `className` prop is never invoked here: SidebarMenuButton's
+  // `asChild` hands NavLink to Radix's Slot, which merges className via
+  // `[slotClassName, childClassName].filter(Boolean).join(" ")` — for a function that
+  // coerces to its own source text (Array.prototype.join calls String() on each item),
+  // not to its return value. So the active state is computed here and passed to
+  // SidebarMenuButton's `isActive` prop, whose own `data-[active=true]:*` variants (a
+  // class+attribute compound selector) already out-specificity any plain class we could
+  // put on NavLink — so NavLink just gets the one constant, always-correct base color.
+  const isNavActive = (url: string, exact: boolean) =>
+    exact ? currentPath === url : currentPath === url || currentPath.startsWith(`${url}/`);
+  const navLinkCls = "text-sidebar-foreground";
 
   const collapsed = state === "collapsed";
 
@@ -82,18 +90,22 @@ export function AppSidebar() {
           )}
           <SidebarGroupContent>
             <SidebarMenu>
-              {navigationItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild tooltip={collapsed ? item.title : undefined}>
-                    <NavLink to={item.url} end className={getNavCls}>
-                      <item.icon className="h-4 w-4 flex-shrink-0" />
-                      {!collapsed && (
-                        <span className="text-sidebar-foreground truncate">{item.title}</span>
-                      )}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {navigationItems.map((item) => {
+                const exact = item.url === "/";
+                const active = isNavActive(item.url, exact);
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={active} tooltip={collapsed ? item.title : undefined}>
+                      <NavLink to={item.url} end={exact} className={navLinkCls}>
+                        <item.icon className="h-4 w-4 flex-shrink-0" />
+                        {!collapsed && (
+                          <span className="truncate">{item.title}</span>
+                        )}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -104,18 +116,21 @@ export function AppSidebar() {
           )}
           <SidebarGroupContent>
             <SidebarMenu>
-              {settingsItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild tooltip={collapsed ? item.title : undefined}>
-                    <NavLink to={item.url} className={getNavCls}>
-                      <item.icon className="h-4 w-4 flex-shrink-0" />
-                      {!collapsed && (
-                        <span className="text-sidebar-foreground truncate">{item.title}</span>
-                      )}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {settingsItems.map((item) => {
+                const active = isNavActive(item.url, false);
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={active} tooltip={collapsed ? item.title : undefined}>
+                      <NavLink to={item.url} className={navLinkCls}>
+                        <item.icon className="h-4 w-4 flex-shrink-0" />
+                        {!collapsed && (
+                          <span className="truncate">{item.title}</span>
+                        )}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
