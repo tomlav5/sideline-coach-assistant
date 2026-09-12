@@ -69,6 +69,9 @@ export function AppSidebar() {
   const navLinkCls = "text-sidebar-foreground";
 =======
   const isActive = (path: string) => currentPath === path;
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 
   const collapsed = state === "collapsed";
