@@ -8,6 +8,107 @@ Known issues and planned work. Newest findings at the top of each section.
 
 ## Bugs
 
+### BUG-033 — Warning that a player's minutes may be understated `OPEN`
+**Found:** 12 Sep 2026, dry run. Not reproducible on demand. Investigated same day.
+
+After submitting two substitutions, a toast warned that a player's minutes may
+be understated because they had no open time log.
+
+Message (src/lib/submitSubstitutions.ts:398-402):
+  "<name>'s minutes may be understated — The substitution was recorded, but
+   this player had no open time log. Check their minutes in Match Data Editor."
+
+TRIGGER. Fires when the outgoing player has closed player_time_logs rows for
+the current period but no active one — player_match_status says they are on the
+pitch, nothing in player_time_logs reflects it. decideMissingStarterLog treats
+this as "case 2", a genuinely missing spell. Case 1 (no rows at all, the normal
+starter-initialisation path) and case 3 (an active row exists) are both silent
+by design.
+
+ROOT CAUSE. This is the risk BUG-009 explicitly documented as still open.
+setOnField writes player_match_status and commits BEFORE any of the time-log
+steps, and there is no rollback across the sequence. A pair that fails partway
+— the incoming player's interval insert failing on both the original attempt
+and its retry — leaves that player marked on-field with no active time log. A
+later substitution involving that player detects the inconsistency and warns.
+
+Period transitions make it likelier by increasing the number of rolling subs,
+but a period-boundary safety-net miss on its own produces zero rows, which is
+case 1 and silent. This warning specifically requires at least one closed row
+already present in the period — the rolling-substitution signature.
+
+Only possible because BUG-009 dropped unique_player_period_fixture. Under the
+old constraint a second insert for the same player and period would have thrown
+23505 loudly rather than silently producing an inconsistent state.
+
+THE WARNING IS ACCURATE and not over-cautious. When it fires, a zero-length
+spell is inserted and closed at the same minute, so the player really is
+credited nothing for the gap. It simply cannot say how much time is missing.
+
+RECOVERABLE. The Match Data Editor reads and writes time_on_minute and
+time_off_minute directly, and its ValidationPanel already flags time_on >=
+time_off — which is exactly what the zero-length spell looks like. The affected
+row self-flags when the editor is opened, even if nobody remembers which player
+the toast named.
+
+NO CHANGE NEEDED TO THE MESSAGE. Two things around it do need fixing: the
+underlying atomicity gap (DEBT-036), and the fact that the toast auto-dismisses
+before it can be read (DESIGN-008). A warning about data integrity is the
+single worst kind of message to put on a timer.
+
+### BUG-032 — Substitution submission is slow and flickers `OPEN`
+**Found:** 12 Sep 2026, dry run. Investigated same day.
+
+Submitting a batch of substitutions takes several seconds and the screen
+flickers while it saves. Goals show a much milder version of the same.
+
+NOT A REGRESSION. Confirmed against the diffs of all three 12 Sep merges —
+fix/live-match-detection, fix/unchecked-fixture-writes and
+fix/floodlight-polish. None of them touch submitSubstitutions.ts,
+usePlayerTimers.tsx, missingStarterLog.ts or the tile grid in
+EnhancedMatchTracker.tsx. This is pre-existing behaviour in the write/refresh
+sequence itself.
+
+CAUSE — round trip count. A single two-player swap costs roughly nine
+sequential database round trips to commit (applyPair's own comment names seven,
+plus two inserts that are conditional in principle but fire in the ordinary
+case), then three to four more before the UI settles:
+refreshPlayerStatusLists, loadEvents and reloadTimes, each awaited in series.
+None are batched; the three post-submit reads hit independent tables and could
+run concurrently. Each pair also carries one automatic retry, which doubles the
+count if anything is transient. A goal, by contrast, is one write and one read
+— which is why its symptoms are mild.
+
+CAUSE — the flicker. State is cleared and replaced in four separate
+commit-and-paint steps separated by real network waits: the pending badge
+clears immediately (resizing the footer), then the tiles move, then the events
+panel updates (resizing the footer again), then the minutes update. Nothing is
+swapped atomically.
+
+NO DOUBLE-SUBMIT GUARD. There is no isSubmitting state disabling the Submit
+action while a batch is in flight, so a second tap re-runs the entire sequence.
+Data is safe — client_event_id upserts are idempotent — but it doubles the
+round trips at precisely the moment a coach is losing patience with the wait.
+This is the most likely real-world aggravator.
+
+React Query is not involved. usePlayerTimers uses plain useState/useEffect/
+setInterval, submitSubstitutions never touches queryClient, and the realtime
+channel handlers for match_events, match_periods and player_match_status only
+console.log their payloads — the comment claiming "events will be handled by
+existing hooks that refetch data" is aspirational, not real.
+
+The fast/slow poll is not implicated for an ordinary mid-period swap: the other
+players on the pitch keep their open intervals, so isActiveNow stays true. It
+can legitimately fire at kick-off and half-time, which is what it exists for.
+
+FIXES, in order of size:
+1. Promise.all the three post-submit reads instead of awaiting in series.
+2. Add an isSubmitting guard on Submit. CRITICAL: it must reset on every error
+   path. A guard that fails to reset leaves a coach unable to substitute for
+   the rest of the match — worse than the bug it fixes.
+3. Batch the per-pair writes into a single transactional RPC. See DEBT-036 —
+   this is the real fix and it also resolves BUG-033.
+
 ### BUG-031 — Deletes never refresh the report views `OPEN`
 **Found:** 11 Sep 2026.
 
@@ -968,6 +1069,30 @@ Relates to UX-001.
 ---
 
 ## Technical debt
+
+### DEBT-036 — applyPair is not atomic `OPEN`
+**Found:** 12 Sep 2026, from the BUG-032 and BUG-033 investigations.
+
+Applying one substitution pair performs seven to nine sequential client-side
+writes with no transaction and no rollback. A failure partway leaves
+player_match_status and player_time_logs disagreeing — the direct cause of
+BUG-033, and the risk BUG-009 documented but did not close. It is also the
+cause of BUG-032's latency, since every step is its own round trip.
+
+One change addresses both: move pair application into a single transactional
+RPC, so player_match_status and the time-log open/close succeed or fail
+together.
+
+This is the most valuable structural change on the backlog after DEBT-030, and
+it touches the path where correctness matters most. It needs its own read-only
+investigation before any code is written, and its own branch. Do not fold it
+into a performance fix.
+
+Also correct the stale comment at EnhancedMatchTracker.tsx:619-621, which still
+describes a staged player appearing on the pitch immediately. That stopped
+being true with the 6 Sep change to effectiveLineup — tiles no longer move
+until Submit commits. Leaving it there invites the next person to design
+around a mental model the code abandoned.
 
 ### DEBT-035 — Function-valued className across a Radix asChild boundary `OPEN`
 **Found:** 12 Sep 2026, as the root cause of UX-028.
@@ -1987,6 +2112,42 @@ Full spec, contrast pairs and regeneration steps in `docs/brand/BRAND.md`.
 ---
 
 ## UX
+
+### UX-032 — Friendlies are not visibly marked in Match Reports `OPEN`
+**Found:** 12 Sep 2026.
+
+Reports distinguish league and cup matches, but a friendly carries no marker,
+so it reads as a competitive fixture at a glance.
+
+fixtures already carries competition_type (league | tournament | friendly), so
+this is display only — no schema change. Mark friendlies clearly, and decide
+whether they should be excluded from, or separately totalled in, top scorers
+and playing time. A coach reading season statistics usually means competitive
+matches; at present everything is blended.
+
+Relates to REPORT-001.
+
+### UX-031 — Match event entry available during a live fixture `OPEN`
+**Found:** 12 Sep 2026.
+
+The fixture dialog offers adding a match event while the game is in progress.
+Events are already being recorded live on the match screen, so this duplicates
+that path and invites double entry of something already logged.
+
+Restrict retrospective event entry to fixtures that are not in progress. Same
+reasoning that retired Manual Entry in BUG-017: two ways to write the same
+record, neither aware of the other, is how data gets duplicated.
+
+### UX-030 — Settings button too easy to hit when scrolling fixtures `OPEN`
+**Found:** 12 Sep 2026.
+
+Scrolling the fixtures list frequently triggers the settings control by
+accident. The target sits where a thumb travels.
+
+Fix by placement and gesture handling, not by shrinking the target — UX-002
+raised controls to a 44px minimum deliberately. Options: move the control out
+of the scroll path, require a deliberate tap rather than firing on touch, or
+move configuration and destructive actions behind an overflow menu.
 
 ### UX-029 — Goal scorer list is global and unordered `OPEN`
 **Found:** 12 Sep 2026, staging testing.
