@@ -8,6 +8,120 @@ Known issues and planned work. Newest findings at the top of each section.
 
 ## Bugs
 
+### BUG-037 — total_match_minute diverges between events `OPEN`
+**Found:** 13 Sep 2026, fixture 7d679d78, period 2.
+
+  09:42:25  goal              minute_in_period 11   total_match_minute 42
+  09:46:51  substitution_off  minute_in_period 16   total_match_minute 30  <-- wrong
+  09:47:01  substitution_off  minute_in_period 16   total_match_minute 46  <-- correct
+
+minute_in_period is correct throughout. Goals and substitutions use the SAME
+state (currentMinute/totalMatchMinute), so this is not differing arithmetic.
+
+ROOT CAUSE. total_match_minute derives from timerState.periods — the sum of
+completed-period durations. That array is replaced wholesale by
+loadMatchState(), which is invoked from five uncoordinated triggers: mount, tab
+visibility change, a 30s poll, and as a side effect of start/pause/resume/end
+period. There is no request sequencing, no AbortController, no generation
+counter — whichever response resolves LAST wins regardless of which was issued
+first. A stale response overwrites periods with an understated offset,
+corrupting total_match_minute while leaving minute_in_period (derived from
+currentPeriod, unaffected) correct.
+
+NOT COSMETIC. total_match_minute is the sort key and displayed label in every
+consumer, AND LiveEventsSummary.tsx:71-77 uses it as a GROUPING KEY —
+sub:${period_id}:${total_match_minute} — to pair substitution_off with
+substitution_on. A corrupted value can merge two unrelated substitutions into
+one displayed card.
+
+FIX: give loadMatchState monotonic request sequencing so a response applies only
+if it is still the most recent request issued. This does not touch the
+timestamp-derived timer design.
+
+RULE OUT FIRST: a second client briefly tracking, each with its own stale
+periods snapshot, would produce an identical symptom. Check whether
+fixtures.active_tracker_id changed around 09:46:41-09:47:01 for that fixture.
+
+HISTORICAL REPAIR is possible: recompute from match_events.recorded_at plus
+match_periods timestamps — sum the elapsed seconds of periods that ended before
+the event's period started, add (recorded_at − that period's actual_start_time)
+minus paused seconds, then apply floor+1 ONCE to the sum. Do not compose
+additively from minute_in_period, which is already rounded (see DEBT-039).
+Caveat: total_paused_seconds is a single cumulative counter with no history, so
+an event recorded shortly before a later pause in the same period will
+over-subtract. Matched substitution pairs give a built-in cross-check.
+
+Relates to SEC-003 (the rule-out check above), DEBT-039.
+
+### BUG-036 — Match Report playing-time aggregation mixes periods `OPEN`
+**Found:** 13 Sep 2026. Independent of BUG-034 — it misreports even with clean data.
+
+MatchReport.tsx:205-242 aggregates per player across ALL rows with no period
+grouping:
+- time_on = min(time_on_minute) across every row, every period
+- time_off = max(time_off_minute) across every row, every period
+- is_starter = taken from the first row seen, and the query orders is_starter
+  descending, so a player is labelled "Starter" if ANY row has it
+
+These are PERIOD-RELATIVE durations, so min/max across periods is meaningless.
+Ardan L — period 1 13→25 as a substitute, period 2 0→27 as a starter —
+displayed as "Starter, On: 0' Off: 27'". Preston displayed "Off: 25'" (his
+period-1 value winning the max) while events showed him off at 38'.
+
+FIX: group by (player_id, period_id). Derive on-time from the earliest period's
+row and off-time from the latest, or display per-period rows. Derive "starter"
+only from the earliest period's row. total_minutes summing is already correct.
+
+### BUG-035 — Close-interval update is unscoped `OPEN`
+**Found:** 13 Sep 2026.
+
+Both the period-transition block (EnhancedMatchTracker.tsx:753-761) and
+submitSubstitutions.applyPair (submitSubstitutions.ts:239-248) close a spell
+with UPDATE ... WHERE fixture_id AND player_id AND period_id AND is_active=true
+— with no row id filter. It closes every open row for that player and period,
+not the one it read.
+
+Secondary to BUG-034 but it is what made that incident hard to spot: all six
+duplicates were closed in one statement and the calculate_total_period_minutes
+trigger recomputed each to 12, so the rows agreed with each other and looked
+plausible rather than obviously broken.
+
+FIX: scope the close by the specific row id read immediately beforehand.
+
+Relates to BUG-034.
+
+### BUG-034 — Duplicate starter rows inflate playing time `OPEN`
+**Found:** 13 Sep 2026. Repaired in production 13 Sep (5 rows deleted).
+
+Preston G accrued six identical period-2 rows (is_starter=true, 0→12) in one
+match, reading 97 minutes against 53 actual. After repair the squad reconciled
+exactly: 364 player-minutes = 7 on the pitch × 52 minutes.
+
+ROOT CAUSE — a missed site. BUG-011's fix introduced decideMissingStarterLog
+(src/lib/missingStarterLog.ts), which reads ALL rows for a player/period and
+only inserts when none exist. It was applied to submitSubstitutions.applyPair
+and to initMissingStarterLogs. It was NOT applied to the third insert site, the
+period-transition block at EnhancedMatchTracker.tsx:782-806, which still does:
+
+  .select('id, is_active') ... .eq('is_active', true).maybeSingle()
+  if (!existingLog) { insert { time_on_minute: 0, is_starter: true } }
+
+A CLOSED row is invisible to that check, so it reads as missing. Preston was
+substituted off at period minute 12, closing his row; every subsequent re-fire
+of that effect inserted another.
+
+WHY IT RE-FIRED REPEATEDLY. The block keys off currentPeriodNumber, fed every
+second from the timer, and useEnhancedMatchTimer resyncs from the DB on tab
+visibility change and every 30s. Neither this block nor initMissingStarterLogs
+checks matchTracker?.isActiveTracker — recordingLocked gates only the UI's
+staging controls — so both run for ANY mounted viewer of the fixture. A second
+tab or device open on the same match writes independently. See SEC-003.
+
+FIX: route the period-transition insert through decideMissingStarterLog, as its
+two siblings already do.
+
+Relates to BUG-011, SEC-003. Blocks: DEBT-037.
+
 ### BUG-033 — Warning that a player's minutes may be understated `OPEN`
 **Found:** 12 Sep 2026, dry run. Not reproducible on demand. Investigated same day.
 
@@ -1070,6 +1184,70 @@ Relates to UX-001.
 
 ## Technical debt
 
+### DEBT-039 — floor+1 applied to the sum, not composed `OPEN`
+**Found:** 13 Sep 2026.
+
+getTotalMatchMinute applies floor+1 to the combined total in one step —
+floor((offset + current)/60) + 1 — rather than composing floor(offset/60) +
+minute_in_period. The two are not always equal; integer-division carry across a
+period boundary can differ by 1. Example: offset 1830s + current 930s gives 47
+one way and 46 the other.
+
+Not the cause of BUG-037, which is a whole-offset error rather than an
+off-by-one. But it matters for any historical repair arithmetic, and two
+formulas for one quantity will eventually disagree somewhere that counts.
+
+Relates to BUG-037.
+
+### DEBT-038 — Pre-rebuild matches credit planned duration, not actual `OPEN`
+**Found:** 13 Sep 2026, database-wide audit.
+
+Matches from Nov 2025 show player totals of exactly 90 minutes — precisely
+planned_minutes — against 52-55 actual. The old code credited the planned
+duration regardless of what happened. Others are wilder: Kesgrave 25 May shows
+1538 minutes against 30 planned, consistent with a period that was never ended
+and a duration computed from wall clock.
+
+These predate the rebuild and reflect code no longer running. They are not a
+live defect, but they will corrupt any season-level playing-time reporting
+built on top of them. Clean or exclude them before REPORT-001 ships.
+
+Blocks: REPORT-001. Relates to REPORT-005.
+
+### DEBT-037 — No overlap constraint on player_time_logs `OPEN`
+**Found:** 13 Sep 2026.
+
+unique_player_period_fixture was dropped by BUG-009 to enable rolling
+substitutions. The migration's own comment records that a replacement — a
+partial unique index on (fixture_id, player_id, period_id) WHERE is_active —
+was considered and deliberately declined, on the grounds that the app maintains
+at most one open interval per player per period by convention, and the season
+was days away. BUG-034 is that convention breaking.
+
+All six of Preston's rows were is_active=true at insert; they were only closed
+afterwards in bulk. The declined partial unique index would have let one insert
+succeed and rejected five with 23505 — a loud, logged, harmless failure instead
+of 60 silent phantom minutes.
+
+The stronger form is an EXCLUDE constraint, which forbids genuine overlaps while
+permitting legitimate non-overlapping rolling-sub rows:
+
+  EXCLUDE USING gist (
+    fixture_id WITH =, player_id WITH =, period_id WITH =,
+    int4range(time_on_minute, COALESCE(time_off_minute, 2147483647)) WITH &&
+  )
+
+Requires btree_gist. The COALESCE treats an open interval as running to the end
+of time, which correctly conflicts with any other row for that player and
+period — only one interval should ever be open at once.
+
+SEQUENCING — DO NOT ADD THIS BEFORE BUG-034 IS FIXED. A constraint that fires
+during a live match fails the substitution and its retry, so the sub does not
+record. Fix the logic first, prove it, then add the backstop and confirm the
+error path is handled gracefully.
+
+Blocked by: BUG-034. Relates to BUG-009.
+
 ### DEBT-036 — applyPair is not atomic `OPEN`
 **Found:** 12 Sep 2026, from the BUG-032 and BUG-033 investigations.
 
@@ -1569,6 +1747,56 @@ Several recent commits are named "Changes". Enable branch protection requiring a
 ---
 
 ## Security
+
+### SEC-003 — active_tracker_id is not an authorization boundary `OPEN`
+**Found:** 13 Sep 2026. THE ROOT PROBLEM UNDERLYING BUG-034 AND BUG-037.
+
+Every RLS policy governing match_periods, match_events, player_match_status,
+player_time_logs and fixtures UPDATE checks only
+user_has_club_access(club_id, 'official') — the same permission every coach in
+the club holds, tracker or not. claim_match_tracking writes only
+active_tracker_id/tracking_started_at/last_activity_at; it enforces nothing.
+restart_match is the ONLY function that checks tracker identity in its body.
+
+What a non-tracker can currently do to a live match they do not control:
+
+  Start / Pause / Resume Period    no UI gate, no RLS gate    possible
+  End Period                       no UI gate, no RLS gate    possible
+  End Match                        no UI gate, no RLS gate    possible
+  Record goals / subs              UI-gated once live only    reachable via API,
+                                                              and before the
+                                                              first period starts
+  Delete Match Data                gated in UI AND in RPC     enforced
+
+Confirmed in play on 13 Sep: pressing Start New Period while not the tracker
+wrote the match_periods row immediately. Claiming tracking did not create the
+period — it triggered a refetch that revealed one already written.
+
+Two background effects also write without any ownership check —
+runPeriodTransitions and initMissingStarterLogs (see BUG-034) — so a second open
+tab writes to a live match with no user action at all.
+
+DESIGN — claim and release. A hard handshake requiring the current tracker to
+release is the wrong model: it fails in exactly the cases that matter, where
+their phone is flat or they have gone home. Use friction proportional to how
+live the current tracker is, which last_activity_at already makes knowable:
+
+- Active within ~2 minutes: a confirmation naming them and what will happen.
+  "Dave is tracking this match and was active 20 seconds ago. Taking over will
+  stop his recording." Deliberate, hard to do by accident, still possible.
+- Gone quiet for several minutes: straightforward takeover, noting when they
+  were last active. This is the phone-died case and must be easy.
+- ALWAYS tell the displaced tracker, prominently, on their own screen. The real
+  failure is not a contested takeover — it is a coach tapping a screen for ten
+  minutes that is no longer recording anything.
+
+SCOPE OF WORK: UI gating on the period and match-end controls; ownership checks
+inside the RPCs and/or RLS; ownership gating on the two background effects; and
+the claim/release UX above. Sequence the UI gating first — it is small and
+protects the multi-coach case immediately.
+
+Relates to BUG-013 (heartbeat liveness), BUG-034, BUG-037. Blocks: full fix for
+BUG-034 and BUG-037's root cause, though both have narrower standalone fixes.
 
 ### SEC-002 — Permission model inconsistent across related tables `OPEN`
 **Found:** 11 Sep 2026.
@@ -2112,6 +2340,29 @@ Full spec, contrast pairs and regeneration steps in `docs/brand/BRAND.md`.
 ---
 
 ## UX
+
+### UX-034 — No indication when a period over-runs its planned duration `OPEN`
+**Found:** 13 Sep 2026.
+
+A period runs until End Period is pressed. One match ran 31 minutes against 25
+planned — six minutes of playing time credited to every player on the pitch,
+with nothing on screen indicating the half should have ended.
+
+This is currently managed by training coaches to end periods promptly. Training
+is fragile; the app already knows both numbers. A quiet indication at the
+planned mark ("Period 1 · 25 planned · 31 elapsed") makes the training
+unnecessary. Not a modal, not a blocking prompt — a coach may have good reason
+to run on, and stoppage time is real.
+
+### UX-033 — Search text carries from scorer to assist picker `OPEN`
+**Found:** 13 Sep 2026, in play.
+
+When recording a goal, text typed to filter the scorer list is still present
+when the assist picker opens, filtering it to the player just selected.
+
+Clear the input between steps — and better, EXCLUDE the scorer from the assist
+list entirely. A player cannot assist their own goal, so removing them is both
+correct and one fewer name to scan.
 
 ### UX-032 — Friendlies are not visibly marked in Match Reports `OPEN`
 **Found:** 12 Sep 2026.
@@ -2892,6 +3143,47 @@ Build phase 1 first and then reassess whether phase 2 is still wanted. It may no
 **Data note:** anything shared carries the same naming convention as the app — first name
 and last initial only. A shared card travels further than a screen does, so the
 minimal-naming decision matters more here, not less.
+
+### REPORT-004 — Match report has no scorer totals `OPEN`
+**Found:** 13 Sep 2026, after a 12-0 win.
+
+Goals are listed chronologically. Updating the FA Full-Time portal needs
+per-player totals, so a high-scoring match means tallying a long list by hand,
+immediately after a match when attention is lowest.
+
+Add a scorer summary ordered by count descending, and the same for assists.
+Keep the chronological list — it is how a coach verifies a goal was recorded.
+
+ONE AGGREGATION, THREE CONSUMERS: the match report; REPORT-003's shareable text
+(a WhatsApp message wants "Preston G 4", not twelve timestamped lines); and FA
+Full-Time transcription, which is the actual obligation and should shape the
+format. A copy-to-clipboard of just the tally is arguably the highest-value
+version of REPORT-003 phase 1.
+
+Relates to REPORT-003.
+
+### REPORT-005 — No match-level data integrity check `OPEN`
+**Found:** 13 Sep 2026.
+
+BUG-034 produced 60 phantom minutes and was found only because a coach happened
+to look at a report a day later. It was detectable arithmetically the moment the
+match ended.
+
+Total player minutes must equal (players on the pitch) × (match duration). After
+repairing Preston the match reconciled exactly: 364 = 7 × 52. Before repair it
+was 424.
+
+Run that check when a match completes and show the result on the report — a
+quiet confirmation when it reconciles, a clear warning when it does not, naming
+the discrepancy. One query, and it catches this entire class of fault
+automatically rather than by chance.
+
+Consider also surfacing fixtures.is_retrospective, which already exists and
+distinguishes a match entered after the fact from one tracked live. Between the
+two, a season report could state how much of its playing-time data is
+trustworthy instead of silently averaging good data with bad.
+
+Relates to BUG-034, DEBT-038.
 
 ---
 
