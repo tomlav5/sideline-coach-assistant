@@ -202,6 +202,14 @@ async function applyPair(
   });
 
   const outDecision = decideMissingStarterLog(outRows, durationMinute);
+  // BUG-035: the row to close below must be the one this function has
+  // actually identified — either the pre-existing active row found in
+  // `outRows`, or the row just inserted for it — not "whatever is active for
+  // this player/period" at close time. A blanket `is_active = true` filter
+  // closes every open row for the player, including any duplicate produced
+  // elsewhere (BUG-034), stamping them all with the same time_off_minute and
+  // making the duplication look self-consistent.
+  let outRowId = outRows.find((row) => row.is_active)?.id;
   if (outDecision.insert) {
     if (outDecision.missingSpell) {
       // Case 2: the player has closed rows in this period but no open one, so
@@ -221,31 +229,36 @@ async function applyPair(
       );
       understatedPlayerIds.push(playerOut);
     }
-    await step('time log: insert out row', async () => {
-      const { error } = await supabase.from('player_time_logs').insert({
-        fixture_id: fixtureId,
-        player_id: playerOut,
-        period_id: period.id,
-        time_on_minute: outDecision.timeOnMinute,
-        is_starter: outDecision.isStarter,
-        is_active: true,
-      });
+    outRowId = await step('time log: insert out row', async () => {
+      const { data, error } = await supabase
+        .from('player_time_logs')
+        .insert({
+          fixture_id: fixtureId,
+          player_id: playerOut,
+          period_id: period.id,
+          time_on_minute: outDecision.timeOnMinute,
+          is_starter: outDecision.isStarter,
+          is_active: true,
+        })
+        .select('id')
+        .single();
       if (error) throw error;
+      return data.id as string;
     });
   }
 
-  // Finalize the time log for the player going OUT.
+  // Finalize the time log for the player going OUT, scoped to the specific
+  // row id read (or inserted) immediately above — never a blanket filter.
   // DURATION, not timestamp: minutes elapsed in the period (plain floor).
-  await step('time log: close out interval', async () => {
-    const { error } = await supabase
-      .from('player_time_logs')
-      .update({ time_off_minute: durationMinute, is_active: false })
-      .eq('fixture_id', fixtureId)
-      .eq('player_id', playerOut)
-      .eq('period_id', period.id)
-      .eq('is_active', true);
-    if (error) throw error;
-  });
+  if (outRowId) {
+    await step('time log: close out interval', async () => {
+      const { error } = await supabase
+        .from('player_time_logs')
+        .update({ time_off_minute: durationMinute, is_active: false })
+        .eq('id', outRowId);
+      if (error) throw error;
+    });
+  }
 
   // Open a time log for the player coming IN, unless one is already active.
   const activeInLog = await step('time log: read in interval', async () => {

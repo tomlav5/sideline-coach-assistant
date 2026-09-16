@@ -749,16 +749,27 @@ export default function EnhancedMatchTracker() {
                 actualDurationMinutes = Math.floor(elapsedSeconds / 60);
               }
               
-              // Set time_off_minute to actual period duration for all active logs
-              await supabase
+              // Set time_off_minute to actual period duration for all active logs.
+              // Read the active rows first and close by id (BUG-035) rather than a
+              // blanket is_active filter, which would also close any duplicate row
+              // produced elsewhere (BUG-034) and stamp it with the same
+              // time_off_minute, making the duplication look self-consistent.
+              const { data: activeLogs } = await supabase
                 .from('player_time_logs')
-                .update({
-                  time_off_minute: actualDurationMinutes,
-                  is_active: false,
-                })
+                .select('id')
                 .eq('fixture_id', fixtureId)
                 .eq('period_id', prevPeriod.id)
-                .eq('is_active', true);  // Only update active logs
+                .eq('is_active', true);
+
+              if (activeLogs && activeLogs.length > 0) {
+                await supabase
+                  .from('player_time_logs')
+                  .update({
+                    time_off_minute: actualDurationMinutes,
+                    is_active: false,
+                  })
+                  .in('id', activeLogs.map((log) => log.id));
+              }
             }
           }
 
@@ -779,31 +790,68 @@ export default function EnhancedMatchTracker() {
                 .eq('is_on_field', true);
 
               if (onFieldPlayers && onFieldPlayers.length > 0) {
+                // Elapsed minutes in the new period, from the freshest value the
+                // timer has reported. Mirrors initMissingStarterLogs below —
+                // decideMissingStarterLog needs this to place a returning
+                // player's un-recorded spell without fabricating one from
+                // minute 0 (BUG-011).
+                const elapsedSeconds = currentSecondsRef.current;
+                const durationMinute =
+                  elapsedSeconds > 0 ? Math.floor(elapsedSeconds / 60) : null;
+
                 for (const row of onFieldPlayers) {
-                  // Check if an active log already exists for this player in this period
-                  const { data: existingLog } = await supabase
+                  // Read EVERY row for (fixture, player, period), active and
+                  // closed — an is_active-only check is blind to a CLOSED row,
+                  // so a player already substituted off in this period reads as
+                  // missing and a duplicate starter row gets fabricated
+                  // (BUG-034).
+                  const { data: rows, error: readErr } = await supabase
                     .from('player_time_logs')
                     .select('id, is_active')
                     .eq('fixture_id', fixtureId!)
                     .eq('player_id', row.player_id)
-                    .eq('period_id', nextPeriod.id)
-                    .eq('is_active', true)
-                    .maybeSingle();
-                  
-                  // Only insert if no active log exists (allows multiple intervals per period)
-                  if (!existingLog) {
-                    await supabase
-                      .from('player_time_logs')
-                      .insert({
-                        fixture_id: fixtureId!,
-                        player_id: row.player_id,
-                        period_id: nextPeriod.id,
-                        time_on_minute: 0,
-                        is_starter: true,
-                        is_active: true,
-                        total_period_minutes: 0,
-                      });
+                    .eq('period_id', nextPeriod.id);
+                  if (readErr) {
+                    console.warn(
+                      `[runPeriodTransitions] could not read time logs for player ${row.player_id} ` +
+                        `in period ${nextPeriod.id}; skipping`,
+                      readErr,
+                    );
+                    continue;
                   }
+
+                  const decision = decideMissingStarterLog(rows ?? [], durationMinute);
+                  if (decision.insert === false) {
+                    if (decision.reason === 'missing-spell-no-duration') {
+                      console.error(
+                        `[runPeriodTransitions] player ${row.player_id} has closed player_time_logs ` +
+                          `rows in period ${nextPeriod.id} but no active one, and no elapsed time is ` +
+                          `available to place the spell — skipping insert. This player's minutes may ` +
+                          `be understated; check Match Data Editor.`,
+                      );
+                    }
+                    continue;
+                  }
+                  if (decision.missingSpell) {
+                    console.error(
+                      `[runPeriodTransitions] player ${row.player_id} is on the pitch in period ` +
+                        `${nextPeriod.id} with closed time logs but no active one; their current spell ` +
+                        `was never recorded. Opening an interval from minute ${decision.timeOnMinute} ` +
+                        `(is_starter=false) — the un-recorded earlier minutes are lost, so this ` +
+                        `player's total is understated rather than over-counted (BUG-011).`,
+                    );
+                  }
+                  await supabase
+                    .from('player_time_logs')
+                    .insert({
+                      fixture_id: fixtureId!,
+                      player_id: row.player_id,
+                      period_id: nextPeriod.id,
+                      time_on_minute: decision.timeOnMinute,
+                      is_starter: decision.isStarter,
+                      is_active: true,
+                      total_period_minutes: 0,
+                    });
                 }
               }
             }
