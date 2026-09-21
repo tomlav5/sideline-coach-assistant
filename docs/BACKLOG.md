@@ -8,6 +8,80 @@ Known issues and planned work. Newest findings at the top of each section.
 
 ## Bugs
 
+### BUG-040 — Resume Period and Start Penalty Shootout do not claim on an unheld match `OPEN`
+**Found:** 21 Sep 2026, while adding claim-on-start (`fix/tracker-ui-gating`).
+
+Claim-on-start (SEC-003, 21 Sep) covers Start Period only. If the tracker
+released between periods, or a match was left running before that change
+shipped, whoever presses Resume Period or Start Penalty Shootout acts on a match
+nobody holds and does not become its tracker. It stays `nobody`, and the
+recordingLocked rule in EnhancedMatchTracker (match live and caller not the
+tracker) keeps goals and substitutions locked until they find and press Take
+Control. That is the same symptom staging showed for Start Period.
+
+Pause Period and End Period have the same gap. Whether they should claim is a
+product decision: acting on an unheld match as the first thing after a tracker's
+release is also the recovery path, and End Match clears the tracker anyway.
+
+FIX: decide the rule, then reuse the claim-then-act pattern in
+handleStartNewPeriod, including its startInFlightRef guard (BUG-039) — claiming
+flips the tracker and would otherwise reload the page mid-write.
+
+Relates to SEC-003, BUG-039.
+
+### BUG-039 — Any change of tracker reloads the whole page and unmounts the match controls `OPEN`
+**Found:** 21 Sep 2026, while adding claim-on-start (`fix/tracker-ui-gating`).
+
+EnhancedMatchTracker runs `loadMatchData()` whenever `matchTracker?.isActiveTracker`
+changes. loadMatchData calls `setLoading(true)`, and the page returns
+`<MatchTrackerSkeleton />` while that is true, so every tracker flip — Take
+Control, a takeover by someone else, a refused claim syncing local state,
+Release — replaces the whole tree with a skeleton. That unmounts
+EnhancedMatchControls and its useEnhancedMatchTimer instance, then remounts it
+and reloads timer state. Alongside it, the controls' `forceRefresh` effect fires
+its own loadMatchState.
+
+Harmless alone; dangerous if it coincides with a write. loadMatchState reads
+match_periods and then fixtures, and overwrites timer state with the result, so
+a load that overlaps a period insert can read the new period next to a stale
+current_period_id and show "not started" over a running period. Start Period then
+reappears, and pressing it would insert a second, overlapping period. Same class
+as BUG-037 (no request sequencing). Claim-on-start would have hit this on every
+match start, because the claim is what flips it; it is suppressed for that flow
+only, by a parent-owned startInFlightRef that the parent effect and the
+forceRefresh effect both check. Every other flip, such as a takeover arriving
+mid-write, still reloads the page. Not reproduced; found by reading.
+
+FIX: only the initial load should gate the page behind `loading` — a refresh must
+not unmount the controls — and loadMatchState needs the sequencing described in
+BUG-037.
+
+Relates to BUG-037, SEC-003, SEC-004.
+
+### BUG-038 — A refused release reads as "nobody holds it", so the ownership gate opens `OPEN`
+**Found:** 20 Sep 2026, reading useRealtimeMatchSync while fixing the ownership
+gate (`fix/tracker-ui-gating`).
+
+release_match_tracking clears active_tracker_id only `WHERE active_tracker_id =
+auth.uid()` and returns FOUND — false when the caller is not the tracker.
+`releaseMatchTracking` in useRealtimeMatchSync checks only `error`, never
+`data`, so a refused release still runs `setMatchTracker(null)`, clears
+activeTrackerIdRef and toasts "Match Tracking Released" while the server still
+names someone else as tracker.
+
+Reachable when a coach's screen still says "You are actively tracking" after
+someone else took over (a missed realtime UPDATE, or a claim that lapsed past
+claim_match_tracking's 5-minute timeout) and they press Release Control.
+Afterwards the ownership gate reads `nobody` and the controls stay enabled for a
+coach who does not hold the match. It is the one path found where local state is
+null while ANOTHER user holds the match. Not reproduced; found by reading the
+code and the RPC.
+
+FIX: treat `data !== true` as "not released" — leave state alone and re-read
+active_tracker_id so the screen shows who does hold it. Hook only.
+
+Relates to SEC-003, SEC-004.
+
 ### BUG-037 — total_match_minute diverges between events `OPEN`
 **Found:** 13 Sep 2026, fixture 7d679d78, period 2.
 
@@ -1748,6 +1822,55 @@ Several recent commits are named "Changes". Enable branch protection requiring a
 
 ## Security
 
+### SEC-005 — Confirmation dialogs and handlers do not re-check the ownership gate `DONE 21 Sep 2026`
+**Found:** 20 Sep 2026, while fixing the ownership gate (`fix/tracker-ui-gating`).
+
+The gate in EnhancedMatchControls disables the buttons that OPEN the End Period
+and End Match confirmations, but the handlers those dialogs run —
+requestEndPeriod, requestEndMatch and runGuard (the UX-010 pending-subs guard) —
+never re-check it. A coach who opens End Period and is displaced while the
+dialog is up (trackerHolder flips to `other`) can still confirm and the period
+ends, because the already-open AlertDialog is not disabled. Same shape for the
+async gap in handleStartNewPeriod, which awaits a player_match_status read
+before calling startNewPeriod. Not reproduced; found by reading the component.
+
+FIX: `if (!canAct) return;` at the top of each handler. Small, but it sits on the
+live-match path, so do it as its own branch and test the displaced-mid-dialog
+case on staging with two accounts. Client-side only; the server-side checks in
+SEC-003 remain the real boundary.
+
+**Done — 21 Sep 2026, `fix/tracker-ui-gating` (PR TBD):** requestEndPeriod,
+requestEndMatch and runGuard now check the latest canAct (read through a ref, so
+an already-open dialog and a post-await check are not stale). A displaced coach's
+confirm is refused with a "Not applied" toast and the dialog closes; runGuard
+checks before it submits or discards anything, and again after the submit await,
+saying the substitutions were submitted if the end is then refused. Covered by
+component tests including the displaced-mid-dialog and displaced-mid-submit
+cases. Not covered: handleStartNewPeriod's short starter-read gap for a `self`
+holder (the `nobody` case is covered, since a claim is refused if someone took
+the match in the gap). Not yet exercised on staging with two accounts.
+
+Relates to SEC-003, SEC-004.
+
+### SEC-004 — The client's view of who holds the match is never re-read after mount `OPEN`
+**Found:** 20 Sep 2026, while fixing the ownership gate (`fix/tracker-ui-gating`).
+
+useRealtimeMatchSync reads fixtures.active_tracker_id once on mount and
+afterwards relies entirely on the fixtures realtime UPDATE. The timer re-syncs
+from the database on tab visibility change and every 30s; tracker identity does
+not. If the UPDATE reporting a takeover is missed (a backgrounded or suspended
+iOS websocket is the likely cause; not reproduced), the ownership gate sits on a
+stale `self`, `nobody` or `other` with nothing to correct it until a reload.
+Every client-side gate, including the one on `fix/tracker-ui-gating`, is only as
+good as this state. It is also the residual hole in that branch: the predicate
+fix cannot close a gate that is reading a stale value.
+
+FIX: re-read active_tracker_id on visibilitychange and when the fixtures channel
+re-subscribes, through the same path as checkInitialStatus. Does not replace the
+server-side checks in SEC-003.
+
+Relates to SEC-003, BUG-013, BUG-038, UX-035.
+
 ### SEC-003 — active_tracker_id is not an authorization boundary `OPEN`
 **Found:** 13 Sep 2026. THE ROOT PROBLEM UNDERLYING BUG-034 AND BUG-037.
 
@@ -1794,6 +1917,80 @@ SCOPE OF WORK: UI gating on the period and match-end controls; ownership checks
 inside the RPCs and/or RLS; ownership gating on the two background effects; and
 the claim/release UX above. Sequence the UI gating first — it is small and
 protects the multi-coach case immediately.
+
+**Update — 17 Sep 2026, branch `fix/tracker-ui-gating` (not yet merged, PR TBD):**
+first sequenced item, UI gating, done. EnhancedMatchControls now takes
+isActiveTracker/matchTracker props and disables Start Period, Pause, Resume,
+End Period, Start Penalty Shootout and End Match unless isActiveTracker is true
+OR active_tracker_id IS NULL (mirrors restart_match's own permissive case, so
+an unclaimed match never strands a coach). MatchLockingBanner's "another user
+is tracking" state gained a "Take Control" button (previously had none) so the
+newly-disabled controls always have an adjacent way to unblock. Separately,
+useRealtimeMatchSync's fixtures-channel handler now updates matchTracker from
+the realtime payload with change-detection (reacts only when active_tracker_id
+itself changes, not on every 30s heartbeat) and exposes a persistent
+`displacedNotice` — shown on-screen in EnhancedMatchTracker.tsx — replacing the
+old disappearing toast for a displaced tracker. Still OPEN: ownership checks
+inside the RPCs/RLS, ownership gating on runPeriodTransitions and
+initMissingStarterLogs, and the graded-friction claim/release UX (confirm
+before takeover when the current tracker was active within ~2 minutes).
+
+**Update — 20 Sep 2026, branch `fix/tracker-ui-gating` (predicate fix; not yet
+merged, PR TBD):** the 17 Sep gate blocked nothing on staging — account B, with
+account A tracking, could still press Start Period and End Match. The gate was
+`!!isActiveTracker || !matchTracker`, and `matchTracker === null` is
+overloaded: it is also the value before the first read of active_tracker_id and
+after a failed one, so "not known yet" passed as "nobody holds it" (fail open).
+Replaced by `trackerHolder` (`unknown | nobody | self | other`, in
+`src/lib/trackerGate.ts`), derived in useRealtimeMatchSync and marked resolved
+only after a successful fixtures read. The gate now permits only `self` or
+`nobody` (an unclaimed match still lets any official act, mirroring
+restart_match); `unknown` renders the controls disabled with a "Checking who is
+tracking this match…" note. Covered by unit tests on the predicate, the hook's
+resolution timing and the rendered buttons.
+
+DIAGNOSIS CAVEAT: read from the code, matchTracker is non-null
+(isActiveTracker false) on every path where the hook learns that ANOTHER user
+holds the match, so the 17 Sep gate should already have blocked B once the first
+read finished. It fails open before that read, after a failed read, on a missed
+fixtures UPDATE (SEC-004) and after a refused release (BUG-038). This change
+closes the first two only, and it is not confirmed that either was what happened
+on staging. Not yet re-tested on staging with two accounts. Still OPEN:
+everything listed in the 17 Sep update, plus BUG-038, SEC-004, SEC-005 and
+UX-035, found on the way.
+
+LIVE-MATCH CONSEQUENCE, now that the gate works: a tracker whose phone dies does
+NOT leave active_tracker_id NULL — only claim_match_tracking and
+release_match_tracking write it, and nothing clears a stale tracker — so the
+other coach is gated as `other`. Take Control is refused by the server until the
+dead tracker's last_activity_at is over 5 minutes old, so they cannot pause or end
+a period for up to 5 minutes. The graded-friction design above (~2 minutes) would
+shorten this; until then it is the price of the gate. The earlier comment that
+`nobody` is "the recovery path for a tracker's phone dying" was wrong and has been
+corrected in the code.
+
+**Update — 21 Sep 2026, branch `fix/tracker-ui-gating` (claim on start; not yet
+merged, PR TBD):** staging showed a match can be in_progress with
+active_tracker_id NULL, because pressing Start Period never claimed tracking. The
+gate then correctly read `nobody` and permitted everyone, which left it inert in
+the normal flow. Start Period now claims tracking for whoever presses it, when the
+holder is `nobody` (not when it is already `self`, which would reset
+tracking_started_at), and starts the period only if the claim succeeded. The
+no-starters check still runs first, so a start that will not proceed takes no
+ownership. A refused claim (someone else active in the last 5 minutes) or a
+failed one starts nothing and shows a "Period not started" toast; a refusal also
+brings local state in line so the gate reads `other` and the banner names a
+tracker. Nothing claims on page load, so a never-started or released match still
+reads `nobody` and stays actionable by every official. SEC-005 (gating the
+confirm, not just the trigger) was done in the same branch.
+
+The claim's tracker flip is what shaped the design: it triggers a whole-page
+reload that unmounts the controls, and a timer reload, both of which would
+overlap the period insert (BUG-039). Both are skipped, for this flow only, by a
+parent-owned startInFlightRef held from press until the writes finish; the same
+ref stops a double-tap issuing a second period insert. Still OPEN: Resume Period
+and Start Penalty Shootout do not claim (BUG-040), plus everything listed in the
+17 and 20 Sep updates. Not yet exercised on staging with two accounts.
 
 Relates to BUG-013 (heartbeat liveness), BUG-034, BUG-037. Blocks: full fix for
 BUG-034 and BUG-037's root cause, though both have narrower standalone fixes.
@@ -2340,6 +2537,30 @@ Full spec, contrast pairs and regeneration steps in `docs/brand/BRAND.md`.
 ---
 
 ## UX
+
+### UX-035 — Banner offers "Take Control" while the tracker read is unresolved, and a failed read has no way out `OPEN`
+**Found:** 20 Sep 2026, while fixing the ownership gate (`fix/tracker-ui-gating`).
+
+The ownership gate now separates `unknown` (the first read of
+fixtures.active_tracker_id is still in flight, or failed) from `nobody`, and
+EnhancedMatchControls renders disabled with "Checking who is tracking this
+match…". MatchLockingBanner was deliberately left alone on that branch and still
+reads `matchTracker == null` as "nobody": on a live match it shows "This match
+is available for tracking" with an amber Take Control button during that window.
+That is the same flash of wrong state the controls no longer have, and an
+invitation to claim a match that may be held. It also means the two "Take
+Control" banners (another user holds it / available) differ only by headline
+and colour, so they are easy to mistake for each other on a phone.
+
+Separately, the unresolved state clears only when a read succeeds.
+checkInitialStatus runs once per mount, so a failed read leaves the controls
+disabled until the page is reloaded (the on-screen note says so).
+
+FIX: pass `trackerHolder` to the banner and render a neutral, no-claim-button
+state for `unknown`; add a retry, or re-read on the visibilitychange the timer
+already uses (see SEC-004).
+
+Relates to SEC-003, SEC-004.
 
 ### UX-034 — No indication when a period over-runs its planned duration `OPEN`
 **Found:** 13 Sep 2026.
