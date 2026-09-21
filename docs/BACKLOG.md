@@ -146,7 +146,7 @@ FIX: group by (player_id, period_id). Derive on-time from the earliest period's
 row and off-time from the latest, or display per-period rows. Derive "starter"
 only from the earliest period's row. total_minutes summing is already correct.
 
-### BUG-035 — Close-interval update is unscoped `OPEN`
+### BUG-035 — Close-interval update is unscoped `DONE 16 Sep 2026`
 **Found:** 13 Sep 2026.
 
 Both the period-transition block (EnhancedMatchTracker.tsx:753-761) and
@@ -162,9 +162,14 @@ plausible rather than obviously broken.
 
 FIX: scope the close by the specific row id read immediately beforehand.
 
+**Done — 16 Sep 2026, `fix/starter-row-duplication` (PR #110):** fixed on the
+same branch as BUG-034. Both close-interval updates — the period-transition block
+and submitSubstitutions.applyPair — are now scoped by row id rather than a bare
+is_active filter, so a close can no longer reach rows it did not read.
+
 Relates to BUG-034.
 
-### BUG-034 — Duplicate starter rows inflate playing time `OPEN`
+### BUG-034 — Duplicate starter rows inflate playing time `DONE 16 Sep 2026`
 **Found:** 13 Sep 2026. Repaired in production 13 Sep (5 rows deleted).
 
 Preston G accrued six identical period-2 rows (is_starter=true, 0→12) in one
@@ -193,6 +198,13 @@ tab or device open on the same match writes independently. See SEC-003.
 
 FIX: route the period-transition insert through decideMissingStarterLog, as its
 two siblings already do.
+
+**Done — 16 Sep 2026, `fix/starter-row-duplication` (PR #110):** the
+period-transition insert now goes through decideMissingStarterLog like its two
+siblings, so a closed row is seen as "a row exists" and nothing is re-inserted.
+The production match of 13 Sep was repaired earlier by deleting the five
+duplicate rows (see above). Not fixed here: the missing ownership check on the
+background effects that made a second tab write at all — that is SEC-003.
 
 Relates to BUG-011, SEC-003. Blocks: DEBT-037.
 
@@ -1258,6 +1270,24 @@ Relates to UX-001.
 
 ## Technical debt
 
+### DEBT-040 — Orphaned edge functions deployed on production `OPEN`
+**Found:** 18 Sep 2026.
+
+Two functions are deployed and ACTIVE on production, last updated 3 Jun 2026,
+from the Lovable era:
+- `auth-email-hook` (v44) is not registered as an auth hook, so nothing calls it.
+  It runs with `verify_jwt = false`, which makes it a publicly reachable
+  endpoint. If it were ever registered it would silently stop auth email (see
+  ENV-010).
+- `send-email` (v4) is not registered either. Production has no `RESEND_API_KEY`
+  set, so it could not send even if called. It also sends from Resend's sandbox
+  address.
+
+Production email runs entirely on Custom SMTP. Delete both functions, and decide
+whether to remove their source from the repo too.
+
+Relates to ENV-010, ENV-007, DEBT-016, DEBT-019, DEBT-020.
+
 ### DEBT-039 — floor+1 applied to the sum, not composed `OPEN`
 **Found:** 13 Sep 2026.
 
@@ -1992,6 +2022,69 @@ ref stops a double-tap issuing a second period insert. Still OPEN: Resume Period
 and Start Penalty Shootout do not claim (BUG-040), plus everything listed in the
 17 and 20 Sep updates. Not yet exercised on staging with two accounts.
 
+**Status — 21 Sep 2026: client-side half DONE, server-side half OPEN.**
+`fix/tracker-ui-gating` merged 21 Sep. The client side is finished: a fail-closed
+ownership gate (`trackerHolder`), controls disabled for non-trackers, live
+displacement detection with a persistent notice, claim-on-start, and
+confirmations gated at the point of action (SEC-005). The server side has not
+been started. The server still accepts match writes from any club official, so
+the gate is a courtesy to a well-behaved client and nothing more. Any
+server-side check must exempt the Match Data Editor and retrospective entry,
+which legitimately write to matches nobody is tracking.
+
+**Amendment A — displaced clients do not know (confirmed in testing, 16 Sep
+2026).** After control was taken, the displaced client kept believing it was the
+tracker until it was refreshed. The realtime handlers only logged their payloads
+and never updated state, so the displaced coach could keep recording into a match
+they no longer controlled. (The 17 Sep update above made the fixtures handler
+update state and show a persistent notice; that narrows the window without
+closing it, since a missed UPDATE — SEC-004 — leaves the same stale belief.) The
+tester also reported that the displaced client's heartbeat kept writing
+last_activity_at, so a ghost tracker kept defending its own claim. CAVEAT, from
+reading the baseline on 21 Sep: update_tracking_activity is scoped `WHERE
+active_tracker_id = auth.uid()`, so a displaced client's heartbeat should be a
+no-op on the server, and the client discards the boolean it returns (the same
+pattern as BUG-038). The client does keep SENDING heartbeats on its stale belief;
+whether they land is unverified. Check last_activity_at against a displaced
+client before relying on either reading.
+
+The point stands either way. UI gating alone cannot fix this, because a client
+cannot gate on knowledge it does not have. Server-side enforcement is the only
+layer that holds, and it tells the displaced client for free, through the
+rejected write.
+
+**Amendment B — Take Control offers something the server then refuses (tested
+20 Sep 2026).** claim_match_tracking rejects any takeover while the current
+tracker was active in the last five minutes. For that window the button presents
+itself, is pressed, and returns a toast whose title and body say the same thing —
+"Match Already Being Tracked" over "Match is already being tracked" (the title is
+hard-coded in useRealtimeMatchSync's claim handler; the body is the RPC's error
+string). It says nothing about who holds the match, how recently they were
+active, or when a takeover will work. The blanket refusal gets the phone-died
+case right and the deliberate handover wrong, and handover happens every week.
+Replace it with friction proportional to how active the tracker is:
+
+- recently active: an explicit confirmation that names them ("Dave was active
+  20 seconds ago — taking over will stop his recording");
+- gone quiet: a simple takeover;
+- in both cases, a prominent notice to the coach who lost control.
+
+The button must never offer what it will refuse. This is the concrete shape of
+the graded-friction design in this entry's "DESIGN — claim and release" section
+(which proposes ~2 minutes; the server's refusal window is 5); the RPC already returns
+current_tracker and tracking_started_at on the refusal path (UX-012).
+
+**Amendment C — a third privilege concept nobody has reviewed.** The functions
+is_super_admin and set_super_admin exist, and "what roles exist" is not just
+admin, official and viewer. Include them in the server-side investigation. Read
+on 21 Sep, not reviewed: is_super_admin() reads profiles.is_super_admin and
+requires account_status = 'approved'; set_super_admin is SECURITY DEFINER and
+lets ANY caller promote any user while no super admin exists (its first-user
+branch), which is the bootstrap path behind ONBOARD-001. Also check who can
+UPDATE profiles.is_super_admin and profiles.account_status directly — see
+ONBOARD-006, where the only way to admit a user today is a manual update of the
+latter.
+
 Relates to BUG-013 (heartbeat liveness), BUG-034, BUG-037. Blocks: full fix for
 BUG-034 and BUG-037's root cause, though both have narrower standalone fixes.
 
@@ -2039,6 +2132,75 @@ path — DEBT-012 is DONE, so this can be picked up directly.
 
 ## Environments & delivery
 
+### ENV-013 — There is no deployed staging environment `OPEN`
+**Found:** 18 Sep 2026.
+
+"Staging" is `npm run dev:staging`: Vite on localhost:8080 against the staging
+Supabase project. No hosted staging build exists.
+
+What follows from that:
+- A staging magic link only works on the machine running the dev server.
+- Coaches can never try a change before it reaches production.
+- Testing on two devices needs the LAN address (Vite binds to `::`, so
+  `http://<machine-ip>:8080` works), and that address must be added to the
+  staging redirect allow-list and changes whenever the router reassigns it.
+
+Fine for one developer. It becomes a limitation as soon as anyone else needs to
+test. Consider a fixed-domain staging deployment on Vercel, pointed at the
+staging Supabase project.
+
+Relates to ENV-001, ENV-002, ENV-011, ENV-012.
+
+### ENV-012 — Six-digit code rejected on staging `OPEN`
+**Found:** 19-20 Sep 2026.
+
+After ENV-011, staging emails arrive with both a link and a six-digit code. The
+link works. The code is rejected as "invalid or outdated". Production's code
+works, so this is almost certainly a staging configuration gap.
+
+Unverified candidates, most likely first:
+- Staging's OTP expiry and length settings (Authentication → Providers → Email)
+  were never compared with production's during ENV-011.
+- The copied template may render a different variable from production's.
+- Email prefetching may consume the token before it is used.
+
+Current workaround: copy the link address from the email and paste it into the
+browser you want to sign in with.
+
+This matters beyond testing. The code is how a coach signs in on a phone, where
+following a link into the right browser is the harder option.
+
+Relates to ENV-011, ONBOARD-002, ONBOARD-003.
+
+### ENV-011 — Staging and production auth flows differed `DONE 19 Sep 2026`
+**Found:** 18 Sep 2026.
+
+Staging could not send sign-in emails the way production does, so the login and
+onboarding flow could only be tested on production.
+
+Investigation found production's auth email is delivered by the dashboard's
+Custom SMTP setting (Resend), not by any edge function. Staging had no SMTP, no
+functions and no secrets. There is no auth configuration in config.toml and no
+environment-specific auth code, so this was configuration only.
+
+Resolved on the staging project (`xszbopufqchbfbqwvqbb`):
+- Custom SMTP set up via Resend, using a SEPARATE staging API key so it can be
+  revoked on its own.
+- The sender is `staging@notify.sidelineassist.club`, named "SideLine (Staging)",
+  so a staging email cannot be mistaken for a real one.
+- Site URL and Redirect URLs set to `http://localhost:8080`. Staging is
+  local-only (see ENV-013).
+- Production's Magic Link template copied across. Staging had Supabase's default
+  template, which contains only the link and no `{{ .Token }}`, so no six-digit
+  code appeared.
+
+The previous Site URL value was not captured. If it named the production domain,
+a magic link from staging could have signed someone into production.
+
+Relates to ENV-004 and ENV-009, whose fix shape (deploy the edge functions and
+register the hook) this supersedes — and which ENV-010's 21 Sep update warns
+against. Also ENV-007, ENV-012, ENV-013.
+
 ### ENV-010 — Auth emails use Supabase's default templates, not the app's branded ones `OPEN`
 Auth email now routes through Resend via Custom SMTP (ENV-007), which means Supabase's plain
 default templates are sent. The branded templates in
@@ -2053,6 +2215,20 @@ Deliberately not done before 12 Sep 2026: plain-but-working email beats branded-
 days out. Do it before any rollout to parents, where a club email needs to look legitimate.
 
 Relates to ENV-007, DEBT-028.
+
+**Update — 21 Sep 2026: the hook is a dead end, not just unregistered, and
+registering it would stop all auth email.** The "To adopt them" steps above are a
+trap; do not follow them. auth-email-hook does not send email. It writes into
+`email_queue` (via the `enqueue_email` RPC), and nothing drains that table: the
+dispatcher its own comment names (`process-email-queue`, index.ts:237) does not
+exist in the repo, and the Lovable-side worker that used to run it was cancelled.
+Registering the hook as a Send Email hook would make it take over from Custom
+SMTP and queue every sign-in, sign-up and invite email without delivering any of
+them. Anyone who thinks "there's already an email hook, let's just switch it on"
+causes an outage in the sign-in path. Branded templates need a different route
+(DESIGN-009); the orphaned deployed functions are DEBT-040.
+
+Also relates to DEBT-016, DEBT-019, DEBT-040, DESIGN-009.
 
 ### ENV-009 — Staging cannot exercise any email flow, and locked out its only user `OPEN`
 **Found:** 8 Sep 2026, trying to sign in to staging to test on a phone.
@@ -2253,6 +2429,49 @@ on `match_events` → web push.
 
 ## Onboarding
 
+### ONBOARD-006 — The approval gate cannot be cleared from the app `OPEN`
+**Found:** 19 Sep 2026.
+
+New sign-ups land on an "Account Pending Approval" screen and cannot be let
+through from the app.
+
+WHY: the gate and the approvals page read different tables.
+- PendingApproval.tsx checks profiles.account_status and only lets a user through
+  when it reads 'approved'.
+- AdminApprovals.tsx (/admin/approvals) lists rows from pending_registrations and
+  club_members.
+
+Nothing creates a pending_registrations row on sign-up. So the approvals page is
+empty while users sit blocked, and approve_user_registration has nothing to act
+on. The only way to let a user in today is a manual UPDATE of
+profiles.account_status.
+
+ALSO WRONG ON THAT SCREEN, seen by every new user:
+- /admin/approvals is not linked from anywhere in the navigation.
+- The screen says approval "usually takes less than 24 hours" and that an email
+  will follow. Nothing sends that email, and no admin is told anyone is waiting.
+- The footer reads "Questions? Contact us at support@sideline.app" — an address
+  on a domain we don't own, left over from the Lovable era.
+
+THE BIGGER PROBLEM: getting a coach into the app takes THREE separate steps —
+email confirmation, admin approval, and club membership. None of them tells the
+user or the admin what comes next, and each one fails silently. An approved user
+with no club lands on an empty dashboard with no explanation. Map the whole path
+before changing any single step.
+
+DECIDE WHETHER THE GATE SHOULD EXIST. In a grassroots club the admin is usually
+the person who just asked the coach to sign up, so manual approval adds a wait
+without adding any safety. Options:
+- remove it and default account_status to 'approved';
+- auto-approve anyone accepting a valid club invitation;
+- keep it and make it work: one source of truth, an admin notification, a
+  pending count in the navigation, and the email the screen promises.
+
+Check production for users stuck in 'pending' before deciding.
+
+Relates to ONBOARD-001, DEBT-028, SEC-003 (amendment C: who may write
+profiles.account_status).
+
 ### ONBOARD-005 — Registration gives no signal when the address is already registered `DONE 10 Sep 2026`
 **Found:** 10 Sep 2026 during onboarding testing on production: registering with an existing
 address showed the success screen and sent no email, with nothing to indicate why.
@@ -2392,6 +2611,22 @@ super admin).
 ---
 
 ## Design
+
+### DESIGN-009 — Auth email templates are outside the design system `OPEN`
+**Found:** 19 Sep 2026.
+
+The sign-in, sign-up and invite emails are Supabase templates with minimal
+customisation. They are the first thing a new coach sees, before the app itself,
+and they sit completely outside the Floodlight work. The repo holds branded React
+Email templates in auth-email-hook, but they are unused because delivery is
+through Custom SMTP (see ENV-010).
+
+Bring the templates into the design pass: Floodlight palette, the club mark, and
+wording consistent with the app. Keep the six-digit code prominent — it is the
+part a coach on a phone actually needs. Apply to production and staging together
+so they don't drift apart again (see ENV-011).
+
+Relates to ENV-010, ENV-012, DESIGN-006, DESIGN-004.
 
 ### DESIGN-008 — Toast strategy: success silent, failure loud `OPEN`
 **Found:** 11 Sep 2026.
