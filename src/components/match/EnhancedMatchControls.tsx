@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState, type MutableRefObject } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +10,7 @@ import { Play, Pause, Square, Plus, Timer, RefreshCw, AlertTriangle, Target } fr
 import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { canActOnMatch, type TrackerHolder } from '@/lib/trackerGate';
 
 // Floodlight — see docs/brand/BRAND.md. Scoped locally to this component, per the
 // precedent set by the header/tile-grid branches (DESIGN-002 covers the app-wide
@@ -44,6 +45,24 @@ interface EnhancedMatchControlsProps {
     isRunning?: boolean
   ) => void;
   forceRefresh?: boolean;
+  // Ownership gate (client-side only — see SEC-003 for the still-open server-side
+  // half). Who holds fixtures.active_tracker_id, from useRealtimeMatchSync, with
+  // "not known yet" kept distinct from "nobody" (see lib/trackerGate.ts). Required on
+  // purpose: an omitted prop must not be able to mean "permitted".
+  trackerHolder: TrackerHolder;
+  // Claim-on-start. Start Period on a match nobody holds claims tracking for the person
+  // pressing it first, and starts only if the claim succeeded — so a started match is
+  // never one the starter was refused ownership of. Resolves false if the claim was
+  // refused or failed; the claim path has already told the user why. Required for the
+  // same reason as trackerHolder: an omitted prop must not mean "start without claiming".
+  onClaimTracking: () => Promise<boolean>;
+  // Owned by the parent, held true by Start Period from press until its writes are done.
+  // Claiming flips isActiveTracker, which triggers two refreshes that must NOT overlap
+  // the period insert: the parent's loadMatchData (setLoading(true) swaps the whole page
+  // for a skeleton, unmounting this component mid-write) and this component's
+  // forceRefresh reload (can read the new period next to a stale current_period_id).
+  // Both skip while this is set. Doubles as the re-entry guard against a double-tap.
+  startInFlightRef: MutableRefObject<boolean>;
   // UX-010 guard: ending a period or the match with staged substitutions still
   // pending would silently lose them and leave the on-screen pitch out of sync
   // with the real one. The parent owns the pending stack; it passes the count and
@@ -59,10 +78,31 @@ export function EnhancedMatchControls({
   fixtureId,
   onTimerUpdate,
   forceRefresh,
+  trackerHolder,
+  onClaimTracking,
+  startInFlightRef,
   pendingSubCount = 0,
   onSubmitPendingSubs,
   onDiscardPendingSubs,
 }: EnhancedMatchControlsProps) {
+  // Fail closed: act only when we positively know this client is the tracker, or
+  // positively know active_tracker_id IS NULL. `unknown` (initial read still in
+  // flight, or it failed) blocks — controls render disabled until it is known, never
+  // enabled-then-disabled.
+  //
+  // CRITICAL — the permissive case: if nobody holds the match (`nobody`: never
+  // claimed, or the tracker released), any club official must still be able to act.
+  // It mirrors restart_match, which already allows action when active_tracker_id IS
+  // NULL. Gating this out would strand a coach mid-game. (A tracker whose phone dies
+  // is `other`, not `nobody` — the way out there is Take Control; see trackerGate.ts.)
+  const canAct = canActOnMatch(trackerHolder);
+  const trackerPending = trackerHolder === 'unknown';
+
+  // The latest canAct, for checks made where the render closure is stale: inside a
+  // confirmation dialog that was opened while permitted, or after an await. The
+  // disabled trigger only stops a dialog OPENING — it does nothing to one already open.
+  const canActRef = useRef(canAct);
+  canActRef.current = canAct;
 
   const {
     timerState,
@@ -105,31 +145,91 @@ export function EnhancedMatchControls({
     onTimerUpdate,
   ]);
 
-  // Force refresh when control is taken
+  // Force refresh when control is taken. Skipped while Start Period is claiming and
+  // writing — that claim is what flipped forceRefresh, and this reload reads
+  // match_periods then fixtures, so overlapping the period insert can leave the screen
+  // showing "not started" over a running period. startNewPeriod ends with its own
+  // resync, so nothing is lost by skipping.
   useEffect(() => {
-    if (forceRefresh) {
+    if (forceRefresh && !startInFlightRef.current) {
       loadMatchState();
     }
-  }, [forceRefresh, loadMatchState]);
+  }, [forceRefresh, loadMatchState, startInFlightRef]);
+
+  // Drives the "Starting…" label and disables the button while claim + start run, so a
+  // slow claim on touchline signal doesn't look like a button that did nothing.
+  const [starting, setStarting] = useState(false);
 
   const handleStartNewPeriod = async () => {
-    // Require at least one starter (is_on_field=true) before starting a period
+    // Re-entry guard. A second tap during the claim round trip would otherwise issue a
+    // second period insert (both would compute the same next period number).
+    if (startInFlightRef.current) return;
+    startInFlightRef.current = true;
+    setStarting(true);
     try {
-      const { data: onField } = await supabase
-        .from('player_match_status')
-        .select('player_id')
-        .eq('fixture_id', fixtureId)
-        .eq('is_on_field', true);
-      if (!onField || onField.length === 0) {
-        toast({
-          title: 'No starters set',
-          description: 'Select your starting players (on-field) before starting the period.',
-          variant: 'destructive'
-        });
-        return;
+      // Require at least one starter (is_on_field=true) before starting a period.
+      // Runs BEFORE the claim: a start that will not proceed must not take ownership.
+      try {
+        const { data: onField } = await supabase
+          .from('player_match_status')
+          .select('player_id')
+          .eq('fixture_id', fixtureId)
+          .eq('is_on_field', true);
+        if (!onField || onField.length === 0) {
+          toast({
+            title: 'No starters set',
+            description: 'Select your starting players (on-field) before starting the period.',
+            variant: 'destructive'
+          });
+          return;
+        }
+      } catch {}
+
+      // Claim-on-start. Only when nobody holds the match: `self` already owns it (a
+      // re-claim would reset tracking_started_at for nothing) and `other`/`unknown`
+      // never reach here — their button is disabled. If the claim is refused (someone
+      // else holds it and was active in the last 5 minutes) or fails, do NOT start.
+      // claimMatchTracking has already toasted the specific reason and, on a refusal,
+      // pulled local state in line so this button disables and the banner names the
+      // tracker. The toast below replaces that one (TOAST_LIMIT is 1), so it has to say
+      // on its own that nothing started — and be true for a network failure too, where
+      // the banner will not have changed. If the claim succeeds but the start then
+      // fails, the user keeps the claim and can retry — holding a match with no period
+      // started is harmless.
+      if (trackerHolder === 'nobody') {
+        const claimed = await onClaimTracking();
+        if (!claimed) {
+          toast({
+            title: 'Period not started',
+            description:
+              "You couldn't take control of this match, so nothing was started. " +
+              'If someone else is tracking it, the banner above says so.',
+            variant: 'destructive',
+          });
+          return;
+        }
       }
-    } catch {}
-    await startNewPeriod();
+
+      await startNewPeriod();
+    } finally {
+      startInFlightRef.current = false;
+      setStarting(false);
+    }
+  };
+
+  // The confirm action inside a dialog, and anything after an await, is a point of
+  // action the disabled trigger cannot protect. Called when the latest canAct says the
+  // caller no longer holds the match. `alreadyDone` says what did happen first, when
+  // something did (a submit that committed before ownership was lost).
+  const refuseNotTracker = (what: string, alreadyDone?: string) => {
+    toast({
+      title: 'Not applied — you are not the active tracker',
+      description:
+        `${alreadyDone ? `${alreadyDone} ` : ''}You are not the active tracker of this match, ` +
+        `so ${what} was not applied.${alreadyDone ? '' : ' Nothing was changed.'} ` +
+        'Use Take Control if you need to act.',
+      variant: 'destructive',
+    });
   };
 
   // Enhanced button logic to handle all resume scenarios
@@ -156,7 +256,15 @@ export function EnhancedMatchControls({
   const [subGuard, setSubGuard] = useState<null | 'period' | 'match'>(null);
   const [guardBusy, setGuardBusy] = useState(false);
 
+  // requestEndPeriod / requestEndMatch are the confirm actions of dialogs that were
+  // opened while permitted; ownership may have changed since (a takeover, or the
+  // displaced notice). Radix closes the dialog when its action is clicked, so refusing
+  // here closes it — with the toast as the explanation — rather than proceeding.
   const requestEndPeriod = () => {
+    if (!canActRef.current) {
+      refuseNotTracker('ending the period');
+      return;
+    }
     if (pendingSubCount > 0) {
       setSubGuard('period');
       return;
@@ -165,6 +273,10 @@ export function EnhancedMatchControls({
   };
 
   const requestEndMatch = () => {
+    if (!canActRef.current) {
+      refuseNotTracker('ending the match');
+      return;
+    }
     if (pendingSubCount > 0) {
       setSubGuard('match');
       return;
@@ -175,6 +287,14 @@ export function EnhancedMatchControls({
   const runGuard = async (mode: 'submit' | 'discard') => {
     const target = subGuard;
     if (!target) return;
+    const what = target === 'period' ? 'ending the period' : 'ending the match';
+    // This dialog is controlled, so it does not close itself: close it explicitly. Checked
+    // before anything is written — a displaced coach must not commit substitutions.
+    if (!canActRef.current) {
+      setSubGuard(null);
+      refuseNotTracker(what);
+      return;
+    }
     setGuardBusy(true);
     try {
       if (mode === 'submit') {
@@ -190,6 +310,18 @@ export function EnhancedMatchControls({
     }
     setGuardBusy(false);
     setSubGuard(null);
+    // Re-check at the point of action: the submit above is async, and ownership can
+    // change while it is in flight. Say what did happen, because the substitutions
+    // were committed (or dropped) even though the end was refused.
+    if (!canActRef.current) {
+      refuseNotTracker(
+        what,
+        mode === 'submit'
+          ? 'Your substitutions were submitted before you lost control.'
+          : 'Your pending substitutions were discarded before you lost control.',
+      );
+      return;
+    }
     if (target === 'period') {
       endCurrentPeriod();
     } else {
@@ -270,11 +402,12 @@ export function EnhancedMatchControls({
           {canStartPeriod && (
             <Button
               onClick={handleStartNewPeriod}
+              disabled={!canAct || starting}
               className="w-full flex items-center justify-center gap-2 h-14 text-base font-semibold border-0 hover:brightness-95"
               style={{ backgroundColor: FLOODLIGHT.amber, color: FLOODLIGHT.navy }}
             >
               <Play className="h-5 w-5" />
-              Start Period
+              {starting ? 'Starting…' : 'Start Period'}
             </Button>
           )}
 
@@ -284,6 +417,7 @@ export function EnhancedMatchControls({
             <Button
               onClick={pauseTimer}
               variant="outline"
+              disabled={!canAct}
               className="w-full flex items-center justify-center gap-2 h-12 text-base border hover:brightness-95"
               style={{ backgroundColor: FLOODLIGHT.card, color: FLOODLIGHT.navy, borderColor: FLOODLIGHT.edge }}
             >
@@ -296,6 +430,7 @@ export function EnhancedMatchControls({
           {canResumePeriod && (
             <Button
               onClick={resumeTimer}
+              disabled={!canAct}
               className="w-full flex items-center justify-center gap-2 h-14 text-base font-semibold border-0 hover:brightness-95"
               style={{ backgroundColor: FLOODLIGHT.amber, color: FLOODLIGHT.navy }}
             >
@@ -308,6 +443,7 @@ export function EnhancedMatchControls({
           {canStartPenaltyShootout && (
             <Button
               onClick={startPenaltyShootout}
+              disabled={!canAct}
               className="w-full flex items-center justify-center gap-2 h-12 text-base font-semibold border-0 hover:brightness-95"
               style={{ backgroundColor: FLOODLIGHT.pitchBlue, color: '#FFFFFF' }}
             >
@@ -324,6 +460,7 @@ export function EnhancedMatchControls({
               <AlertDialogTrigger asChild>
                 <Button
                   variant="outline"
+                  disabled={!canAct}
                   className="w-full flex items-center justify-center gap-2 h-12 border-2 hover:brightness-95"
                   style={{ borderColor: FLOODLIGHT.navy, color: FLOODLIGHT.navy, backgroundColor: FLOODLIGHT.card }}
                 >
@@ -353,7 +490,7 @@ export function EnhancedMatchControls({
             <AlertDialogTrigger asChild>
               <Button
                 variant="destructive"
-                disabled={!canEndMatch}
+                disabled={!canEndMatch || !canAct}
                 className="w-full flex items-center justify-center gap-2 h-12 text-base font-semibold mt-2"
               >
                 <Square className="h-5 w-5" />
@@ -437,6 +574,20 @@ export function EnhancedMatchControls({
             </AlertDialogContent>
           </AlertDialog>
         </div>
+
+        {/* Shown while the tracker read is in flight or has failed — the buttons above
+            are already disabled. Sits below them, not above, so the tappable controls
+            don't shift when it clears. "Reload" covers the failed-read case, where
+            this never clears on its own. */}
+        {trackerPending && (
+          <p
+            role="status"
+            className="text-sm text-center"
+            style={{ color: FLOODLIGHT.slate }}
+          >
+            Checking who is tracking this match… If this doesn't clear, reload the page.
+          </p>
+        )}
 
         {/* Instructions */}
         {timerState.matchStatus === 'not_started' && (

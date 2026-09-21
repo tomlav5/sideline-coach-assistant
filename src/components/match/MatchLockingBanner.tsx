@@ -31,6 +31,15 @@ export function MatchLockingBanner({
   isClaimingMatch,
   matchStatus
 }: MatchLockingBannerProps) {
+  // fix/tracker-ui-gating: EnhancedMatchControls now disables Start/Pause/Resume/
+  // End Period/Start Penalty Shootout/End Match whenever another user holds
+  // active_tracker_id. This banner sits directly above those controls, so it is
+  // the "Take Control" affordance for that disabled state — every disabled
+  // state must have one adjacent (never block an action without showing the way
+  // to unblock it). The graded-friction takeover UX (confirm if the current
+  // tracker was active moments ago) is SEC-003's server-side work, deliberately
+  // not attempted here; this is a plain, immediate takeover, same as the
+  // unclaimed-match case below.
   // Don't show banner for completed matches
   if (matchStatus === 'completed') {
     return null;
@@ -106,9 +115,16 @@ export function MatchLockingBanner({
               )}
             </div>
           </div>
-          <span className="text-sm text-muted-foreground">
-            You can view updates in real-time
-          </span>
+          <Button
+            onClick={onClaimTracking}
+            disabled={isClaimingMatch}
+            variant="outline"
+            className="w-full sm:w-auto h-11 hover:brightness-95"
+            style={{ borderColor: FLOODLIGHT.pitchBlue, color: FLOODLIGHT.pitchBlue, backgroundColor: FLOODLIGHT.card }}
+          >
+            <Lock className="h-4 w-4 mr-1" />
+            {isClaimingMatch ? 'Taking over...' : 'Take Control'}
+          </Button>
         </AlertDescription>
       </Alert>
     );

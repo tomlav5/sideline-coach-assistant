@@ -182,10 +182,16 @@ export default function EnhancedMatchTracker() {
   // Real-time sync and match locking
   const {
     matchTracker,
+    trackerHolder,
     claimMatchTracking,
     releaseMatchTracking,
-    isClaimingMatch
+    isClaimingMatch,
+    displacedNotice
   } = useRealtimeMatchSync(fixtureId);
+  // True from the moment Start Period is pressed until its claim + writes are done (see
+  // EnhancedMatchControls). Lives here, not in the controls, because the controls can be
+  // unmounted by loadMatchData's skeleton — this component is what survives that.
+  const startInFlightRef = useRef(false);
   useEffect(() => {
     if (fixtureId) {
       loadMatchData();
@@ -1001,7 +1007,12 @@ export default function EnhancedMatchTracker() {
 
   // Refresh data when real-time updates are received
   useEffect(() => {
-    if (matchTracker) {
+    // Skipped while Start Period is claiming and writing: loadMatchData does
+    // setLoading(true), which swaps this whole page for the skeleton and unmounts the
+    // controls, so the claim's own tracker flip would tear the controls down mid-insert
+    // and the remounted timer could load a half-written period. A normal start (no
+    // claim) never reloads mid-write either.
+    if (matchTracker && !startInFlightRef.current) {
       // Refresh data when match tracking status changes
       loadMatchData();
     }
@@ -1083,6 +1094,20 @@ export default function EnhancedMatchTracker() {
       <div className="flex-1 min-h-0 overflow-y-auto" style={{ paddingBottom: footerPad }}>
         <div className="container mx-auto p-3 sm:p-4 space-y-4 max-w-4xl">
 
+      {/* Displaced-tracker notice — persistent (not a toast that disappears), so a
+          coach who has been taken over does not keep tapping a screen that has
+          silently stopped recording (SEC-003). Stays until this client is the
+          tracker again (reclaimed here, or another payload reports it as such). */}
+      {displacedNotice && (
+        <div
+          role="alert"
+          className="rounded-lg border-2 p-4 text-sm font-medium"
+          style={{ borderColor: '#B4232C', backgroundColor: 'rgba(180, 35, 44, 0.08)', color: '#B4232C' }}
+        >
+          {displacedNotice}
+        </div>
+      )}
+
       {/* Match Locking Banner */}
       <MatchLockingBanner
         matchTracker={matchTracker}
@@ -1097,6 +1122,9 @@ export default function EnhancedMatchTracker() {
         fixtureId={fixtureId!}
         onTimerUpdate={handleTimerUpdate}
         forceRefresh={matchTracker?.isActiveTracker}
+        trackerHolder={trackerHolder}
+        onClaimTracking={claimMatchTracking}
+        startInFlightRef={startInFlightRef}
         pendingSubCount={pendingStack.length}
         onSubmitPendingSubs={handleSubmitPendingSubs}
         onDiscardPendingSubs={discardPendingSubs}
