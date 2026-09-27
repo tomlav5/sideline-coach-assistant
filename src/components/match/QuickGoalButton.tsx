@@ -1,14 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { Goal, Check, Search } from 'lucide-react';
+import { Goal } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { PlayerPickerList } from '@/components/match/PlayerPickerList';
 
 // Floodlight — see docs/brand/BRAND.md. Scoped locally, per the precedent set by the
 // header/tile-grid branches (DESIGN-002 covers the app-wide token migration).
@@ -26,50 +24,40 @@ interface Player {
 }
 
 interface QuickGoalButtonProps {
-  players: Player[];
+  /**
+   * On-pitch and bench players, in the SAME order as the match screen's
+   * player tile grid (UX-029) — see EnhancedEventDialog's equivalent props,
+   * both fed from EnhancedMatchTracker's effectivePitch/effectiveBench so
+   * this dialog and that one always show the same players in the same order.
+   */
+  pitchPlayers: Player[];
+  benchPlayers: Player[];
   onGoalScored: (playerId: string, isOurTeam: boolean, assistPlayerId?: string, isPenalty?: boolean) => Promise<void>;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-const RECENT_SCORERS_KEY = 'sideline-recent-scorers';
-const MAX_RECENT_SCORERS = 5;
-
-export function QuickGoalButton({ players, onGoalScored, open, onOpenChange }: QuickGoalButtonProps) {
+export function QuickGoalButton({ pitchPlayers, benchPlayers, onGoalScored, open, onOpenChange }: QuickGoalButtonProps) {
   const isMobile = useIsMobile();
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [recentScorers, setRecentScorers] = useState<string[]>([]);
   const [isOurTeam, setIsOurTeam] = useState(true);
   const [selectedScorer, setSelectedScorer] = useState<string | null>(null);
   const [showAssistSelect, setShowAssistSelect] = useState(false);
   const [isPenalty, setIsPenalty] = useState(false);
 
-  // Load recent scorers from localStorage
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(RECENT_SCORERS_KEY);
-      if (stored) {
-        setRecentScorers(JSON.parse(stored));
-      }
-    } catch (error) {
-      console.error('Failed to load recent scorers:', error);
-    }
-  }, []);
-
-  // Save recent scorers to localStorage
-  const addRecentScorer = (playerId: string) => {
-    try {
-      const updated = [playerId, ...recentScorers.filter(id => id !== playerId)].slice(0, MAX_RECENT_SCORERS);
-      setRecentScorers(updated);
-      localStorage.setItem(RECENT_SCORERS_KEY, JSON.stringify(updated));
-    } catch (error) {
-      console.error('Failed to save recent scorer:', error);
-    }
-  };
+  // On-pitch first, then bench, both in tile-grid order (UX-029) — the
+  // scorer step's own groups, passed straight to PlayerPickerList.
+  const playerGroups = [
+    { label: 'On pitch', players: pitchPlayers },
+    { label: 'Bench', players: benchPlayers },
+  ];
 
   const handleScorerSelected = (playerId: string) => {
     setSelectedScorer(playerId);
+    // UX-033: don't carry a scorer-step search into the assist step — they
+    // share this one `searchTerm` field across the two steps.
+    setSearchTerm('');
     // Show assist selection for our team goals
     setShowAssistSelect(true);
   };
@@ -91,9 +79,6 @@ export function QuickGoalButton({ players, onGoalScored, open, onOpenChange }: Q
     setIsLoading(true);
     try {
       await onGoalScored(scorerId, isOurTeam, assistId || undefined, isPenalty);
-      if (isOurTeam) {
-        addRecentScorer(scorerId);
-      }
       resetDialog();
     } catch (error) {
       // Error handled by parent
@@ -111,77 +96,27 @@ export function QuickGoalButton({ players, onGoalScored, open, onOpenChange }: Q
     setIsPenalty(false);
   };
 
-  // Filter players based on search
-  const filteredPlayers = players.filter(p =>
-    `${p.first_name} ${p.last_name}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.jersey_number?.toString().includes(searchTerm)
-  );
-
-  // Get recent scorer player objects
-  const recentScorerPlayers = recentScorers
-    .map(id => players.find(p => p.id === id))
-    .filter((p): p is Player => !!p);
-
-  const getPlayerDisplay = (player: Player) => {
-    const number = player.jersey_number ? `#${player.jersey_number}` : '';
-    return `${number} ${player.first_name} ${player.last_name}`.trim();
-  };
-
-  // Filter out the scorer from assist selection
-  const assistPlayers = players.filter(p => p.id !== selectedScorer);
-  const filteredAssistPlayers = assistPlayers.filter(p =>
-    `${p.first_name} ${p.last_name}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.jersey_number?.toString().includes(searchTerm)
-  );
+  // UX-038: bench players stay selectable as the assist provider — a goal
+  // recorded a little late can have a real assister who has since come off —
+  // but grouped below On pitch, same as the scorer step, never presented as
+  // equally likely. Scorer excluded from both groups (UX-033): a player
+  // can't assist their own goal.
+  const assistGroups = [
+    { label: 'On pitch', players: pitchPlayers.filter(p => p.id !== selectedScorer) },
+    { label: 'Bench', players: benchPlayers.filter(p => p.id !== selectedScorer) },
+  ];
 
   const assistContent = (
-    <div className="space-y-4">
-      <div className="relative">
-        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search for assist provider..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-9"
-          autoFocus={!isMobile}
-        />
-      </div>
-
-      <ScrollArea className="h-[300px] border rounded-lg bg-muted/30">
-        <div className="space-y-1 p-3">
-          <Button
-            onClick={() => handleGoalScored(selectedScorer!, null)}
-            disabled={isLoading}
-            variant="outline"
-            className="w-full h-12 justify-start mb-3 border-dashed bg-background"
-          >
-            No Assist
-          </Button>
-          {filteredAssistPlayers.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">
-              No players found
-            </p>
-          ) : (
-            filteredAssistPlayers.map(player => (
-              <Button
-                key={player.id}
-                onClick={() => handleGoalScored(selectedScorer!, player.id)}
-                disabled={isLoading}
-                variant="ghost"
-                className="w-full h-12 justify-start font-normal bg-background hover:bg-accent"
-              >
-                {player.jersey_number && (
-                  <Badge variant="outline" className="mr-2">
-                    #{player.jersey_number}
-                  </Badge>
-                )}
-                {player.first_name} {player.last_name}
-              </Button>
-            ))
-          )}
-        </div>
-      </ScrollArea>
-    </div>
+    <PlayerPickerList
+      groups={assistGroups}
+      onSelect={(playerId) => handleGoalScored(selectedScorer!, playerId)}
+      searchValue={searchTerm}
+      onSearchChange={setSearchTerm}
+      searchPlaceholder="Search for assist provider..."
+      leadingAction={{ label: 'No Assist', onSelect: () => handleGoalScored(selectedScorer!, null) }}
+      disabled={isLoading}
+      autoFocusSearch={!isMobile}
+    />
   );
 
   const content = (
@@ -245,71 +180,25 @@ export function QuickGoalButton({ players, onGoalScored, open, onOpenChange }: Q
             />
             <Label htmlFor="penalty-our-team">Penalty Kick</Label>
           </div>
-          
-          {/* Recent Scorers - Quick Tap (only for our team) */}
-          {recentScorerPlayers.length > 0 && (
-            <div>
-              <p className="text-sm font-medium mb-2">Recent Scorers (Quick Tap)</p>
-              <div className="grid grid-cols-1 gap-2">
-                {recentScorerPlayers.map(player => (
-                  <Button
-                    key={player.id}
-                    onClick={() => handleScorerSelected(player.id)}
-                    disabled={isLoading}
-                    size="lg"
-                    variant="outline"
-                    className="h-14 text-left justify-start font-medium"
-                  >
-                    <Goal className="h-5 w-5 mr-3" style={{ color: FLOODLIGHT.slate }} />
-                    <span className="flex-1">{getPlayerDisplay(player)}</span>
-                    <Check className="h-4 w-4" style={{ color: FLOODLIGHT.slate }} />
-                  </Button>
-                ))}
-              </div>
-            </div>
-          )}
 
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search player name or number..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9"
-              autoFocus={!isMobile}
-            />
-          </div>
-
-          {/* All Players */}
+          {/* Goal Scorer — on-pitch players first, then bench, both in the
+              same order as the match screen's tile grid (UX-029). Replaces
+              the old "Recent Scorers (Quick Tap)" localStorage list, which
+              was global across matches and reshuffled after every goal.
+              Inline list (UX-036), not a combobox — a coach tapping the
+              amber Goal button touchline-side needs the names on screen in
+              one tap, not a picker that opens a second control. */}
           <div>
-            <p className="text-sm font-medium mb-2">All Players</p>
-            <ScrollArea className="h-[300px] border rounded-lg bg-muted/30">
-              <div className="space-y-1 p-3">
-                {filteredPlayers.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-8">
-                    No players found
-                  </p>
-                ) : (
-                  filteredPlayers.map(player => (
-                    <Button
-                      key={player.id}
-                      onClick={() => handleScorerSelected(player.id)}
-                      disabled={isLoading}
-                      variant="ghost"
-                      className="w-full h-12 justify-start font-normal bg-background hover:bg-accent"
-                    >
-                      {player.jersey_number && (
-                        <Badge variant="outline" className="mr-2">
-                          #{player.jersey_number}
-                        </Badge>
-                      )}
-                      {player.first_name} {player.last_name}
-                    </Button>
-                  ))
-                )}
-              </div>
-            </ScrollArea>
+            <p className="text-sm font-medium mb-2">Goal Scorer</p>
+            <PlayerPickerList
+              groups={playerGroups}
+              onSelect={handleScorerSelected}
+              searchValue={searchTerm}
+              onSearchChange={setSearchTerm}
+              emptyMessage="No active players available"
+              disabled={isLoading}
+              autoFocusSearch={!isMobile}
+            />
           </div>
         </>
       )}
@@ -321,7 +210,13 @@ export function QuickGoalButton({ players, onGoalScored, open, onOpenChange }: Q
       {/* Player Selection Dialog/Sheet */}
       {isMobile ? (
         <Sheet open={open} onOpenChange={(open) => !open && resetDialog()}>
-          <SheetContent side="bottom" className="h-[85dvh] p-4">
+          {/* overflow-auto: the inline picker list (UX-036) plus the team
+              toggle/penalty checkbox above it can run taller than 85dvh on a
+              small phone even though the list itself self-scrolls — without
+              this the excess was simply clipped, not reachable by scrolling
+              the sheet. Matches EnhancedEventDialog's Sheet, which already
+              has this. */}
+          <SheetContent side="bottom" className="h-[85dvh] p-4 overflow-auto">
             <SheetHeader>
               <SheetTitle>{showAssistSelect ? 'Who Assisted?' : 'Who Scored?'}</SheetTitle>
             </SheetHeader>

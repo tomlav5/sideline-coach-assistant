@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -39,7 +39,23 @@ interface EnhancedEventDialogProps {
   currentPeriod?: MatchPeriod;
   currentMinute: number;
   totalMatchMinute: number;
+  /**
+   * Flat squad list. Used as-is (with a DB fallback fetch if empty) when
+   * `pitchPlayers`/`benchPlayers` are omitted — the shape the post-match
+   * editor (`EventsTable.tsx`) passes, which has no live on-pitch/bench split.
+   */
   players: Player[];
+  /**
+   * On-pitch and bench players, in the SAME order as the match screen's
+   * player tile grid (UX-029) — both are just the committed lineup order,
+   * pitch/bench split, so reusing them here means the scorer list never
+   * invents a second ordering. When provided, these replace `players` for
+   * display: the scorer/assist pickers show "On pitch" then "Bench" as two
+   * ordered groups instead of one flat list, so a substituted-off scorer
+   * stays reachable (UX-029).
+   */
+  pitchPlayers?: Player[];
+  benchPlayers?: Player[];
   onEventRecorded?: () => void;
 }
 
@@ -51,6 +67,8 @@ export function EnhancedEventDialog({
   currentMinute,
   totalMatchMinute,
   players,
+  pitchPlayers,
+  benchPlayers,
   onEventRecorded
 }: EnhancedEventDialogProps) {
   const isMobile = useIsMobile();
@@ -92,29 +110,34 @@ export function EnhancedEventDialog({
           setResolvedPeriod(currentPeriod);
         }
 
-        // Use players passed from parent (active players) or fallback to all available players
-        setActivePlayers(players);
+        // The pitch/bench split (when the caller has one) drives display
+        // directly via playerGroups below — this flat-list resolution is
+        // only for callers without it (the post-match editor).
+        if (!pitchPlayers && !benchPlayers) {
+          // Use players passed from parent (active players) or fallback to all available players
+          setActivePlayers(players);
 
-        // Fallback: if empty, load team players from DB
-        if (!players || players.length === 0) {
-          try {
-            const { data: fx2 } = await supabase
-              .from('fixtures')
-              .select('team_id')
-              .eq('id', fixtureId)
-              .single();
-            if (fx2?.team_id) {
-              const { data: teamPlayers } = await supabase
-                .from('team_players')
-                .select('players(*)')
-                .eq('team_id', fx2.team_id);
-              const fallback = (teamPlayers || [])
-                .map((tp: any) => tp.players)
-                .filter(Boolean);
-              if (fallback.length > 0) setActivePlayers(fallback as any);
+          // Fallback: if empty, load team players from DB
+          if (!players || players.length === 0) {
+            try {
+              const { data: fx2 } = await supabase
+                .from('fixtures')
+                .select('team_id')
+                .eq('id', fixtureId)
+                .single();
+              if (fx2?.team_id) {
+                const { data: teamPlayers } = await supabase
+                  .from('team_players')
+                  .select('players(*)')
+                  .eq('team_id', fx2.team_id);
+                const fallback = (teamPlayers || [])
+                  .map((tp: any) => tp.players)
+                  .filter(Boolean);
+                if (fallback.length > 0) setActivePlayers(fallback as any);
+              }
+            } catch (err) {
+              console.warn('Fallback player load failed:', err);
             }
-          } catch (err) {
-            console.warn('Fallback player load failed:', err);
           }
         }
       } catch (e) {
@@ -127,7 +150,25 @@ export function EnhancedEventDialog({
     if (open) {
       loadContext();
     }
-  }, [open, fixtureId, currentPeriod, players]);
+  }, [open, fixtureId, currentPeriod, players, pitchPlayers, benchPlayers]);
+
+  // UX-029: when the caller supplies the live pitch/bench split, show it as
+  // two ordered groups — "On pitch" first, in tile-grid order, then "Bench"
+  // (also in tile-grid order) — rather than one flat, unstably-ordered list.
+  // `undefined` here tells PlayerSelector to fall back to its flat `players`
+  // prop, which is how the post-match editor (no pitch/bench state) keeps
+  // working unchanged.
+  const playerGroups = useMemo(() => {
+    if (!pitchPlayers && !benchPlayers) return undefined;
+    return [
+      { label: 'On pitch', players: pitchPlayers ?? [] },
+      { label: 'Bench', players: benchPlayers ?? [] },
+    ];
+  }, [pitchPlayers, benchPlayers]);
+
+  const availableCount = playerGroups
+    ? (pitchPlayers?.length ?? 0) + (benchPlayers?.length ?? 0)
+    : activePlayers.length;
 
   const handleSubmit = async () => {
     if (!resolvedPeriod) {
@@ -221,6 +262,7 @@ export function EnhancedEventDialog({
               <Label>Goal Scorer</Label>
               <PlayerSelector
                 players={activePlayers}
+                groups={playerGroups}
                 value={selectedPlayer}
                 onValueChange={(value) => {
                   setSelectedPlayer(value);
@@ -231,7 +273,7 @@ export function EnhancedEventDialog({
                 emptyMessage="No active players available"
               />
               <p className="text-xs text-muted-foreground mt-1">
-                {activePlayers.length} player{activePlayers.length !== 1 ? 's' : ''} available • Type to search
+                {availableCount} player{availableCount !== 1 ? 's' : ''} available • Type to search
               </p>
             </div>
           )}
@@ -242,6 +284,7 @@ export function EnhancedEventDialog({
               <Label>Assist Player (optional)</Label>
               <PlayerSelector
                 players={activePlayers}
+                groups={playerGroups}
                 value={assistPlayer === '' ? 'none' : assistPlayer}
                 onValueChange={(v) => setAssistPlayer(v === 'none' ? '' : v)}
                 placeholder="Select assist player"
