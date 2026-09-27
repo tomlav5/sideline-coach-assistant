@@ -102,11 +102,16 @@ October project.
 
 ## Corrections to the auto-generated sections above
 
-1. **Dead pages.** `src/pages/MatchTracker.tsx`, `OptimizedDashboard.tsx` and
-   `OptimizedReports.tsx` are confirmed dead. `MatchTracker` is lazy-imported in `App.tsx`
-   but no `<Route>` renders it; the other two are not imported anywhere. The live pages are
-   `OptimizedIndex` (routed as `/`), `Reports` (routed as `/reports` — **not**
-   `OptimizedReports`), and `EnhancedMatchTracker` (routed as `/match-day/:fixtureId`).
+1. **Dead pages — corrected 27 Sep 2026.** This entry previously named
+   `src/pages/MatchTracker.tsx`, `OptimizedDashboard.tsx` and `OptimizedReports.tsx` as
+   confirmed dead. As of 27 Sep 2026, **none of those three files exist any more** — they
+   were evidently deleted in an earlier, unlogged cleanup. What *did* still exist and was
+   genuinely dead was `src/pages/Index.tsx` (deleted, see DEBT-029) and the plain
+   `src/pages/Dashboard.tsx` (deleted, see DEBT-041) — neither of which this entry had ever
+   named, so check `App.tsx`'s actual routes and lazy-import list rather than trusting a
+   "dead pages" note going stale like this one did. The live pages are `OptimizedIndex`
+   (routed as `/`), `Reports` (routed as `/reports` — **not** `OptimizedReports`, which no
+   longer exists), and `EnhancedMatchTracker` (routed as `/match-day/:fixtureId`).
 2. **`.env` is committed to this repository** and is not in `.gitignore`. It holds only the
    Supabase URL, project ID and publishable key — public by design — but it must be
    untracked before staging and production can point at different Supabase projects.

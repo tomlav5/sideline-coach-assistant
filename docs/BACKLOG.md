@@ -1270,6 +1270,43 @@ Relates to UX-001.
 
 ## Technical debt
 
+### DEBT-042 — Additional dead code swept alongside DEBT-021/022/029 `DONE 27 Sep 2026`
+**Found and done:** 27 Sep 2026, while verifying the DEBT-021/022/029 candidate list for
+branch `chore/delete-dead-code` before deleting anything.
+
+Three more files turned out to have zero importers, zero lazy imports and (where checked)
+no trace in the production bundle, and were deleted in the same branch:
+
+- `src/components/match/MatchControls.tsx` — the pre-`EnhancedMatchControls` version of the
+  match-screen control bar. Superseded, nothing imports it. Carried no hard-coded colour
+  literals (functional-only), so contributes 0 to the DESIGN-002 count.
+- `src/hooks/useMatchTimer.tsx` — an earlier client-tick timer hook with its own `endMatch()`,
+  superseded by `useEnhancedMatchTimer`'s timestamp-derived timer. No consumers. Also 0
+  colour sites. Worth noting for anyone who finds it in history: this is exactly the
+  client-tick approach the project's critical rules say the timer must never use — it was
+  already dead, not a live violation.
+- `src/components/ui/chart.tsx` — the shadcn chart wrapper, not imported by anything. Its 5
+  hex values are Tailwind arbitrary-value selectors targeting Recharts' own inline SVG
+  `stroke`/`fill` attributes (`[stroke='#ccc']`), not real colour-setting, so they were never
+  part of the DESIGN-002 count either.
+
+`npx tsc --noEmit`, `npm run lint` and `npm test` (159/159) all clean after all three
+deletions; `npm run build` unaffected.
+
+### DEBT-041 — `src/pages/Dashboard.tsx` is dead code `DONE 27 Sep 2026`
+**Found:** 27 Sep 2026, during the DESIGN-002 completion audit. Not previously logged —
+CLAUDE.md's "dead pages" list names `OptimizedDashboard.tsx` and `OptimizedReports.tsx`
+instead, and neither of those files exists any more (see the CLAUDE.md correction below).
+
+`src/pages/Dashboard.tsx` has no route in `App.tsx` and is not lazy-imported or statically
+imported by anything under `src/`. It carried 20 hard-coded colour utilities — the same
+green/yellow/blue/purple pattern as the live `OptimizedIndex.tsx` it was apparently
+superseded by.
+
+**Done 27 Sep 2026, branch `chore/delete-dead-code`:** re-verified zero importers, deleted
+(20 colour sites removed). `npx tsc --noEmit`, `npm run lint` and `npm test` (159/159) clean
+afterward; `npm run build` unaffected.
+
 ### DEBT-040 — Orphaned edge functions deployed on production `OPEN`
 **Found:** 18 Sep 2026.
 
@@ -1476,7 +1513,7 @@ same local Floodlight constants as the rest of the match screen, with no `dark:`
 every other match-screen component it renders the same light-card colours regardless of theme, and
 under floodlights sits as a pale panel inside an otherwise dark app.
 
-### DEBT-029 — `src/pages/Index.tsx` is dead code `OPEN`
+### DEBT-029 — `src/pages/Index.tsx` is dead code `DONE 27 Sep 2026`
 **Found:** 11 Sep 2026, while scoping the palette work.
 
 `src/App.tsx` line 15 reads `const Index = lazy(() => import("./pages/OptimizedIndex"))`. The route
@@ -1488,6 +1525,15 @@ styling the home screen without checking first.
 
 Delete it, or rename OptimizedIndex to Index and delete the old one, so the live file has an honest
 name. Related to DEBT-020.
+
+**Done 27 Sep 2026, branch `chore/delete-dead-code`:** took the delete option, not the rename —
+re-verified zero importers and zero lazy imports, confirmed two of its distinctive strings
+("You have an active match tracking session", "Live Match in Progress") are absent from the
+production bundle, then deleted (58 colour sites removed). `npx tsc --noEmit`, `npm run lint`
+and `npm test` (159/159) clean afterward; `npm run build` unaffected — no chunk for this file
+existed before or after. The "honest name" half (renaming `OptimizedIndex.tsx` → `Index.tsx`)
+is untouched and left to DEBT-020, since it's a live-file rename rather than a dead-file delete
+and didn't belong in this branch.
 
 ### DEBT-028 — The token invitation flow exists but UserManagement bypasses it `OPEN`
 **Found:** 10 Sep 2026.
@@ -1792,18 +1838,27 @@ been created directly by Lovable's sync, consistent with DEBT-007. Once DEBT-012
 resolved, backfill a migration (or note in the new baseline) capturing these two tables so
 the schema can actually be rebuilt from git.
 
-### DEBT-017 — MatchEventsList.tsx is orphaned `OPEN`
+### DEBT-017 — MatchEventsList.tsx is orphaned `DONE 27 Sep 2026`
 Not imported anywhere. Its event_type union declares six values the database constraint
 has never permitted (throw_in, corner, free_kick, penalty, goal_kick, substitution),
 which is how it drifted unnoticed. Delete, same as the Session 1 orphans.
 
-### DEBT-021 — `ActivePlayerCard.tsx` is orphaned `OPEN`
+**Done 27 Sep 2026:** the file was already gone from the tree by the time `chore/delete-dead-code`
+was scoped — no importer, no lazy import, not present anywhere under `src/`. Nothing to
+delete; this entry is closed as bookkeeping only, so it stops showing up as open work.
+
+### DEBT-021 — `ActivePlayerCard.tsx` is orphaned `DONE 27 Sep 2026`
 **Found:** 6 Sep 2026, during UX-007 branch 2. `src/components/match/ActivePlayerCard.tsx`
 was the on-field player row on the match screen; branch 2 replaced it with
 `PlayerTileGrid` and nothing else imports it. Delete once branch 2 is merged (kept for
 now only so the branch is a clean single-purpose diff).
 
-### DEBT-022 — `EnhancedSubstitutionDialog.tsx` is orphaned `OPEN`
+**Done 27 Sep 2026, branch `chore/delete-dead-code`:** re-verified zero importers (no
+static import, no lazy import, no test), deleted. `npx tsc --noEmit`, `npm run lint` and
+`npm test` (159/159) all clean afterward; `npm run build` unaffected. Removed 9 hard-coded
+colour sites (DESIGN-002) along with the file.
+
+### DEBT-022 — `EnhancedSubstitutionDialog.tsx` is orphaned `DONE 27 Sep 2026`
 **Found:** 6 Sep 2026, during UX-007 branch 3. `src/components/match/EnhancedSubstitutionDialog.tsx`
 was the tap-to-open substitution flow on the match screen; branch 3 replaced it with the
 staged model (tile taps → pending stack → Submit) and nothing else imports it. Its write
@@ -1812,6 +1867,12 @@ in place so the branch is a clean single-purpose diff (same treatment as DEBT-02
 `ActivePlayerCard.tsx` in branch 2); delete once branch 3 is merged. The older sibling
 `src/components/match/SubstitutionDialog.tsx` looks orphaned too — check and sweep both
 together.
+
+**Done 27 Sep 2026, branch `chore/delete-dead-code`:** re-verified zero importers for
+`EnhancedSubstitutionDialog.tsx`, deleted (24 colour sites removed). Also swept the sibling
+this entry flagged, `SubstitutionDialog.tsx` — independently confirmed zero importers,
+deleted alongside it (not previously counted in any DESIGN-002 tally). `npx tsc --noEmit`,
+`npm run lint` and `npm test` (159/159) clean afterward; `npm run build` unaffected.
 
 ### DEBT-007 — Lovable bidirectional sync still active `DONE 4 Sep 2026`
 Pushes to this repo sync to Lovable and vice versa. Now that development happens through
@@ -2757,6 +2818,23 @@ did not touch them.
 Tracking This Match" panel — both use hard-coded blue, green and purple gradients entirely
 outside the Floodlight palette, and both sit on the app's landing screen, the first thing
 any coach or parent sees.
+
+**Update — 27 Sep 2026, completion audit.** Re-counted with a broader net than the original
+258 (also caught `ring-`/gradient `from-`/`via-`/`to-`/`ring-offset-` utilities, plus hex/rgba
+literals and local colour-constant objects like the `FLOODLIGHT` consts): **291 live-or-dead
+Tailwind-class sites + ~49 hex/rgba literals + ~65 local-constant usages, ~294 sites in
+total.** Of those, 111 Tailwind-class sites sat in code nothing renders — see DEBT-029,
+DEBT-041, DEBT-021, DEBT-022 (`Index.tsx` 58, `Dashboard.tsx` 20, `EnhancedSubstitutionDialog.tsx` 24,
+`ActivePlayerCard.tsx` 9). Branch `chore/delete-dead-code` deleted all four, plus
+`EditMatchDialog.tsx` (orphaned, restyled under UX-015 for nothing — the live post-match
+editor is `MatchDataEditor.tsx`) and three files with no colour debt at all
+(`MatchControls.tsx`, `useMatchTimer.tsx`, `ui/chart.tsx` — see DEBT-042).
+
+**The live site count now stands at ~183**, down from ~294, with zero shared-component
+leverage available to reduce it further (checked every colour-bearing file's actual import
+count: everything is imported 0-1 times except `ui/toast.tsx`, 4 sites, genuinely global).
+Full screen-by-screen breakdown, repeated-pattern analysis, missing-token list and proposed
+conversion slices from the 27 Sep audit are not reproduced here — see that session's report.
 
 **Blocks:** DESIGN-003.
 
