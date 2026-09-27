@@ -11,6 +11,7 @@ import { ArrowLeft, Trophy, Target, Clock, Users, Calendar, MapPin, Edit } from 
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { ResponsiveWrapper } from '@/components/ui/responsive-wrapper';
+import { buildPlayerTimes, formatSpell, type PlayerTime, type PlayerTimeLogRow } from '@/lib/playerTimeReport';
 
 interface MatchEvent {
   id: string;
@@ -40,20 +41,6 @@ interface MatchPeriod {
   actual_start_time?: string;
   actual_end_time?: string;
   is_active: boolean;
-}
-
-interface PlayerTime {
-  player_id: string;
-  time_on?: number;
-  time_off?: number;
-  total_minutes: number;
-  is_starter: boolean;
-  half: string;
-  players: {
-    first_name: string;
-    last_name: string;
-    jersey_number?: number;
-  };
 }
 
 interface FixtureDetails {
@@ -194,53 +181,15 @@ export default function MatchReport() {
             planned_duration_minutes
           )
         `)
-        .eq('fixture_id', fixtureId)
-        .order('is_starter', { ascending: false });
+        .eq('fixture_id', fixtureId);
 
       if (playerTimesError) throw playerTimesError;
       
-      // Group player times by player_id and calculate actual totals
-      const playerTimeMap = new Map<string, PlayerTime>();
-      
-      (playerTimesData || []).forEach((pt) => {
-        const playerId = pt.player_id;
-        if (!playerTimeMap.has(playerId)) {
-          playerTimeMap.set(playerId, {
-            player_id: playerId,
-            time_on: null,
-            time_off: null,
-            total_minutes: 0,
-            is_starter: pt.is_starter,
-            half: 'first', // Legacy support
-            players: pt.players
-          });
-        }
-        
-        const existingPlayer = playerTimeMap.get(playerId)!;
-        
-        // Track earliest time_on (first time they came on)
-        if (pt.time_on_minute !== null) {
-          if (existingPlayer.time_on === null || pt.time_on_minute < existingPlayer.time_on) {
-            existingPlayer.time_on = pt.time_on_minute;
-          }
-        }
-        
-        // Track latest time_off (last time they came off)
-        if (pt.time_off_minute !== null) {
-          if (existingPlayer.time_off === null || pt.time_off_minute > existingPlayer.time_off) {
-            existingPlayer.time_off = pt.time_off_minute;
-          }
-        }
-        
-        // Accumulate total minutes across all entries for this player
-        existingPlayer.total_minutes += pt.total_period_minutes || 0;
-      });
-      
-      setPlayerTimes(Array.from(playerTimeMap.values()).sort((a, b) => {
-        if (a.is_starter !== b.is_starter) return a.is_starter ? -1 : 1;
-        return b.total_minutes - a.total_minutes;
-      }));
-
+      // One entry per player, one spell per period row (BUG-036). buildPlayerTimes
+      // sorts by (period_number, time_on_minute) itself, so this query deliberately
+      // carries NO .order(): ordering by the embedded match_periods(period_number)
+      // column could only ever fail the whole report, never improve it.
+      setPlayerTimes(buildPlayerTimes((playerTimesData || []) as unknown as PlayerTimeLogRow[]));
 
     } catch (error: any) {
       console.error('Error fetching match report:', error);
@@ -676,12 +625,11 @@ export default function MatchReport() {
                           </div>
                         </div>
                       </div>
-                      <div className="text-right flex-shrink-0">
+                      <div className="text-right min-w-0 max-w-[55%]">
                         <div className="font-bold text-base sm:text-lg">{playerTime.total_minutes}m</div>
-                        {playerTime.time_on !== null && (
-                          <div className="text-[10px] sm:text-xs text-muted-foreground whitespace-nowrap">
-                            {playerTime.time_on !== null && `On: ${playerTime.time_on}'`}
-                            {playerTime.time_off !== null && ` Off: ${playerTime.time_off}'`}
+                        {playerTime.spells.length > 0 && (
+                          <div className="text-[10px] sm:text-xs text-muted-foreground break-words">
+                            {playerTime.spells.map(formatSpell).join(' · ')}
                           </div>
                         )}
                       </div>

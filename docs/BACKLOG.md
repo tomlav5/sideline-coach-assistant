@@ -127,7 +127,7 @@ over-subtract. Matched substitution pairs give a built-in cross-check.
 
 Relates to SEC-003 (the rule-out check above), DEBT-039.
 
-### BUG-036 — Match Report playing-time aggregation mixes periods `OPEN`
+### BUG-036 — Match Report playing-time aggregation mixes periods `DONE 27 Sep 2026`
 **Found:** 13 Sep 2026. Independent of BUG-034 — it misreports even with clean data.
 
 MatchReport.tsx:205-242 aggregates per player across ALL rows with no period
@@ -145,6 +145,35 @@ period-1 value winning the max) while events showed him off at 38'.
 FIX: group by (player_id, period_id). Derive on-time from the earliest period's
 row and off-time from the latest, or display per-period rows. Derive "starter"
 only from the earliest period's row. total_minutes summing is already correct.
+
+**Done — 27 Sep 2026, `fix/report-period-aggregation` (PR #TBD):** the per-player
+aggregation moved out of MatchReport.tsx into a pure `buildPlayerTimes` in
+`src/lib/playerTimeReport.ts` (with tests). Each player now carries every spell,
+sorted by period then on-minute, and renders as `P1 13'-25' · P2 0'-27'`.
+`is_starter` comes from the earliest period's first spell only, so the Starters
+tile now counts the kick-off eleven. The query carries NO `.order()` at all: the
+old `is_starter` desc ordering is gone (it was the direct cause of the starter
+misreport), and the replacement ordering by the embedded
+`match_periods(period_number)` was removed before merge on review. Because
+`buildPlayerTimes` sorts by (period_number, time_on_minute) itself, an embedded
+ORDER BY could never improve the output, but a PostgREST rejection of that
+syntax would have thrown and replaced the entire report with an error toast —
+pure downside. Ties between rows identical in period and on-minute now fall back
+to arrival order; that only arises for duplicate rows of the BUG-034 shape,
+which DEBT-037's overlap constraint is the right place to prevent. An open spell
+renders `P2 0'-` with no off value (the report is reachable mid-match); zero-length spells are kept visible as
+a data-check signal. total_minutes summing is unchanged. The unread `half`
+field was removed.
+
+Per-period spells were chosen over a single first-on/last-off pair because any
+single pair hides what happened: on/off minutes are period-relative, so a pair
+spanning periods either needs a cross-period timestamp the rows don't carry (see
+the DEBT-039 caveats) or silently drops the middle spells — and a player who was
+subbed off and back on within a period is exactly the case a coach checks.
+
+The overflow guard here (`min-w-0` on the shrinking text child, a width cap, and
+wrapping instead of `whitespace-nowrap`) is the same shape of fix still open on
+LiveEventsSummary under UX-017.
 
 ### BUG-035 — Close-interval update is unscoped `DONE 16 Sep 2026`
 **Found:** 13 Sep 2026.
@@ -1269,6 +1298,17 @@ Relates to UX-001.
 ---
 
 ## Technical debt
+
+### DEBT-043 — `src/components/match/PlayerTimesList.tsx` is dead code `OPEN`
+**Found:** 27 Sep 2026, during BUG-036 (`fix/report-period-aggregation`), while
+confirming nothing read MatchReport's legacy `half` field.
+
+Nothing imports `PlayerTimesList`. It carries its own `half: 'first' | 'second'`
+model of playing time — the two-halves assumption the period-based
+`player_time_logs` schema replaced. Delete it in a dead-code sweep; not done on
+the BUG-036 branch to keep that change to one thing.
+
+Relates to DEBT-042.
 
 ### DEBT-042 — Additional dead code swept alongside DEBT-021/022/029 `DONE 27 Sep 2026`
 **Found and done:** 27 Sep 2026, while verifying the DEBT-021/022/029 candidate list for
@@ -3396,7 +3436,7 @@ its content width and pushes the row wider than its container.
 The two compound: BUG-006's FIX 5 collapses every substitution at a given minute into a single row to
 stop blank cards rendering, so a triple substitution produces one row carrying six full names.
 
-**Fix shape.** First names only — roughly halving the string — plus `min-w-0` on the text child and
+**Fix shape.** (BUG-036 applied the same `min-w-0` + wrap fix to the Match Report playing-time rows, 27 Sep 2026.) First names only — roughly halving the string — plus `min-w-0` on the text child and
 either wrapping or truncation. Both small. Branch 4 gives these rows more room and makes the resting
 state a single truncated line, so resolve it there rather than patching twice.
 
