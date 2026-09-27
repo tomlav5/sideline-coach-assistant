@@ -1381,6 +1381,12 @@ export default function EnhancedMatchTracker() {
         currentMinute={currentMinute}
         totalMatchMinute={totalMatchMinute}
         players={activePlayersList.length > 0 ? activePlayersList : players}
+        // UX-029: same on-pitch/bench split, in the same order, as the tile
+        // grid below (effectivePitch/effectiveBench) — so the scorer list
+        // never scans differently from the layout the coach is looking at,
+        // and a player just subbed off is still reachable under Bench.
+        pitchPlayers={effectivePitch}
+        benchPlayers={effectiveBench}
         onEventRecorded={async () => {
           await loadEvents();
           await refreshPlayerStatusLists();
@@ -1484,9 +1490,12 @@ export default function EnhancedMatchTracker() {
         disabled={recordingLocked}
       />
 
-      {/* Goal Dialog */}
+      {/* Goal Dialog — same on-pitch/bench split, in the same tile-grid
+          order, as EnhancedEventDialog (UX-029). This is the dialog the
+          screen's primary "Goal" button actually opens. */}
       <QuickGoalButton
-        players={activePlayersList.length > 0 ? activePlayersList : players}
+        pitchPlayers={effectivePitch}
+        benchPlayers={effectiveBench}
         onGoalScored={handleQuickGoal}
         open={showGoalDialog}
         onOpenChange={setShowGoalDialog}

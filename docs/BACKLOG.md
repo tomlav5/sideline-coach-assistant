@@ -2773,6 +2773,84 @@ Full spec, contrast pairs and regeneration steps in `docs/brand/BRAND.md`.
 
 ## UX
 
+### UX-038 — Assist step presented bench players as equally valid as pitch players `DONE 27 Sep 2026`
+**Found and fixed:** 27 Sep 2026, staging testing on `fix/goal-dialog`, while fixing UX-029/UX-033.
+
+The assist step (both dialogs) listed every eligible player — on-pitch and bench alike — in
+one flat, unlabelled list. A player who had been on the bench the whole match was offered as
+an assist candidate with no visual distinction from someone still on the pitch.
+
+**Decision:** bench players stay selectable — a goal is sometimes recorded a little after the
+fact, and a real assist can legitimately come from someone who has since been subbed off — but
+they must never be *presented* as equally likely. Fixed by applying the same On pitch / Bench
+grouping used for the scorer step (UX-029) to the assist step too, on-pitch group first, in
+both `QuickGoalButton` (now via `PlayerPickerList`) and `EnhancedEventDialog` (via
+`PlayerSelector`'s existing `groups` prop, excluding the selected scorer from each group).
+
+Covered by `src/components/match/QuickGoalButton.test.tsx` and
+`src/components/match/PlayerPickerList.test.tsx`.
+
+Relates to UX-029.
+
+### UX-037 — EnhancedSubstitutionDialog has the same localStorage recency-list bug as UX-029, but is dead code `OPEN`
+**Found:** 27 Sep 2026, while fixing UX-029/UX-033 on `fix/goal-dialog`.
+
+`EnhancedSubstitutionDialog.tsx` keeps its own `localStorage`-backed `recentSubsIn` array
+(`sideline-recent-subs`) and a "Recent Substitutes (Quick Tap)" quick-tap section — the exact
+same shape of bug as `QuickGoalButton`'s `recentScorers` (UX-029): global across matches,
+reshuffles on every use.
+
+Not fixed as part of UX-029: `grep -rn "EnhancedSubstitutionDialog"` finds no `<
+EnhancedSubstitutionDialog` anywhere in `src` — it is not imported by any page or component,
+only mentioned in a comment in `src/lib/submitSubstitutions.ts`. The live match screen stages
+substitutions by tapping tiles instead (UX-007 branch 3, `usePendingSubs`/`pendingSubs.ts`).
+It appears to be dead code already headed for removal by `chore/delete-dead-code`.
+
+FIX: confirm on that branch (or just before it lands) that this file is still unreferenced,
+then delete it rather than fix the localStorage bug in it. If something turns out to still
+reach it, reuse the UX-029 fix — `PlayerSelector`'s `groups` prop, fed the same
+`pitchPlayers`/`benchPlayers` split — rather than patching the recency list.
+
+Relates to UX-029, UX-007.
+
+### UX-036 — The "Goal" button and the 'g' keyboard shortcut open two different dialogs `OPEN`
+**Found:** 27 Sep 2026, while fixing UX-029/UX-033 on `fix/goal-dialog`.
+
+On the live match screen, the primary amber **Goal** button opens `QuickGoalButton`
+(`BottomActionBar`'s `onQuickGoal`). The 'g' keyboard shortcut (`useKeyboardShortcuts`'
+`onRecordGoal`, in `EnhancedMatchTracker`) instead opens `EnhancedEventDialog` — the same
+dialog the secondary **Event** button and the post-match editor use. A coach who presses 'g'
+gets a different scorer-picking UI than the one they'd get by tapping Goal, for the same
+action. (This mismatch is also exactly how UX-029/UX-033's first fix attempt targeted the
+wrong component — see the note under UX-029.)
+
+**Update, 27 Sep 2026:** the two dialogs now differ by more than which button opens them.
+Fixing UX-029/UX-033 in `QuickGoalButton` surfaced that `PlayerSelector` (a Popover+Command
+combobox — trigger button, tap to open, then tap a name in a floating list) cost that dialog
+an extra tap and a second amber-adjacent control next to the Goal button on a touchline phone.
+`QuickGoalButton` was moved to a new presentational component, `PlayerPickerList` (plain,
+always-visible, grouped buttons — no popover, no internal search state), while
+`EnhancedEventDialog` and the post-match editor (`EventsTable.tsx`) were deliberately left on
+`PlayerSelector` — converging them onto `PlayerPickerList` was out of scope for that fix and
+is a separate branch. So today the two dialogs differ in **which control opens them**, and
+now also in **how the player list is presented** (combobox vs. inline list). Whichever
+dialog this item's fix keeps as canonical, that's also the point to decide whether
+`EnhancedEventDialog` should move to `PlayerPickerList` too, for one goal-recording pattern
+app-wide.
+
+Separately, `EnhancedEventDialog` is titled "Record Match Event" and its Event-button entry
+point is captioned just "Event", but it only ever supports `event_type: 'goal'`
+(`const [eventType, setEventType] = useState<'goal'>('goal')` — no other type is selectable).
+Whether that's a stale label from a wider event picker that never shipped, or that dialog is
+meant to grow other event types, isn't clear from the code.
+
+FIX: decide which dialog is canonical for goal-by-keyboard-shortcut (probably `QuickGoalButton`,
+to match the on-screen button) and repoint `onRecordGoal`; separately, decide what "Other
+Event" should mean given only goals are currently supported; and decide whether to converge
+both dialogs on `PlayerPickerList`.
+
+Relates to UX-029.
+
 ### UX-035 — Banner offers "Take Control" while the tracker read is unresolved, and a failed read has no way out `OPEN`
 **Found:** 20 Sep 2026, while fixing the ownership gate (`fix/tracker-ui-gating`).
 
@@ -2810,15 +2888,42 @@ planned mark ("Period 1 · 25 planned · 31 elapsed") makes the training
 unnecessary. Not a modal, not a blocking prompt — a coach may have good reason
 to run on, and stoppage time is real.
 
-### UX-033 — Search text carries from scorer to assist picker `OPEN`
-**Found:** 13 Sep 2026, in play.
+### UX-033 — Search text carries from scorer to assist picker `DONE 27 Sep 2026`
+**Found:** 13 Sep 2026, in play. **Fixed:** branch `fix/goal-dialog` (PR TBD), together with
+UX-029 — same dialog, one component.
 
-When recording a goal, text typed to filter the scorer list is still present
-when the assist picker opens, filtering it to the player just selected.
+**Correction, same day:** the first pass fixed `EnhancedEventDialog` — wrong component. The
+match screen's primary amber **Goal** button (`BottomActionBar`'s `onQuickGoal`) opens
+`QuickGoalButton`, not `EnhancedEventDialog`. Staging testing caught it: search text still
+carried over after the first pass shipped. **If you're touching goal recording, check which
+dialog you're in** — see the "Two goal dialogs" note under UX-029 below.
 
-Clear the input between steps — and better, EXCLUDE the scorer from the assist
-list entirely. A player cannot assist their own goal, so removing them is both
-correct and one fewer name to scan.
+**Done (`QuickGoalButton`):** `handleScorerSelected` clears `searchTerm` when the flow moves
+from the scorer step to the assist step. This is the actual fix, not a defensive extra: both
+steps render a `PlayerPickerList` (see UX-029's "final shape" note) whose search box is
+explicitly parent-owned — `searchValue`/`onSearchChange` bound straight to `QuickGoalButton`'s
+own `searchTerm` state — so without this clear, text typed while picking the scorer would
+still carry straight into the assist step's box. (An earlier version of this fix routed the
+scorer step through `PlayerSelector`, whose search state is internal and isolated per
+instance; that would have made this specific leak harder to hit by construction, but was
+reverted — see UX-029 — because a popover was the wrong control for this dialog.) The assist
+list already excluded the selected scorer (`assistPlayers = players.filter(p => p.id !==
+selectedScorer)`); it's now built as two groups, each with the scorer filtered out, from
+`pitchPlayers`/`benchPlayers` directly.
+
+**Done (`EnhancedEventDialog`), kept as-is:** the search-clear and scorer-exclusion were
+already in place from an earlier commit (`8c51a56`, "Fix search text persistence with custom
+PlayerSelector") — `PlayerSelector` clears its own search state on popover close, and the
+assist field already passed `excludePlayerId={selectedPlayer}`. Confirmed both still hold and
+now apply per group (see UX-029). This dialog is reached from the match screen's **Event**
+button and the 'g' keyboard shortcut, and from the post-match editor — not from the Goal
+button.
+
+Covered by `src/components/match/QuickGoalButton.test.tsx`,
+`src/components/match/PlayerPickerList.test.tsx` and
+`src/components/match/PlayerSelector.test.tsx`.
+
+Relates to UX-029.
 
 ### UX-032 — Friendlies are not visibly marked in Match Reports `OPEN`
 **Found:** 12 Sep 2026.
@@ -2856,26 +2961,80 @@ raised controls to a 44px minimum deliberately. Options: move the control out
 of the scroll path, require a deliberate tap rather than firing on touch, or
 move configuration and destructive actions behind an overflow menu.
 
-### UX-029 — Goal scorer list is global and unordered `OPEN`
-**Found:** 12 Sep 2026, staging testing.
+### UX-029 — Goal scorer list is global and unordered `DONE 27 Sep 2026`
+**Found:** 12 Sep 2026, staging testing. **Fixed:** branch `fix/goal-dialog` (PR TBD),
+together with UX-033 — same dialog, one component.
 
-The scorer list persists across matches and presents names in an unstable order, so a
-coach recording a goal has to scan an arbitrary list under time pressure — at exactly the
-moment they least want to.
+**Two goal dialogs — read this before touching goal recording again.** There are two
+components that record a goal from the live match screen, and they are not the same one:
 
-Two problems, one fix. Scope the list to the current match, and order it stably: show the
-players currently on the pitch, in a fixed order, rather than a "recent scorers" list.
+- **`QuickGoalButton`** — opened by the match screen's primary amber **Goal** button
+  (`BottomActionBar`'s `onQuickGoal` → `EnhancedMatchTracker`'s `showGoalDialog`). This is
+  what a coach actually taps mid-match, and it's what UX-029/UX-033 were reported against.
+- **`EnhancedEventDialog`** — opened by the secondary **Event** button (`onOtherEvent`) *and*
+  by the 'g' keyboard shortcut (`useKeyboardShortcuts`' `onRecordGoal`, inconsistently — worth
+  its own look, logged as UX-036 below), and separately by the post-match editor
+  (`EventsTable.tsx`, `MatchDataEditor`). Despite the "Other Event" label it currently only
+  supports `event_type: 'goal'` too.
 
-**Rationale.** A recency heuristic optimises for a large squad. At seven-a-side there are
-seven candidates, so simply showing the seven on is faster than any ranking and —
-critically — never reorders between goals. A list that moves between taps is worse than no
-list.
+**The first pass of this fix (same day) touched only `EnhancedEventDialog`** — plausible from
+the name, wrong in practice, and staging testing caught it a few hours later: the Goal button
+still showed "Recent Scorers (Quick Tap)" / "All Players" with the old reshuffling order.
+`QuickGoalButton` had its own, unrelated implementation of the exact same bug — a
+`localStorage`-backed `recentScorers` array (`sideline-recent-scorers`), global across
+matches and reshuffled by every goal, entirely separate code from `EnhancedEventDialog`.
+Nothing else in the codebase read that key, so it was removed outright rather than migrated.
 
-Also consider whether bench players should be reachable from the goal dialog at all, or
-only behind a secondary action. Recording a goal for a player who is not on the pitch is
-almost always a mis-tap, and the app already knows who is on.
+**The second pass (same day, still `QuickGoalButton`) was also wrong at first** — the fix
+prompt asked for `PlayerSelector` reuse without checking what it renders: a Popover+Command
+combobox, trigger button and floating list. That's fine for `EnhancedEventDialog`'s two-field
+form, but on `QuickGoalButton`'s single-purpose "who scored" screen it turned one tap into
+two and put a second amber-adjacent control on screen next to the primary Goal button —
+worse than the flat button list it replaced, on the exact device (a phone, touchline-side)
+this app is built for. Caught in staging before merge, not shipped.
 
-Relates to UX-007.
+**Done, final shape:** `QuickGoalButton` and `EnhancedEventDialog` now use two different
+components, deliberately:
+
+- **`QuickGoalButton`** — grouped, always-visible buttons via a new presentational component,
+  `src/components/match/PlayerPickerList.tsx` (no popover, no combobox, no internal search
+  state — search text is owned by the parent). One tap selects a player, matching the
+  original hand-rolled list's interaction exactly.
+- **`EnhancedEventDialog`** and the post-match editor (`EventsTable.tsx`) — kept on
+  `PlayerSelector` (the Popover+Command combobox), which gained an optional `groups` prop
+  (ordered, labelled sections) alongside its existing flat `players` prop. Converging both
+  dialogs onto `PlayerPickerList` is out of scope here — logged as part of UX-036.
+
+Both list components show two ordered groups — "On pitch" first, then a separated "Bench" —
+instead of one flat, unstably-ordered (or, in `QuickGoalButton`'s case, recency-ordered)
+list. Rather than inventing a second ordering, both reuse the exact order already computed
+for the match screen's player tile grid: `EnhancedMatchTracker`'s `effectivePitch` /
+`effectiveBench` (the committed lineup, pitch/bench split, order preserved — see
+`pendingSubs.ts`'s `effectiveLineup`), passed into both dialogs as `pitchPlayers`/
+`benchPlayers` props. That order is stable across goals within a match — it only changes
+when a substitution is actually committed, never from recency or scoring.
+
+Bench players stay reachable in both dialogs, resolving the "should bench be reachable at
+all" question this item raised — yes, in a clearly separated group, because a coach who subs
+a player off and records their goal moments later needs them findable. **This extends to the
+assist step too, by decision (UX-038):** a bench player can still be picked as the assist
+provider — a goal recorded a little late can have a real assister who has since come off —
+but always grouped below On pitch in both dialogs, never presented as equally likely as
+someone still on the field.
+
+Covered by `src/components/match/PlayerSelector.test.tsx`,
+`src/components/match/PlayerPickerList.test.tsx` and
+`src/components/match/QuickGoalButton.test.tsx`.
+
+**Not fixed here:** `EnhancedSubstitutionDialog` has the identical pattern — a
+`localStorage`-backed `recentSubsIn` (`sideline-recent-subs`), "Recent Substitutes (Quick
+Tap)" — but that component is currently unreferenced by any route or parent (substitutions on
+the live screen go through the tile-tap staging flow, UX-007 branch 3) and is slated for
+removal by `chore/delete-dead-code`. Logged as UX-037 below rather than fixed, since fixing
+dead code that's about to be deleted would be wasted work — confirm it's still dead before
+that branch lands, not after.
+
+Relates to UX-007, UX-033, UX-036, UX-037, UX-038.
 
 ### UX-028 — Sidebar nav icons invisible against sidebar background `DONE 11 Sep 2026`
 **Found and fixed:** 11 Sep 2026, branch `fix/floodlight-polish` (PR TBD).
