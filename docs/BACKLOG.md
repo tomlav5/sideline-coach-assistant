@@ -8,6 +8,120 @@ Known issues and planned work. Newest findings at the top of each section.
 
 ## Bugs
 
+### BUG-041 — Phantom time-log row written into an ENDED period during the half-time break `OPEN`
+**Found:** 27 Sep 2026. Production data repaired 27 Sep 2026 (two rows deleted).
+
+Fixture 4967f527-6956-4c07-a100-a16b4db12c63, Reds v Colchester Villa,
+27 Sep 2026. A player showed 78 minutes in a 56-minute match.
+
+Periods:
+  P1  e4fa9bf4-6bf8-4bc8-aa6c-b1341a20fdfd
+      14:00:38.839 → 14:31:32.270, planned 30, paused 0
+      actual 30m53s, credited 30
+  P2  21248c87-02e7-4805-b0c4-23ed39ccb43f
+      14:32:01.705 → 14:58:36.313, planned 30, paused 0
+      actual 26m35s, credited 26
+
+Conor B held three player_time_logs rows:
+  845709d1-0fc4-431d-9e3f-cb37f9d6d927  P1  0→22  22m  is_starter=true
+                                             created 14:00:39.638
+  c9f217e2-913c-40b5-ad85-d57dc2380789  P1  0→30  30m  is_starter=false
+                                             created 14:31:51.239   ← PHANTOM
+  c9732574-dec9-453d-9d8d-fb4eeac19cd9  P2  0→26  26m  is_starter=true
+                                             created 14:32:03.024
+
+22 + 30 + 26 = 78. His true total is 48.
+
+A second phantom, worth zero minutes:
+  b05ab955-da06-4e79-8ee3-2fc4055ee2e1  Peter D  P1  0→0  0m
+                                             is_starter=false
+                                             created 14:31:50.882
+
+Both were written in the 29-second gap between P1 ending (14:31:32) and P2
+starting (14:32:01) — during the half-time break, into a period that had
+already closed.
+
+RECONCILIATION.
+  P1 expected 7 × 30 = 210, recorded 240 (excess exactly 30)
+  P2 expected 7 × 26 = 182, recorded 182 (clean)
+  Total expected 392, recorded 422, excess 30 — precisely the phantom row.
+After deleting both rows the match reconciles at 392 across 17 rows.
+
+THE COACH DID NOTHING WRONG. Every substitution recorded correctly and
+balanced: P1 minute 22, Conor B and Riley O off, Harry H and Theo J on;
+P2 minute 19, Finley R off, Peter D on. The app invented the row.
+
+ROOT CAUSE — two faults combining.
+
+1. runPeriodTransitions step 2 (src/pages/EnhancedMatchTracker.tsx, the
+   "Initialize new period for currently on-field players" block) resolves
+   nextPeriod by period_number. During the break period 2 did not exist yet,
+   so newPeriodNumber still resolved to 1 and the block initialised players
+   into the period that had just ENDED. Nothing checks that the resolved
+   period is still open (actual_end_time null / is_active true).
+
+2. Both this block and initMissingStarterLogs compute:
+
+     const durationMinute = elapsedSeconds > 0
+       ? Math.floor(elapsedSeconds / 60)
+       : null;
+
+   That guard exists to stop decideMissingStarterLog fabricating a spell from
+   minute 0 (BUG-011), but it only catches EXACTLY zero. Any reading from 1 to
+   59 seconds floors to minute 0 and is treated as a genuine measurement. At a
+   period boundary the elapsed counter sits in precisely that window — which is
+   why the phantom reads time_on_minute = 0 with is_starter = false, the
+   signature of decideMissingStarterLog case 2 with a duration of zero.
+
+TRIGGER. The coach made half-time changes during the break — Riley O out,
+Conor B back in for the second half. Each change updated player_match_status,
+which re-fired the effect. Conor B, substituted off at minute 22, had no ACTIVE
+P1 row, so case 2 fired and opened a spell from minute 0. The row was inserted
+is_active=true; when P2 started at 14:32:01, step 1 ran for period 1 and closed
+every active row at the period's actual duration — stamping the phantom at 30.
+
+Peter D's 0→0 row has the shape applyPair produces (insert and close at the
+same minute), so it most likely came from the substitution submit path. That is
+BUG-033 firing on this match — the "minutes may be understated" toast the coach
+reported the same day.
+
+NOT BUG-034 RETURNING. BUG-034's fix is holding: both sites now read every row
+for (fixture, player, period) rather than filtering on is_active. This is a
+different mechanism producing the same damage — a row written into a finished
+period, with a duration reading of zero.
+
+FIX SHAPE (not built).
+1. Refuse to insert into a period that has ended. The resolved period must have
+   actual_end_time null and is_active true, or the block does nothing. This is
+   the important half: no code path should ever write a new spell into a closed
+   period.
+2. Replace the elapsedSeconds > 0 guard. Either require >= 60, or — better —
+   derive elapsed from the period's actual_start_time rather than trusting a
+   client-side counter across a boundary, where it is by definition stale.
+3. Consider whether the effect should run at all while no period is active.
+
+WOULD HAVE BEEN PREVENTED — twice over. Two already-logged items would each
+have stopped this independently:
+- DEBT-037's overlap constraint on player_time_logs would have REJECTED the
+  0→30 row, because it overlaps the same player's 0→22 row in the same period.
+  The database would never have stored it.
+- REPORT-005's match-level integrity check would have flagged it the moment the
+  match ended: 422 against an expected 392.
+This is the second production incident of this family (BUG-034, Preston G,
+13 Sep; this one, 27 Sep). That is the argument for prioritising both.
+
+INTERIM WORKAROUND for coaches, until the fix lands: start the next period
+BEFORE making half-time changes. Changes made while a period is live are
+written into a live period and are safe. It costs a minute on the clock — a far
+smaller distortion than a phantom 30-minute row.
+
+SEPARATE QUESTION, not part of this bug: planned_duration_minutes on both
+periods was 30, although the match was understood to be 25 minutes per half.
+Either the fixture was configured wrongly at creation or the understanding was
+wrong — unconfirmed.
+
+Relates to BUG-034, BUG-033, BUG-011, BUG-009, DEBT-036, DEBT-037, REPORT-005.
+
 ### BUG-040 — Resume Period and Start Penalty Shootout do not claim on an unheld match `OPEN`
 **Found:** 21 Sep 2026, while adding claim-on-start (`fix/tracker-ui-gating`).
 
@@ -235,7 +349,13 @@ The production match of 13 Sep was repaired earlier by deleting the five
 duplicate rows (see above). Not fixed here: the missing ownership check on the
 background effects that made a second tab write at all — that is SEC-003.
 
-Relates to BUG-011, SEC-003. Blocks: DEBT-037.
+**27 Sep 2026:** BUG-041 is a distinct, later defect of the same family — a
+phantom row written into a period that had already ended, with a duration
+reading of zero. It is not this bug returning: BUG-034's fix is confirmed
+holding on that fixture (both sites read every row for fixture, player and
+period, not just active ones).
+
+Relates to BUG-011, SEC-003, BUG-041. Blocks: DEBT-037.
 
 ### BUG-033 — Warning that a player's minutes may be understated `OPEN`
 **Found:** 12 Sep 2026, dry run. Not reproducible on demand. Investigated same day.
@@ -284,6 +404,15 @@ NO CHANGE NEEDED TO THE MESSAGE. Two things around it do need fixing: the
 underlying atomicity gap (DEBT-036), and the fact that the toast auto-dismisses
 before it can be read (DESIGN-008). A warning about data integrity is the
 single worst kind of message to put on a timer.
+
+**27 Sep 2026 — recurred in production.** The "Not reproducible on demand" note
+above is now out of date: this fired again on fixture
+4967f527-6956-4c07-a100-a16b4db12c63 (Reds v Colchester Villa), and the coach
+reported the toast the same day. Peter D's P1 0→0 row
+(b05ab955-da06-4e79-8ee3-2fc4055ee2e1, created 14:31:50.882, during the
+half-time break) has the insert-and-close-at-the-same-minute shape applyPair
+produces and is the likely artefact. Deleted in the same repair as BUG-041.
+Still not reproduced on demand, but no longer a one-off.
 
 ### BUG-032 — Substitution submission is slow and flickers `OPEN`
 **Found:** 12 Sep 2026, dry run. Investigated same day.
@@ -1427,7 +1556,14 @@ during a live match fails the substitution and its retry, so the sub does not
 record. Fix the logic first, prove it, then add the backstop and confirm the
 error path is handled gracefully.
 
-Blocked by: BUG-034. Relates to BUG-009.
+**27 Sep 2026 — second incident it would have prevented.** BUG-041 wrote a
+phantom Conor B row, P1 0→30, alongside his genuine P1 0→22 row. The two
+intervals overlap for the same fixture, player and period, so the EXCLUDE
+constraint above would have rejected the insert and the database would never
+have stored it. Two production incidents in three weeks (13 Sep, 27 Sep) is the
+case for prioritising this now that BUG-034 is fixed.
+
+Blocked by: BUG-034. Relates to BUG-009, BUG-041.
 
 ### DEBT-036 — applyPair is not atomic `OPEN`
 **Found:** 12 Sep 2026, from the BUG-032 and BUG-033 investigations.
@@ -3916,7 +4052,12 @@ distinguishes a match entered after the fact from one tracked live. Between the
 two, a season report could state how much of its playing-time data is
 trustworthy instead of silently averaging good data with bad.
 
-Relates to BUG-034, DEBT-038.
+**27 Sep 2026 — second incident it would have caught.** BUG-041's phantom row
+was equally detectable arithmetically at the final whistle: 422 player-minutes
+recorded against an expected 392 (7 × 30 + 7 × 26), an excess of exactly 30.
+Found only because a coach noticed a player on 78 minutes in a 56-minute match.
+
+Relates to BUG-034, BUG-041, DEBT-038.
 
 ---
 
