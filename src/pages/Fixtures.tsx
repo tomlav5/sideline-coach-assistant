@@ -3,7 +3,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTeams } from '@/hooks/useTeams';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -17,6 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CreateFixtureDialog } from '@/components/fixtures/CreateFixtureDialog';
 import { EditFixtureDialog } from '@/components/fixtures/EditFixtureDialog';
@@ -81,6 +82,10 @@ export default function Fixtures() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingFixture, setEditingFixture] = useState<Fixture | null>(null);
+  // The fixture awaiting delete confirmation. The dialog lives outside the row's
+  // DropdownMenu: Radix unmounts menu content on select, which would take a nested
+  // dialog down with it.
+  const [fixtureToDelete, setFixtureToDelete] = useState<Fixture | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [selectedTime, setSelectedTime] = useState('');
   const [createCalendarOpen, setCreateCalendarOpen] = useState(false);
@@ -641,7 +646,7 @@ export default function Fixtures() {
                         <DropdownMenuItem 
                           onClick={(e) => {
                             e.stopPropagation();
-                            deleteFixture(fixture.id);
+                            setFixtureToDelete(fixture);
                           }}
                           className="text-destructive"
                         >
@@ -1034,6 +1039,41 @@ export default function Fixtures() {
           {renderFixtures(completedFixtures, 'completed')}
         </TabsContent>
       </Tabs>
+
+      <AlertDialog
+        open={!!fixtureToDelete}
+        onOpenChange={(open) => {
+          if (!open) setFixtureToDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this match?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {fixtureToDelete && (
+                <>
+                  vs {fixtureToDelete.opponent_name} on{' '}
+                  {format(new Date(fixtureToDelete.scheduled_date), 'dd/MM/yyyy')}.{' '}
+                </>
+              )}
+              The match's recorded data — events, goals and playing time — is removed with it.
+              This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className={buttonVariants({ variant: 'destructive' })}
+              onClick={() => {
+                if (fixtureToDelete) deleteFixture(fixtureToDelete.id);
+                setFixtureToDelete(null);
+              }}
+            >
+              Delete match
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -564,7 +564,7 @@ that channel and actually runs the refresh was not verified this session. Relate
 ENV-006, which covers `refresh_report_views()` failing silently on an unpopulated view —
 this is the same function's reliability, different trigger path.
 
-### BUG-025 — Deleting a fixture has no confirmation step `OPEN`
+### BUG-025 — Deleting a fixture has no confirmation step `DONE 27 Sep 2026`
 **Found:** 11 Sep 2026, while fixing BUG-024.
 
 `deleteFixture`'s menu item (`src/pages/Fixtures.tsx`, "Delete" in the row overflow menu)
@@ -573,6 +573,15 @@ inconsistent with the project rule that destructive actions always confirm, and 
 consequential now that BUG-024 made Fixtures the *only* place a match can be deleted from.
 Low priority relative to the September launch list, but should be closed before general
 coach rollout.
+
+**Fixed 27 Sep 2026** on `fix/fixture-delete-confirmation` (PR # TBC). The menu item now
+only sets `fixtureToDelete`; one component-level `AlertDialog` names the opponent and date
+and calls the unchanged `deleteFixture` on "Delete match". Tests in
+`src/pages/Fixtures.test.tsx`.
+
+**Radix constraint:** never nest an `AlertDialog` inside `DropdownMenuContent`. Selecting an
+item unmounts the menu, which takes the dialog with it, or (BUG-022) leaves the menu stacked
+above it. Lift the dialog out and drive it from state.
 
 ### BUG-024 — Match Reports delete could silently destroy match data for non-admin coaches `DONE 11 Sep 2026`
 **Found:** 11 Sep 2026.
