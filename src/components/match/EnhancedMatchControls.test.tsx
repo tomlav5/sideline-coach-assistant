@@ -133,6 +133,52 @@ describe('EnhancedMatchControls › ownership gate', () => {
   });
 });
 
+describe('EnhancedMatchControls › reports a successful start (auto-apply trigger)', () => {
+  const pressStart = () => fireEvent.click(screen.getByRole('button', { name: /start period/i }));
+
+  it('reports the new period id once the period has actually started', async () => {
+    mocks.timerState = states['Start Period'];
+    mocks.startNewPeriod.mockResolvedValue('p2');
+    const onPeriodStarted = vi.fn();
+    renderControls({ trackerHolder: 'self', onPeriodStarted });
+
+    pressStart();
+
+    await waitFor(() => expect(onPeriodStarted).toHaveBeenCalledWith('p2'));
+    expect(onPeriodStarted).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports nothing when the period failed to start', async () => {
+    mocks.timerState = states['Start Period'];
+    mocks.startNewPeriod.mockResolvedValue(null);
+    const onPeriodStarted = vi.fn();
+    renderControls({ trackerHolder: 'self', onPeriodStarted });
+
+    pressStart();
+
+    await waitFor(() => expect(mocks.startNewPeriod).toHaveBeenCalledTimes(1));
+    await screen.findByRole('button', { name: /start period/i });
+    expect(onPeriodStarted).not.toHaveBeenCalled();
+  });
+
+  it('reports nothing when the claim was refused', async () => {
+    mocks.timerState = states['Start Period'];
+    mocks.startNewPeriod.mockResolvedValue('p2');
+    const onPeriodStarted = vi.fn();
+    renderControls({
+      trackerHolder: 'nobody',
+      onClaimTracking: vi.fn().mockResolvedValue(false),
+      onPeriodStarted,
+    });
+
+    pressStart();
+
+    await waitFor(() => expect(mocks.toast).toHaveBeenCalled());
+    expect(mocks.startNewPeriod).not.toHaveBeenCalled();
+    expect(onPeriodStarted).not.toHaveBeenCalled();
+  });
+});
+
 describe('EnhancedMatchControls › claim on start', () => {
   const pressStart = () => fireEvent.click(screen.getByRole('button', { name: /start period/i }));
 

@@ -174,7 +174,12 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
     }
   };
 
-  const startNewPeriod = async (plannedDurationMinutes: number = 30, periodType: 'period' | 'penalties' = 'period') => {
+  // Resolves to the new period's id once its row is inserted (the period is then
+  // running, even if the fixtures write below fails), or null if it did not start.
+  const startNewPeriod = async (
+    plannedDurationMinutes: number = 30,
+    periodType: 'period' | 'penalties' = 'period',
+  ): Promise<string | null> => {
     try {
       const nextPeriodNumber = timerState.periods.length + 1;
       
@@ -228,9 +233,11 @@ export function useEnhancedMatchTimer({ fixtureId, onSaveState }: UseEnhancedMat
       }));
       // Immediate resync to ensure we align with server timestamps
       loadMatchState();
+      return (newPeriod as { id: string }).id;
     } catch (error) {
       console.error('Error starting new period:', error);
       toast({ title: 'Error', description: 'Failed to start period', variant: 'destructive' });
+      return null;
     }
   };
 

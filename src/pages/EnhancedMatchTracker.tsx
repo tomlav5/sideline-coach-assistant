@@ -38,8 +38,10 @@ import { LiveEventsSummary } from '@/components/match/LiveEventsSummary';
 import { UndoButton } from '@/components/match/UndoButton';
 import { useUndoStack } from '@/hooks/useUndoStack';
 import { usePendingSubs } from '@/hooks/usePendingSubs';
+import { useAutoApplyPendingSubs } from '@/hooks/useAutoApplyPendingSubs';
 import { PendingSubsPanel } from '@/components/match/PendingSubsPanel';
-import { submitSubstitutions } from '@/lib/submitSubstitutions';
+import { NoOpenPeriodError, submitSubstitutions } from '@/lib/submitSubstitutions';
+import { openSpellsForNewPeriod } from '@/lib/openPeriodSpells';
 import { decideMissingStarterLog } from '@/lib/missingStarterLog';
 import { useToast } from '@/hooks/use-toast';
 
@@ -686,6 +688,19 @@ export default function EnhancedMatchTracker() {
     await loadEvents();
     reloadTimes();
 
+    if (result.error instanceof NoOpenPeriodError) {
+      // BUG-041: submitted during a break. Nothing was written, and nothing is
+      // removed from the stack — the same pairs submit once the period starts.
+      toast({
+        title: result.error.message,
+        description:
+          'Your changes are still staged — start the next period to submit them, ' +
+          'or edit the match afterwards in Match Data Editor.',
+        variant: 'destructive',
+      });
+      throw result.error;
+    }
+
     if (result.error) {
       const remaining = pendingStack.length - result.committedPairIds.length;
       const detail =
@@ -779,88 +794,10 @@ export default function EnhancedMatchTracker() {
             }
           }
 
-          // 2) Initialize new period for currently on-field players with time_on = 0
+          // 2) Initialize new period for currently on-field players. Refuses to
+          //    open a spell in a period that has already ended (BUG-041).
           if (newPeriodNumber > 0) {
-            const { data: nextPeriod } = await supabase
-              .from('match_periods')
-              .select('*')
-              .eq('fixture_id', fixtureId)
-              .eq('period_number', newPeriodNumber)
-              .single();
-
-            if (nextPeriod) {
-              const { data: onFieldPlayers } = await supabase
-                .from('player_match_status')
-                .select('player_id')
-                .eq('fixture_id', fixtureId)
-                .eq('is_on_field', true);
-
-              if (onFieldPlayers && onFieldPlayers.length > 0) {
-                // Elapsed minutes in the new period, from the freshest value the
-                // timer has reported. Mirrors initMissingStarterLogs below —
-                // decideMissingStarterLog needs this to place a returning
-                // player's un-recorded spell without fabricating one from
-                // minute 0 (BUG-011).
-                const elapsedSeconds = currentSecondsRef.current;
-                const durationMinute =
-                  elapsedSeconds > 0 ? Math.floor(elapsedSeconds / 60) : null;
-
-                for (const row of onFieldPlayers) {
-                  // Read EVERY row for (fixture, player, period), active and
-                  // closed — an is_active-only check is blind to a CLOSED row,
-                  // so a player already substituted off in this period reads as
-                  // missing and a duplicate starter row gets fabricated
-                  // (BUG-034).
-                  const { data: rows, error: readErr } = await supabase
-                    .from('player_time_logs')
-                    .select('id, is_active')
-                    .eq('fixture_id', fixtureId!)
-                    .eq('player_id', row.player_id)
-                    .eq('period_id', nextPeriod.id);
-                  if (readErr) {
-                    console.warn(
-                      `[runPeriodTransitions] could not read time logs for player ${row.player_id} ` +
-                        `in period ${nextPeriod.id}; skipping`,
-                      readErr,
-                    );
-                    continue;
-                  }
-
-                  const decision = decideMissingStarterLog(rows ?? [], durationMinute);
-                  if (decision.insert === false) {
-                    if (decision.reason === 'missing-spell-no-duration') {
-                      console.error(
-                        `[runPeriodTransitions] player ${row.player_id} has closed player_time_logs ` +
-                          `rows in period ${nextPeriod.id} but no active one, and no elapsed time is ` +
-                          `available to place the spell — skipping insert. This player's minutes may ` +
-                          `be understated; check Match Data Editor.`,
-                      );
-                    }
-                    continue;
-                  }
-                  if (decision.missingSpell) {
-                    console.error(
-                      `[runPeriodTransitions] player ${row.player_id} is on the pitch in period ` +
-                        `${nextPeriod.id} with closed time logs but no active one; their current spell ` +
-                        `was never recorded. Opening an interval from minute ${decision.timeOnMinute} ` +
-                        `(is_starter=false) — the un-recorded earlier minutes are lost, so this ` +
-                        `player's total is understated rather than over-counted (BUG-011).`,
-                    );
-                  }
-                  await supabase
-                    .from('player_time_logs')
-                    .insert({
-                      fixture_id: fixtureId!,
-                      player_id: row.player_id,
-                      period_id: nextPeriod.id,
-                      time_on_minute: decision.timeOnMinute,
-                      is_starter: decision.isStarter,
-                      is_active: true,
-                      total_period_minutes: 0,
-                    });
-                }
-              }
-            }
+            await openSpellsForNewPeriod(fixtureId!, newPeriodNumber, currentSecondsRef.current);
           }
         } catch (e) {
           console.error('Error handling period transitions:', e);
@@ -872,6 +809,23 @@ export default function EnhancedMatchTracker() {
       runPeriodTransitions();
     }
   }, [currentPeriodNumber, prevPeriodNumber, fixtureId]);
+
+  // Substitutions staged during the break are applied automatically once the
+  // next period is running (BUG-041 follow-up, UX-039 phase 1). Set only by a
+  // successful Start Period on this device; see useAutoApplyPendingSubs for why
+  // it also waits for the timer to report that period and for the transition
+  // effect above to finish.
+  const [startedPeriodId, setStartedPeriodId] = useState<string | null>(null);
+  useAutoApplyPendingSubs({
+    startedPeriodId,
+    reportedPeriodId: timerPeriodId,
+    transitionsSettled: currentPeriodNumber > 0 && prevPeriodNumber === currentPeriodNumber,
+    pendingCount: pendingStack.length,
+    recordingLocked,
+    submit: handleSubmitPendingSubs,
+    onApplied: (count) =>
+      toast({ title: `${count} ${count === 1 ? 'change' : 'changes'} applied` }),
+  });
 
   // Keep player status lists fresh when periods change (e.g., after starting a new one)
   useEffect(() => {
@@ -1128,6 +1082,7 @@ export default function EnhancedMatchTracker() {
         pendingSubCount={pendingStack.length}
         onSubmitPendingSubs={handleSubmitPendingSubs}
         onDiscardPendingSubs={discardPendingSubs}
+        onPeriodStarted={setStartedPeriodId}
       />
 
       {/* Quick Action Buttons - Large, Thumb-Friendly */}

@@ -1,6 +1,7 @@
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { decideMissingStarterLog } from '@/lib/missingStarterLog';
+import { isPeriodOpen } from '@/lib/periodOpen';
 
 /**
  * Commits a batch of staged substitutions (UX-007 branch 3).
@@ -77,7 +78,29 @@ export interface SubmitSubstitutionsResult {
 
 interface PeriodRow {
   id: string;
+  actual_end_time?: string | null;
   [key: string]: unknown;
+}
+
+/**
+ * Shown to the coach when Submit is pressed with no period running (BUG-041).
+ * Worded to be true both BETWEEN periods and after the final whistle — the same
+ * error covers each, and "start the next period" is not actionable once the
+ * match has ended.
+ */
+export const NO_OPEN_PERIOD_MESSAGE =
+  'Substitutions can only be recorded while a period is running.';
+
+/**
+ * Returned (not thrown) by `submitSubstitutions` when no period is open. Nothing
+ * has been written; every staged pair is still pending and can be submitted
+ * unchanged once the next period starts.
+ */
+export class NoOpenPeriodError extends Error {
+  constructor() {
+    super(NO_OPEN_PERIOD_MESSAGE);
+    this.name = 'NoOpenPeriodError';
+  }
 }
 
 /**
@@ -109,7 +132,20 @@ async function setOnField(
   }
 }
 
-async function resolveCurrentPeriod(fixtureId: string): Promise<PeriodRow | null> {
+/**
+ * The period a substitution is written into, or null if no period is open.
+ *
+ * First choice is the `is_active` period. The two fallbacks exist so a stale or
+ * failed `is_active` read — or a PAUSED period, which has `is_active = false` —
+ * does not lose a substitution mid-period. But a fallback may only hand back a
+ * period that is still running (`isPeriodOpen`: `actual_end_time` is null).
+ * BUG-041: between ending one period and starting the next, no period is
+ * active and both fallbacks used to return the period that had JUST ENDED, so
+ * a half-time substitution opened a spell for the player coming on at minute 0
+ * of the finished period (closed later at its full length) and a zero-length
+ * spell for the player going off (raising the BUG-033 understated toast).
+ */
+export async function resolveCurrentPeriod(fixtureId: string): Promise<PeriodRow | null> {
   const { data: activePeriod } = await supabase
     .from('match_periods')
     .select('*')
@@ -119,7 +155,7 @@ async function resolveCurrentPeriod(fixtureId: string): Promise<PeriodRow | null
 
   if (activePeriod) return activePeriod as PeriodRow;
 
-  // Fallback 1: the fixture's recorded current period.
+  // Fallback 1: the fixture's recorded current period, if it is still running.
   const { data: fixtureData } = await supabase
     .from('fixtures')
     .select('current_period_id')
@@ -132,10 +168,10 @@ async function resolveCurrentPeriod(fixtureId: string): Promise<PeriodRow | null
       .select('*')
       .eq('id', fixtureData.current_period_id)
       .single();
-    if (periodById) return periodById as PeriodRow;
+    if (isPeriodOpen(periodById)) return periodById as PeriodRow;
   }
 
-  // Fallback 2: the most recent period.
+  // Fallback 2: the most recent period, if it is still running.
   const { data: latestPeriod } = await supabase
     .from('match_periods')
     .select('*')
@@ -144,7 +180,9 @@ async function resolveCurrentPeriod(fixtureId: string): Promise<PeriodRow | null
     .limit(1)
     .single();
 
-  return (latestPeriod as PeriodRow) ?? null;
+  if (isPeriodOpen(latestPeriod)) return latestPeriod as PeriodRow;
+
+  return null;
 }
 
 async function applyPair(
@@ -349,7 +387,7 @@ export async function submitSubstitutions(
   if (!period) {
     return {
       committedPairIds,
-      error: new Error('No match period is open — cannot record a substitution.'),
+      error: new NoOpenPeriodError(),
     };
   }
 

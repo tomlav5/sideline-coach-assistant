@@ -8,8 +8,31 @@ Known issues and planned work. Newest findings at the top of each section.
 
 ## Bugs
 
-### BUG-041 — Phantom time-log row written into an ENDED period during the half-time break `OPEN`
+### BUG-042 — After Restart Match from period 1, the period-transition effect may never run for the new period 1 `OPEN`
+**Found:** 29 Sep 2026, while adding the BUG-041 auto-apply. Suspected from reading the code; not reproduced.
+
+`EnhancedMatchTracker`'s period-transition effect runs only when `currentPeriodNumber` changes to
+a value different from `prevPeriodNumber`. `restart_match` deletes every period, time log and
+event, and the tracker handles it with `loadMatchData()`, which does not remount the page — so
+`prevPeriodNumber` keeps its old value. After a restart from period 1, starting period 1 again
+leaves the number at 1 = 1: step 2 never opens starter spells, and only the
+`initMissingStarterLogs` safety net might. The BUG-041 auto-apply also treats transitions as
+already settled in that case, so any staged pairs would commit without waiting for starter
+spells.
+
+To confirm on staging: start P1, restart the match, start P1 again, and check whether starters
+get `player_time_logs` rows. Likely fix: reset `prevPeriodNumber` to 0 on restart.
+
+Relates to BUG-041, UX-039, BUG-011.
+
+### BUG-041 — Phantom time-log row written into an ENDED period during the half-time break `DONE 29 Sep 2026`
 **Found:** 27 Sep 2026. Production data repaired 27 Sep 2026 (two rows deleted).
+**Fixed:** 29 Sep 2026 on `fix/substitution-into-ended-period` (PR #TBD). `resolveCurrentPeriod`
+no longer returns a period with `actual_end_time` set, so a substitution submitted between
+periods is refused ("Start the next period before making substitutions.") and stays staged;
+the period-transition effect's step 2 (now `src/lib/openPeriodSpells.ts`) refuses to open a
+spell in an ended period too. Covered by `src/lib/submitSubstitutions.test.ts` and
+`src/lib/openPeriodSpells.test.ts`.
 
 Fixture 4967f527-6956-4c07-a100-a16b4db12c63, Reds v Colchester Villa,
 27 Sep 2026. A player showed 78 minutes in a 56-minute match.
@@ -51,54 +74,64 @@ THE COACH DID NOTHING WRONG. Every substitution recorded correctly and
 balanced: P1 minute 22, Conor B and Riley O off, Harry H and Theo J on;
 P2 minute 19, Finley R off, Peter D on. The app invented the row.
 
-ROOT CAUSE — two faults combining.
+ROOT CAUSE (corrected 29 Sep 2026) — the substitution submit path wrote into
+the period that had just ended.
 
-1. runPeriodTransitions step 2 (src/pages/EnhancedMatchTracker.tsx, the
-   "Initialize new period for currently on-field players" block) resolves
-   nextPeriod by period_number. During the break period 2 did not exist yet,
-   so newPeriodNumber still resolved to 1 and the block initialised players
-   into the period that had just ENDED. Nothing checks that the resolved
-   period is still open (actual_end_time null / is_active true).
+resolveCurrentPeriod() in src/lib/submitSubstitutions.ts returns the is_active
+period if there is one, then falls back to (1) fixtures.current_period_id and
+(2) the most recent period by period_number. Neither fallback checked whether
+the period it returned was still open. During the gap between ending one period
+and starting the next no period is active, so both fallbacks returned the
+period that had JUST ENDED, and applyPair wrote into it:
 
-2. Both this block and initMissingStarterLogs compute:
+- Player coming ON (Conor B — substituted off at minute 22, brought back on
+  during the break): no active log, so it inserted { time_on_minute:
+  durationMinute, is_starter: false, is_active: true }. durationMinute is
+  Math.floor(currentSeconds / 60), and the break timer reads near zero, so
+  minute 0. The row stayed active until P2 started, when runPeriodTransitions
+  step 1 closed every active P1 row at P1's actual duration — stamping it 0→30.
+- Player going OFF (Peter D): closed P1 rows and no active one, so
+  decideMissingStarterLog returned case 2 — a spell inserted at minute 0 and
+  closed at the same minute (0→0) — and raised the BUG-033 "minutes may be
+  understated" toast the coach reported that day.
 
-     const durationMinute = elapsedSeconds > 0
-       ? Math.floor(elapsedSeconds / 60)
-       : null;
+All three facts — the 0→30 row, the 0→0 row, and the toast — are explained by
+this one cause. decideMissingStarterLog was behaving correctly; it was being
+fed a closed period.
 
-   That guard exists to stop decideMissingStarterLog fabricating a spell from
-   minute 0 (BUG-011), but it only catches EXACTLY zero. Any reading from 1 to
-   59 seconds floors to minute 0 and is treated as a genuine measurement. At a
-   period boundary the elapsed counter sits in precisely that window — which is
-   why the phantom reads time_on_minute = 0 with is_starter = false, the
-   signature of decideMissingStarterLog case 2 with a duration of zero.
+EARLIER DIAGNOSIS WAS WRONG. The first write-up blamed the period-transition
+effect's step 2 re-firing on player_match_status updates, plus the
+elapsedSeconds > 0 guard. Two staging reproduction runs on 29 Sep 2026 —
+including a hard refresh and a three-minute break between periods — produced no
+phantom rows, because no substitution was made during the break. That ruled
+the remount/re-fire theory out. The elapsedSeconds guard was left unchanged:
+once a write into a closed period is impossible, a duration of 0 is legitimate
+(a substitution genuinely made in the first minute of a live period is credited
+from minute 0).
 
-TRIGGER. The coach made half-time changes during the break — Riley O out,
-Conor B back in for the second half. Each change updated player_match_status,
-which re-fired the effect. Conor B, substituted off at minute 22, had no ACTIVE
-P1 row, so case 2 fired and opened a spell from minute 0. The row was inserted
-is_active=true; when P2 started at 14:32:01, step 1 ran for period 1 and closed
-every active row at the period's actual duration — stamping the phantom at 30.
+TRIGGER. Any substitution submitted between ending one period and starting the
+next.
 
-Peter D's 0→0 row has the shape applyPair produces (insert and close at the
-same minute), so it most likely came from the substitution submit path. That is
-BUG-033 firing on this match — the "minutes may be understated" toast the coach
-reported the same day.
+FIX (built 29 Sep 2026).
+1. resolveCurrentPeriod: both fallbacks now apply isPeriodOpen
+   (src/lib/periodOpen.ts — actual_end_time is null). The is_active lookup is
+   still the first choice, and the fallbacks still rescue a PAUSED period
+   (pausing sets is_active=false but never actual_end_time). With nothing
+   usable it returns null, and submitSubstitutions returns NoOpenPeriodError
+   without writing anything. The tracker shows "Start the next period before
+   making substitutions." and leaves every staged pair pending.
+2. Defence in depth: the period-transition effect's step 2 (moved verbatim to
+   src/lib/openPeriodSpells.ts) warns and inserts nothing if the resolved
+   period has ended — which also covers a reload during a break, when the
+   effect runs on mount with the last (ended) period's number.
+3. initMissingStarterLogs was checked and left alone: it only ever resolves
+   the is_active period, and endCurrentPeriod clears is_active in the same
+   write that sets actual_end_time.
 
 NOT BUG-034 RETURNING. BUG-034's fix is holding: both sites now read every row
 for (fixture, player, period) rather than filtering on is_active. This is a
 different mechanism producing the same damage — a row written into a finished
 period, with a duration reading of zero.
-
-FIX SHAPE (not built).
-1. Refuse to insert into a period that has ended. The resolved period must have
-   actual_end_time null and is_active true, or the block does nothing. This is
-   the important half: no code path should ever write a new spell into a closed
-   period.
-2. Replace the elapsedSeconds > 0 guard. Either require >= 60, or — better —
-   derive elapsed from the period's actual_start_time rather than trusting a
-   client-side counter across a boundary, where it is by definition stale.
-3. Consider whether the effect should run at all while no period is active.
 
 WOULD HAVE BEEN PREVENTED — twice over. Two already-logged items would each
 have stopped this independently:
@@ -110,10 +143,27 @@ have stopped this independently:
 This is the second production incident of this family (BUG-034, Preston G,
 13 Sep; this one, 27 Sep). That is the argument for prioritising both.
 
-INTERIM WORKAROUND for coaches, until the fix lands: start the next period
-BEFORE making half-time changes. Changes made while a period is live are
-written into a live period and are safe. It costs a minute on the clock — a far
-smaller distortion than a phantom 30-minute row.
+COACH GUIDANCE: stage half-time changes during the break as normal; they are
+applied automatically when the next period starts (see below). Pressing Submit
+during a break is refused with "Substitutions can only be recorded while a
+period is running." and the staged changes stay on screen.
+
+AUTO-APPLY ADDED AFTER STAGING TESTING (29 Sep 2026, same branch). Staging
+confirmed the refusal works — pairs stay staged and a second Submit after Start
+Period commits them correctly — but the workflow it left was not shippable.
+Coaches make half-time changes in a huddle; relying on them to remember a
+second Submit after kick-off means pairs left pending indefinitely, and a
+forgotten pending pair is worse than BUG-041 itself: the on-screen pitch is
+wrong AND the substitution is never recorded. So staged pairs now commit
+automatically when the next period starts — UX-039 phase 1, built on this
+branch (src/hooks/useAutoApplyPendingSubs.ts).
+
+POSSIBLE EARLIER OCCURRENCE — pending confirmation. The 20 Sep 2026 match with
+orphaned open player_time_logs rows for Farris W and Llewyn W is likely the
+same defect (a substitution submitted during a break leaves the incoming
+player's row open in the ended period until the next period starts — or, after
+the final period, indefinitely). Confirm against that fixture's row
+created_at times and period end times.
 
 SEPARATE QUESTION, not part of this bug: planned_duration_minutes on both
 periods was 30, although the match was understood to be 25 minutes per half.
@@ -358,7 +408,8 @@ period, not just active ones).
 Relates to BUG-011, SEC-003, BUG-041. Blocks: DEBT-037.
 
 ### BUG-033 — Warning that a player's minutes may be understated `OPEN`
-**Found:** 12 Sep 2026, dry run. Not reproducible on demand. Investigated same day.
+**Found:** 12 Sep 2026, dry run. Investigated same day. Reproducible since 29 Sep 2026 — see
+the 29 Sep note at the end of this item.
 
 After submitting two substitutions, a toast warned that a player's minutes may
 be understated because they had no open time log.
@@ -413,6 +464,15 @@ reported the toast the same day. Peter D's P1 0→0 row
 half-time break) has the insert-and-close-at-the-same-minute shape applyPair
 produces and is the likely artefact. Deleted in the same repair as BUG-041.
 Still not reproduced on demand, but no longer a one-off.
+
+**29 Sep 2026 — 27 Sep trigger identified; now reproducible.** The 27 Sep toast
+was BUG-041: a substitution submitted between periods resolved the just-ended
+period, found the outgoing player's closed rows with no active one, and took
+case 2. Recipe: end a period, then submit a substitution before starting the
+next. That path is now refused (BUG-041, `fix/substitution-into-ended-period`),
+so it can no longer raise this toast. The 12 Sep dry-run occurrence and the
+DEBT-036 atomicity-gap mechanism described above remain possible, so this item
+stays OPEN.
 
 ### BUG-032 — Substitution submission is slow and flickers `OPEN`
 **Found:** 12 Sep 2026, dry run. Investigated same day.
@@ -3035,6 +3095,64 @@ Full spec, contrast pairs and regeneration steps in `docs/brand/BRAND.md`.
 ---
 
 ## UX
+
+### UX-039 — Stage half-time substitutions during the break and apply them when the next period starts `OPEN`
+**Found:** 29 Sep 2026, while fixing BUG-041.
+
+**Phase 1 DONE 29 Sep 2026** on `fix/substitution-into-ended-period` (PR #TBD) — built as an
+AUTOMATIC apply, not the confirmation prompt proposed below. Staging testing of the refusal
+showed that any step the coach must remember after kick-off (a second Submit, or answering a
+prompt while the game restarts) risks pairs left pending, which is worse than the original bug.
+Staged pairs now commit through the normal Submit path once the next period has started, with a
+single "N changes applied" toast. It waits until (a) Start Period on this device actually
+started a period, (b) the timer reports that period — so `currentSeconds`, and therefore
+`time_on_minute`, is the NEW period's elapsed time, normally minute 0 — and (c) the
+period-transition effect has finished opening spells. Fires at most once per period; a failed
+submit leaves the period running and the pairs staged for a manual Submit. Covered by
+`src/hooks/useAutoApplyPendingSubs.test.ts` and `EnhancedMatchControls.test.tsx`.
+
+**Remaining (keeps this OPEN): the lineup model** described below.
+
+**KNOWN CONSEQUENCE of phase 1 — not a new bug.** When the next period starts, the
+period-transition effect opens a minute-0 spell for every player `player_match_status` still
+says is on the pitch — including the player being taken off, because nothing has committed
+yet. The auto-apply then closes it at the same minute, so every half-time substitution leaves a
+zero-length `P2 0'–0'` `player_time_logs` row for the outgoing player (P3 at the next break,
+and so on). It credits zero minutes, so totals are correct, but it shows in Match Data Editor
+and ValidationPanel flags it (time_on >= time_off). The manual flow (Submit after Start Period)
+produces the same row. The lineup model removes it: the staged lineup reaches
+`player_match_status` BEFORE the new period's spells are opened, so the outgoing player never
+gets one.
+
+Since BUG-041, submitting a substitution between periods is refused with "Substitutions can
+only be recorded while a period is running." STAGING still works during the break —
+`pendingSubs.ts` is pure client-side logic with no period gating, and the controls are gated on
+tracker ownership, not on whether a period is running. Only the WRITE is refused. So the
+workflow is: huddle and stage during the break, press Start Period, press Submit. One extra
+tap in a particular order, and a couple of seconds of clock.
+
+THE REAL PROBLEM IS THE MODEL, not the refusal. A substitution is an in-period event that
+happens at a minute. "You three are starting the second half" has no minute — it is the next
+period's STARTING LINEUP. Forcing it through the substitution path is why there is no period to
+attribute it to, and the refusal is the symptom of that mismatch rather than a policy decision.
+
+Better design: during a break the same tile taps set the next period's lineup, and pressing
+Start Period opens those players at minute 0 of the new period — no substitution events, nothing
+to attribute, nothing that can touch the ended period. Needs care around the period-transition
+effect (which already opens spells for every on-field player at period start) so the two do not
+both open a spell for the same player, and around what happens if the coach ends the match
+instead of starting another period.
+
+PHASE 1, if the full model is too big: on pressing Start Period with pairs staged, prompt
+"Submit N staged changes now?" and commit them at minute 0 on yes. Cheap, closes most of the
+gap, and does not write match data without an explicit confirmation. Considered and deliberately
+deferred on 29 Sep to keep `fix/substitution-into-ended-period` to one reviewable change on
+match-recording code.
+
+PRIORITY: ahead of DEBT-037. The overlap constraint guards against a defect now fixed at source;
+this is the thing coaches actually experience every match.
+
+Relates to BUG-041, BUG-014.
 
 ### UX-038 — Assist step presented bench players as equally valid as pitch players `DONE 27 Sep 2026`
 **Found and fixed:** 27 Sep 2026, staging testing on `fix/goal-dialog`, while fixing UX-029/UX-033.
