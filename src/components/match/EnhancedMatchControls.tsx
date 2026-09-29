@@ -72,6 +72,12 @@ interface EnhancedMatchControlsProps {
   onSubmitPendingSubs?: () => Promise<void>;
   /** Drop the pending substitutions. */
   onDiscardPendingSubs?: () => void;
+  /**
+   * Called with the new period's id after Start Period has actually started one —
+   * never when the starter check, the claim or the insert failed. The parent uses it
+   * to auto-apply substitutions staged during the break (BUG-041 / UX-039).
+   */
+  onPeriodStarted?: (periodId: string) => void;
 }
 
 export function EnhancedMatchControls({
@@ -84,6 +90,7 @@ export function EnhancedMatchControls({
   pendingSubCount = 0,
   onSubmitPendingSubs,
   onDiscardPendingSubs,
+  onPeriodStarted,
 }: EnhancedMatchControlsProps) {
   // Fail closed: act only when we positively know this client is the tracker, or
   // positively know active_tracker_id IS NULL. `unknown` (initial read still in
@@ -210,7 +217,8 @@ export function EnhancedMatchControls({
         }
       }
 
-      await startNewPeriod();
+      const newPeriodId = await startNewPeriod();
+      if (newPeriodId) onPeriodStarted?.(newPeriodId);
     } finally {
       startInFlightRef.current = false;
       setStarting(false);
