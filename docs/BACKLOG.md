@@ -3897,8 +3897,17 @@ entered entirely by hand never shows that status and will not appear correctly i
 the one legitimate need Manual Entry was meeting (badly, by stamping `completed` unconditionally
 and without regard to whether the fixture was live — see BUG-017).
 
-**Interim workaround, no code.** Start the fixture in the app and end it immediately, so it exists
-as a `completed` match, then enter the real record through Match Data Editor.
+**Interim workaround, no code.** Enter the full record through Match Data Editor first, then open
+the fixture and close the match out there. Confirmed working on a real match, 2 Oct 2026 (Yellows
+v Long Melford, entered from a paper record after BUG-043). This is better than the earlier
+suggestion of starting and immediately ending the fixture first, which writes a spurious period
+and start/end timestamps that then have to be corrected.
+
+**Severity is lower than this entry first stated.** Marking a match complete is not impossible —
+it is available on the fixture, just not where you are standing when you finish entering the data.
+So this is a flow and discoverability problem, not a blocker: you finish a long manual entry,
+the editor gives no indication anything remains, and the match silently stays un-completed until
+you happen to go and close it elsewhere. Prioritise accordingly.
 
 **Fix shape.** A "Mark match complete" action in Match Data Editor, guarded so it cannot fire on a
 fixture whose `status`/`match_status` is `in_progress` / `live` / `paused` — the same live-check
