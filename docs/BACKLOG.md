@@ -3126,6 +3126,51 @@ Full spec, contrast pairs and regeneration steps in `docs/brand/BRAND.md`.
 
 ## UX
 
+### UX-040 — Match Data Editor cannot choose which period an event belongs to `OPEN`
+**Found:** 2 Oct 2026 (Tom), entering a paper-recorded match. With two periods created there
+is no way to add a goal to period 1 — the add dialog assigns a period without asking. The
+period should be selectable when the event is created.
+
+**What the code does** (`src/components/match-editor/EventsTable.tsx`, verified 2 Oct 2026):
+there are two add-event entry points, and they pick the period differently.
+- **"Add First Event"** — the button in the empty state, shown only while the match has *no
+  events* (`events.length === 0`) — calls `setSelectedPeriodForAdd(periods[0])`: the **first**
+  period.
+- **"Add Event"** — the button above the events table, shown once at least one event exists —
+  calls `setSelectedPeriodForAdd(periods[periods.length - 1])`: the **last** period.
+
+`periods` is ordered by `period_number` (`useEditMatchData`), so in a two-period match the
+first event entered lands in period 1 and every event after it lands in period 2. Which period
+a new event lands in therefore depends on which button happened to be on screen, and neither
+offers a choice. Both open the live tracker's `EnhancedEventDialog`, which shows the period
+(`P1 • Minute 0 …`) as read-only text and writes `period_id` from the `currentPeriod` prop.
+
+**Impact:** entering a multi-period match from paper is awkward. Workarounds are to create and
+populate one period at a time (add P1, enter its events, then add P2), or to add every event
+and then correct its period in the edit form.
+
+**The fix is smaller than it looks.** The inline edit row already renders a `Select` listing
+every period, bound to `editForm.period_id`. The same control belongs in the add path — either
+in a small picker before the dialog opens, or as a period prop/selector on the dialog for the
+editor's use only (the live tracker must keep using the current period, so it should not
+appear there).
+
+**The inconsistent defaults are a defect in their own right**, whether or not the selector is
+added, and should be reconciled. Once a selector exists, both entry points should default the
+same way — suggest the **last** period, since events are normally entered in chronological
+order.
+
+**Observation (read from the code, not reproduced):** both entry points pass `currentMinute={0}`
+and `totalMatchMinute={0}`, so `EnhancedEventDialog` writes `total_match_minute` equal to the
+typed in-period minute. A period-2 goal entered at minute 5 is stored with `total_match_minute`
+5, not 5 + period 1's length. `total_match_minute` is read by `MatchReport.tsx`,
+`ExportDialog.tsx` and `ValidationPanel.tsx`, among others, so editor-entered events may show
+the wrong match minute there. Worth confirming on staging and splitting into its own item if
+it holds.
+
+Relates to BUG-043 (the same screen could not add a first period at all) and to the
+retrospective-entry gap generally (REPORT-005, UX-032).
+
 ### UX-039 — Stage half-time substitutions during the break and apply them when the next period starts `OPEN`
 **Found:** 29 Sep 2026, while fixing BUG-041.
 
