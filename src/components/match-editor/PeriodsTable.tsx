@@ -151,153 +151,156 @@ export function PeriodsTable({ periods, fixtureId, onUpdate, onHasChanges }: Per
     }
   };
 
-  if (periods.length === 0) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-muted-foreground mb-4">No periods recorded yet</p>
-        <Button onClick={() => setShowAddDialog(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add First Period
-        </Button>
-      </div>
-    );
-  }
-
+  // BUG-043: one return, one Add dialog. The empty state and the table are
+  // alternative content inside it — an early return for the empty state left
+  // the dialog unmounted, so "Add First Period" did nothing.
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button onClick={() => setShowAddDialog(true)} size="sm">
-          <Plus className="h-4 w-4 mr-2" />
-          Add Period
-        </Button>
-      </div>
+      {periods.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-muted-foreground mb-4">No periods recorded yet</p>
+          <Button onClick={() => setShowAddDialog(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add First Period
+          </Button>
+        </div>
+      ) : (
+        <>
+          <div className="flex justify-end">
+            <Button onClick={() => setShowAddDialog(true)} size="sm">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Period
+            </Button>
+          </div>
 
-      <div className="border rounded-lg">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Period Number</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Duration</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {periods.map((period) => (
-              <TableRow key={period.id}>
-                {editingId === period.id ? (
-                  <>
-                    <TableCell>
-                      <Badge>Period {period.period_number}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">
-                        {period.period_type === 'penalties' ? 'Penalties' : 'Regular'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {period.period_type !== 'penalties' ? (
-                        <Input
-                          type="number"
-                          value={editForm.planned_duration_minutes}
-                          onChange={(e) => setEditForm({ ...editForm, planned_duration_minutes: Number(e.target.value) })}
-                          className="h-8 w-24"
-                          min={1}
-                          max={90}
-                        />
-                      ) : (
-                        <span className="text-sm text-muted-foreground">N/A</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {period.is_active && (
-                        <Badge variant="default">Active</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => saveEdit(period.id)}
-                          disabled={saving}
-                        >
-                          <Check className="h-4 w-4 text-green-600" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={cancelEdit}
-                          disabled={saving}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </>
-                ) : (
-                  <>
-                    <TableCell>
-                      <Badge>Period {period.period_number}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">
-                        {period.period_type === 'penalties' ? 'Penalties' : 'Regular'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <span className="font-mono">
-                        {period.planned_duration_minutes > 0 ? `${period.planned_duration_minutes} min` : 'N/A'}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      {period.is_active && (
-                        <Badge variant="default">Active</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => startEdit(period)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button size="sm" variant="ghost" disabled={period.is_active}>
-                              <Trash2 className="h-4 w-4 text-destructive" />
+          <div className="border rounded-lg">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Period Number</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Duration</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {periods.map((period) => (
+                  <TableRow key={period.id}>
+                    {editingId === period.id ? (
+                      <>
+                        <TableCell>
+                          <Badge>Period {period.period_number}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">
+                            {period.period_type === 'penalties' ? 'Penalties' : 'Regular'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {period.period_type !== 'penalties' ? (
+                            <Input
+                              type="number"
+                              value={editForm.planned_duration_minutes}
+                              onChange={(e) => setEditForm({ ...editForm, planned_duration_minutes: Number(e.target.value) })}
+                              className="h-8 w-24"
+                              min={1}
+                              max={90}
+                            />
+                          ) : (
+                            <span className="text-sm text-muted-foreground">N/A</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {period.is_active && (
+                            <Badge variant="default">Active</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => saveEdit(period.id)}
+                              disabled={saving}
+                            >
+                              <Check className="h-4 w-4 text-green-600" />
                             </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete Period?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                This will delete Period {period.period_number} if it has no associated events or player times. This action cannot be undone.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => deletePeriod(period.id)}
-                                className="bg-destructive text-destructive-foreground"
-                              >
-                                Delete
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
-                    </TableCell>
-                  </>
-                )}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={cancelEdit}
+                              disabled={saving}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </>
+                    ) : (
+                      <>
+                        <TableCell>
+                          <Badge>Period {period.period_number}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">
+                            {period.period_type === 'penalties' ? 'Penalties' : 'Regular'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <span className="font-mono">
+                            {period.planned_duration_minutes > 0 ? `${period.planned_duration_minutes} min` : 'N/A'}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          {period.is_active && (
+                            <Badge variant="default">Active</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => startEdit(period)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button size="sm" variant="ghost" disabled={period.is_active}>
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Period?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This will delete Period {period.period_number} if it has no associated events or player times. This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => deletePeriod(period.id)}
+                                    className="bg-destructive text-destructive-foreground"
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </TableCell>
+                      </>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </>
+      )}
 
       {/* Add Period Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>

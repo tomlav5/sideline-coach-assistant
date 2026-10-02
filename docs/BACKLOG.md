@@ -8,6 +8,36 @@ Known issues and planned work. Newest findings at the top of each section.
 
 ## Bugs
 
+### BUG-043 — Match Data Editor cannot add the first period to a match that has none `DONE 2 Oct 2026`
+**Found:** 2 Oct 2026 (Tom). The Yellows' first fixture of the season was recorded on paper.
+Entering it afterwards was impossible — Events said "Please add a period first", and Add First
+Period did nothing at all.
+**Fixed:** 2 Oct 2026 on `fix/match-editor-add-first-period` (PR #TBD). `PeriodsTable` now has a
+single return with one Add dialog; the empty state and the table are alternative content inside
+it. Covered by `src/components/match-editor/PeriodsTable.test.tsx`.
+
+**Cause:** `src/components/match-editor/PeriodsTable.tsx` early-returned the empty state when
+`periods.length === 0`. The `<Dialog open={showAddDialog}>` that "Add First Period" controls
+lived only in the other return — the one rendering the table — so with no periods the click set
+state, the component re-rendered, took the same early return, and the dialog was never mounted.
+No error, no feedback. A period could only be added once one already existed.
+
+**Impact:** the Match Data Editor could not do the one job it is for. Any match not tracked live
+could not be entered, so the club's season record cannot be completed. Unnoticed because
+live-tracked matches create their periods automatically and never show the empty state.
+
+**Observations (not changed here):**
+- A period added in the editor is inserted with no `actual_start_time` or `actual_end_time`. Per
+  `src/lib/periodOpen.ts`, a period with no `actual_end_time` reads as OPEN. Harmless for a
+  completed fixture, but worth knowing before anything else relies on that field — and
+  `periodOpen.ts`'s own comment says "a retrospective match inserts its periods with
+  `actual_end_time` already set", which is true of `useRetrospectiveMatch` but not of this path.
+- A match entered from paper has goals and scorers but no minutes and no playing time, so it
+  will show zero playing time for every player. Decide whether such fixtures need marking so
+  that does not later read as corruption.
+
+Relates to REPORT-005, UX-032.
+
 ### BUG-042 — After Restart Match from period 1, the period-transition effect may never run for the new period 1 `OPEN`
 **Found:** 29 Sep 2026, while adding the BUG-041 auto-apply. Suspected from reading the code; not reproduced.
 
