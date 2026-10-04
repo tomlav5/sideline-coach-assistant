@@ -200,6 +200,29 @@ periods was 30, although the match was understood to be 25 minutes per half.
 Either the fixture was configured wrongly at creation or the understanding was
 wrong — unconfirmed.
 
+CONFIRMED IN THE FIELD — 3-4 Oct 2026, four production matches. Queried every
+player_time_logs row written after its period's actual_end_time across all four
+fixtures: ZERO rows. The defect is dead on real data, not just on staging.
+
+The auto-apply also fired, on two of the four, which is the first field evidence
+for UX-039 phase 1:
+  - Halstead Town Reds (4 Oct) — Theo off / James on
+  - Reed Hall Sentinels Blues (4 Oct) — Zayn off / Lucas on AND Aris off /
+    Albert on, both committed in one batch ~0.9s apart
+All at minute_in_period = 1 of period 2 (the first minute, per the TIMESTAMP
+convention in matchMinute.ts; the matching player_time_logs rows carry the
+DURATION form and read 0).
+
+The other two did not exercise the path: AFC Pegasus made no half-time changes
+(its substitutions are all mid-period), and Aspire Sport (3 Oct) named a squad
+of exactly 7 with no bench, so no substitution was possible. Worth recording
+because "a match with zero substitutions" otherwise reads as a recording
+failure — here it was a squad-size fact, confirmed by the player count.
+
+total_match_minute tracked correctly across every period boundary, every
+substitution_off had its matching substitution_on in the same batch, and no
+orphaned or duplicate rows appeared.
+
 Relates to BUG-034, BUG-033, BUG-011, BUG-009, DEBT-036, DEBT-037, REPORT-005.
 
 ### BUG-040 — Resume Period and Start Penalty Shootout do not claim on an unheld match `OPEN`
