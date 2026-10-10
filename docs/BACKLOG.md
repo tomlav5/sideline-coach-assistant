@@ -8,6 +8,70 @@ Known issues and planned work. Newest findings at the top of each section.
 
 ## Bugs
 
+### BUG-046 — createFixture swallows failures with a console line and no toast `OPEN`
+**Found:** 10 Oct 2026, while fixing BUG-044.
+
+`createFixture` in `src/pages/Fixtures.tsx` ends `catch (error) { console.error(...) }`, the
+same silent catch as BUG-044's defect 1. If the insert fails, the dialog just stays open and
+nothing tells the coach why. Unlike update and delete, an RLS-blocked insert does raise an error
+(42501), so a count check isn't needed here. A destructive toast is the whole fix.
+Deliberately left alone on the BUG-044 branch so that branch does one thing.
+
+Relates to BUG-044.
+
+### BUG-045 — Cancel Match runs immediately from the row menu with no confirmation `OPEN`
+**Found:** 10 Oct 2026, while fixing BUG-044.
+
+In `src/pages/Fixtures.tsx`, the row menu's "Cancel Match" calls `cancelFixture` straight from
+`onClick`. One mis-tap on a phone marks a scheduled fixture `cancelled`, which breaks the critical
+rule "destructive actions always confirm". The menu has no un-cancel action, so getting the
+fixture back means a database edit. Fix shape: copy the BUG-025 delete confirmation
+(`AlertDialog` naming opponent and date).
+
+Relates to BUG-025, BUG-044.
+
+### BUG-044 — Edit Fixture's Update Fixture button does nothing: no save, no error `DONE 10 Oct 2026`
+**Found:** 8 Oct 2026 (Tom). Changing an existing fixture's date in the Edit Fixture dialog and
+pressing Update Fixture did nothing. Nothing saved, no error shown.
+**Fixed:** 10 Oct 2026 on `fix/edit-fixture-silent-failure` (PR #TBD). Covered by
+`src/lib/fixtureDateTime.test.ts` and the BUG-044 block in `src/pages/Fixtures.test.tsx`.
+
+**Cause:** three defects in `updateFixture` (`src/pages/Fixtures.tsx`). Any one of them is enough
+to produce the report:
+1. **Silent failure.** `catch (error) { console.error(...) }` with no toast, so every failure
+   was invisible to the coach. It now shows a destructive toast: "Failed to update match:
+   <reason>". The dialog stays open so the edits aren't lost.
+2. **Empty kickoff time crashed it.** For a fixture with no kickoff time (`kickoff_time_tbd`,
+   time field labelled Optional), `selectedTime` is `''`. `''.split(':')` gave
+   `setHours(NaN, NaN)`, so the date became Invalid Date, and `toISOString()` threw a RangeError
+   that went straight into the silent catch. The handler already writes
+   `kickoff_time_tbd: !selectedTime`, so an empty time was always meant to be supported. Now
+   handled by `combineFixtureDateTime` (`src/lib/fixtureDateTime.ts`): an empty time means local
+   midnight on the date, which is the default `createFixture` has always used. A malformed time
+   throws a readable error and never reaches `setHours` as NaN. `createFixture` now calls the same
+   helper. It never had the crash, because it already branched on an empty time.
+3. **RLS blind spot.** The `.update()` had no `{ count: 'exact' }`. RLS limits fixtures UPDATE
+   to club officials ("Club officials can update fixtures"). A blocked update returns 200 with
+   zero rows and no error, so the dialog would have closed as if it had saved. It now counts rows
+   and, on zero, shows "Nothing was saved. You do not have permission to edit matches" with the
+   dialog left open. A successful save now shows a "Match updated" toast.
+
+`cancelFixture` had defects 1 and 3 as well and got the same treatment: count check,
+permission message on zero rows, destructive toast on error, "Match cancelled" on success.
+
+Which defect hit Tom on 8 Oct isn't confirmed. The empty-time crash is the likeliest if that
+fixture was kickoff TBD, but the old code would have hidden all three.
+
+**Recurring pattern:** defect 3 is BUG-024's defect again, this time in a sibling handler right
+next to the `deleteFixture` that BUG-024 fixed. A rough grep on 10 Oct 2026 found ~64
+`.update(` / `.delete(` calls across 28 files in `src/` with no `count: 'exact'`. Some already
+check affected rows another way (e.g. `.select()` and asserting a row came back), but nobody has
+audited them. Every `.update()` and `.delete()` in the app should be swept for this pattern.
+Match-recording writes (`match_events`, `player_time_logs`, `match_periods`,
+`player_match_status`) come first.
+
+Relates to BUG-024, BUG-045, BUG-046.
+
 ### BUG-043 — Match Data Editor cannot add the first period to a match that has none `DONE 2 Oct 2026`
 **Found:** 2 Oct 2026 (Tom). The Yellows' first fixture of the season was recorded on paper.
 Entering it afterwards was impossible — Events said "Please add a period first", and Add First

@@ -24,6 +24,7 @@ import { EditFixtureDialog } from '@/components/fixtures/EditFixtureDialog';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLiveMatchDetection } from '@/hooks/useLiveMatchDetection';
 import { useToast } from '@/hooks/use-toast';
+import { combineFixtureDateTime } from '@/lib/fixtureDateTime';
 
 interface Team {
   id: string;
@@ -51,6 +52,10 @@ interface Fixture {
   selected_squad_data: any;
   kickoff_time_tbd?: boolean;
 }
+
+// Supabase errors are plain objects with a message, not Error instances.
+const errorMessage = (error: unknown) =>
+  (error as { message?: string } | null)?.message || 'Unknown error';
 
 const FIXTURE_TYPES = [
   { value: 'home', label: 'Home', icon: Home },
@@ -182,15 +187,8 @@ export default function Fixtures() {
     try {
       setCreating(true);
       
-      // Combine date and optional time
-      const scheduledDateTime = new Date(selectedDate);
-      if (selectedTime) {
-        const [hours, minutes] = selectedTime.split(':');
-        scheduledDateTime.setHours(parseInt(hours), parseInt(minutes));
-      } else {
-        // Default to midnight if time not specified
-        scheduledDateTime.setHours(0, 0, 0, 0);
-      }
+      // Combine date and optional time (midnight when no time is given)
+      const scheduledDateTime = combineFixtureDateTime(selectedDate, selectedTime);
 
       const { error } = await supabase
         .from('fixtures')
@@ -277,12 +275,15 @@ export default function Fixtures() {
     try {
       setUpdating(true);
       
-      // Combine date and time
-      const [hours, minutes] = selectedTime.split(':');
-      const scheduledDateTime = new Date(selectedDate);
-      scheduledDateTime.setHours(parseInt(hours), parseInt(minutes));
+      // Combine date and optional time (midnight when no time is given).
+      // BUG-044: an empty time used to become setHours(NaN, NaN) and throw.
+      const scheduledDateTime = combineFixtureDateTime(selectedDate!, selectedTime);
 
-      const { error } = await supabase
+      // RLS restricts fixtures UPDATE to club officials. An update blocked by
+      // RLS still returns 200 with zero rows affected and throws nothing, so
+      // count rows actually updated rather than trusting the absence of an
+      // error (same shape as deleteFixture, BUG-024).
+      const { error, count } = await supabase
         .from('fixtures')
         .update({
           team_id: newFixture.team_id,
@@ -294,10 +295,24 @@ export default function Fixtures() {
           competition_type: newFixture.competition_type,
           competition_name: newFixture.competition_name.trim() || null,
           kickoff_time_tbd: !selectedTime,
-        })
+        }, { count: 'exact' })
         .eq('id', editingFixture.id);
 
       if (error) throw error;
+
+      if (!count) {
+        toast({
+          title: "Unable to update match",
+          description: "Nothing was saved. You do not have permission to edit matches",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({
+        title: "Match updated",
+        description: "The fixture has been saved",
+      });
 
       setEditDialogOpen(false);
       setEditingFixture(null);
@@ -308,6 +323,11 @@ export default function Fixtures() {
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     } catch (error) {
       console.error('Error updating fixture:', error);
+      toast({
+        title: "Error",
+        description: `Failed to update match: ${errorMessage(error)}`,
+        variant: "destructive",
+      });
     } finally {
       setUpdating(false);
     }
@@ -315,18 +335,40 @@ export default function Fixtures() {
 
   const cancelFixture = async (fixtureId: string) => {
     try {
-      const { error } = await supabase
+      // Count rows actually updated: an RLS-blocked update returns 200 with
+      // zero rows and no error (see updateFixture).
+      const { error, count } = await supabase
         .from('fixtures')
-        .update({ status: 'cancelled' as any })
+        .update({ status: 'cancelled' as any }, { count: 'exact' })
         .eq('id', fixtureId);
 
       if (error) throw error;
+
+      if (!count) {
+        toast({
+          title: "Unable to cancel match",
+          description: "You do not have permission to cancel matches",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({
+        title: "Match cancelled",
+        description: "The fixture has been marked as cancelled",
+      });
+
       fetchFixtures();
       
       // Invalidate dashboard cache to trigger auto-refresh
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     } catch (error) {
       console.error('Error cancelling fixture:', error);
+      toast({
+        title: "Error",
+        description: `Failed to cancel match: ${errorMessage(error)}`,
+        variant: "destructive",
+      });
     }
   };
 
