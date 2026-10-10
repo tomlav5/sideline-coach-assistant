@@ -3250,7 +3250,15 @@ match-recording code.
 PRIORITY: ahead of DEBT-037. The overlap constraint guards against a defect now fixed at source;
 this is the thing coaches actually experience every match.
 
-Relates to BUG-041, BUG-014.
+**PERIODS, NOT HALVES — noted 10 Oct 2026.** The Oranges v Witham Town fixture that day ran
+THREE periods. This entry, BUG-041's coach guidance and much of the surrounding discussion
+are all phrased around "half time", which is only the two-period case. The lineup model must
+work at every period boundary, and no coach-facing string may say "half time" — the shipped
+BUG-041 message ("Substitutions can only be recorded while a period is running") is already
+correct on this point; check the rest. Also relevant to REPORT-003's share card, which has
+to render two, three or four periods.
+
+Relates to BUG-041, BUG-014, REPORT-003.
 
 ### UX-038 — Assist step presented bench players as equally valid as pitch players `DONE 27 Sep 2026`
 **Found and fixed:** 27 Sep 2026, staging testing on `fix/goal-dialog`, while fixing UX-029/UX-033.
@@ -4242,6 +4250,46 @@ to canvas and offer it through `navigator.share({ files: [...] })`, which iOS Sa
 supports from a PWA. Fall back to a download where it is unsupported.
 
 Build phase 1 first and then reassess whether phase 2 is still wanted. It may not be.
+
+**Reassessed 10 Oct 2026, after using phase 1 (Tom): the phases are inverted.** Phase 1
+shipped with REPORT-004 as "Copy tally" and is "not so necessary". Phase 2 is the one
+actually wanted — every week still means screenshotting the match report by hand to send to
+the other coaches. Phase 2 is now the live requirement; phase 1 stays as a fallback for
+anyone who wants text.
+
+**Deliberately deferred until the Floodlight conversion (DESIGN-002 phase two) lands.** A
+share card is pure brand surface — every pixel is palette — so building it in the current
+scheme means building it twice. Note that this is the first feature actively wanted that is
+blocked behind the design work, which is an argument for scheduling DESIGN-002 rather than
+against building the card.
+
+**Design target — rendered mockup:** https://claude.ai/artifact/BjqtpGkfDZ1mFr9WbwH238
+(private to Tom; share from the page's Share menu for anyone else). Approved 10 Oct 2026:
+"exactly what I wanted". Build to match it. A Floodlight card made from the Oranges 2-3
+Witham Town result — competition and date, both teams with the score, result chip, venue, the goal
+timeline grouped BY PERIOD with scorers and assists, the scorer/assist tally, and a
+sideline.assist footer with the substitution count.
+
+**Four content decisions, SETTLED 10 Oct 2026 (Tom):**
+1. **No playing time on the card.** It stays a back-pocket stat for coaches to review as
+   needed rather than something fronted to a wider audience. The card carries the result,
+   not the squad management. (This also removes the forwardability concern that made it the
+   hardest of the four.)
+2. **Periods, not halves.** Many fixtures run in thirds — the 10 Oct fixture ran three
+   periods. "Period" is acknowledged as slightly American for football, but it is the label
+   that works for two, three or four and that coaches and parents will read without
+   stumbling. No coach-facing string anywhere may say "half time". See the matching note on
+   UX-039.
+3. **An image, not a link.** It renders inline in WhatsApp with nothing to open. Forwarding
+   is no more controllable here than for anything else the club shares, so it is not a
+   reason to prefer a link.
+4. **Names unchanged** — first name and last initial, the same convention as every other
+   screen.
+
+**Mechanism note:** `navigator.share({ files: [...] })` is subject to the same user-gesture
+rule as the clipboard write in REPORT-004 — build the file BEFORE the handler and call share
+synchronously inside it, feature-detect with `navigator.canShare({ files })`, and fall back
+to rendering the card on screen for a long-press save where sharing is unsupported.
 
 **Data note:** anything shared carries the same naming convention as the app — first name
 and last initial only. A shared card travels further than a screen does, so the
