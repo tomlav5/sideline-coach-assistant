@@ -7,11 +7,12 @@ import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowLeft, Trophy, Target, Clock, Users, Calendar, MapPin, Edit } from 'lucide-react';
+import { ArrowLeft, Trophy, Target, Clock, Users, Calendar, MapPin, Edit, Copy, Check } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { ResponsiveWrapper } from '@/components/ui/responsive-wrapper';
 import { buildPlayerTimes, formatSpell, type PlayerTime, type PlayerTimeLogRow } from '@/lib/playerTimeReport';
+import { buildMatchTally, formatTallyText, tallyName, type TallyEntry } from '@/lib/matchTally';
 
 interface MatchEvent {
   id: string;
@@ -71,6 +72,14 @@ export default function MatchReport() {
   const [periods, setPeriods] = useState<MatchPeriod[]>([]);
   const [loading, setLoading] = useState(true);
   const [eventFilter, setEventFilter] = useState<'all' | 'goals' | 'substitutions'>('all');
+  const [tallyCopyState, setTallyCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
+
+  // "Copied" is a brief in-place confirmation, not a toast (DESIGN-008).
+  useEffect(() => {
+    if (tallyCopyState !== 'copied') return;
+    const timer = setTimeout(() => setTallyCopyState('idle'), 2000);
+    return () => clearTimeout(timer);
+  }, [tallyCopyState]);
 
   useEffect(() => {
     if (fixtureId) {
@@ -350,6 +359,41 @@ export default function MatchReport() {
   const { ourGoals, opponentGoals } = getScore();
   const { result, color, text } = getMatchResult(ourGoals, opponentGoals);
 
+  // REPORT-004: scorer/assist totals for FA Full-Time. The copy text is built here,
+  // at render, from the same names and score the header shows — so the click
+  // handler has nothing to compute before calling the clipboard.
+  const tally = buildMatchTally(events);
+  const tallyText = formatTallyText(fixture.teams.name, fixture.opponent_name, ourGoals, opponentGoals, tally);
+
+  const copyTally = () => {
+    // writeText must be called synchronously inside the click: any await before
+    // it loses the user gesture on iOS Safari and the write is refused.
+    try {
+      navigator.clipboard.writeText(tallyText).then(
+        () => setTallyCopyState('copied'),
+        () => setTallyCopyState('failed'),
+      );
+    } catch {
+      // navigator.clipboard is undefined outside a secure context.
+      setTallyCopyState('failed');
+    }
+  };
+
+  const renderTallyList = (label: string, entries: TallyEntry[]) =>
+    entries.length > 0 && (
+      <div>
+        <h4 className="font-medium text-xs sm:text-sm mb-2">{label}</h4>
+        <div className="space-y-1.5">
+          {entries.map((entry) => (
+            <div key={entry.player_id} className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm gap-2">
+              <span className="font-medium truncate">{tallyName(entry)}</span>
+              <span className="font-mono font-bold flex-shrink-0">{entry.count}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+
   return (
     <ResponsiveWrapper className="space-y-4 sm:space-y-6 max-w-full">
       {/* Header - stacked on mobile */}
@@ -453,6 +497,58 @@ export default function MatchReport() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Scorers & Assists (REPORT-004) — nothing at all when we have no goals */}
+      {tally.scorers.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3 sm:pb-6">
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                <Trophy className="h-4 w-4 sm:h-5 sm:w-5" />
+                Scorers &amp; Assists
+              </CardTitle>
+              <Button
+                variant="outline"
+                onClick={copyTally}
+                className="h-11 min-w-[44px] flex items-center gap-2"
+                aria-live="polite"
+              >
+                {tallyCopyState === 'copied' ? (
+                  <>
+                    <Check className="h-4 w-4" />
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-4 w-4" />
+                    Copy tally
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="p-3 sm:p-6 pt-0 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {renderTallyList('Scorers', tally.scorers)}
+              {renderTallyList('Assists', tally.assists)}
+            </div>
+            {tallyCopyState === 'failed' && (
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  Couldn't copy automatically. Select the text below and copy it by hand.
+                </p>
+                <textarea
+                  readOnly
+                  value={tallyText}
+                  rows={tallyText.split('\n').length}
+                  onFocus={(e) => e.currentTarget.select()}
+                  className="w-full rounded border bg-muted/50 p-2 font-mono text-base resize-none"
+                />
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Match Events */}
