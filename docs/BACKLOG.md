@@ -4247,8 +4247,24 @@ Build phase 1 first and then reassess whether phase 2 is still wanted. It may no
 and last initial only. A shared card travels further than a screen does, so the
 minimal-naming decision matters more here, not less.
 
-### REPORT-004 — Match report has no scorer totals `OPEN`
+### REPORT-004 — Match report has no scorer totals `DONE 8 Oct 2026`
 **Found:** 13 Sep 2026, after a 12-0 win.
+**Fixed:** 8 Oct 2026 on `feat/match-report-scorer-totals` (PR #TBD). New pure
+`src/lib/matchTally.ts` (`buildMatchTally`, `formatTallyText`) aggregates the events
+MatchReport already loads — no new query. A "Scorers & Assists" card above the
+chronological events list (which is unchanged) shows both tallies, plus a "Copy tally"
+button that writes plain text synchronously in the click handler (iOS gesture rule), shows
+"Copied" in place, and falls back to a selectable textarea on failure. Covered by
+`src/lib/matchTally.test.ts`. Prompted by four matches on 3–4 Oct 2026 (8, 8, 11 and 9
+goals) tallied by hand.
+
+- **Feeds REPORT-003.** `buildMatchTally` is the input REPORT-003's WhatsApp text needs.
+  REPORT-003 will need a first-name-only (or not) decision that this item deliberately
+  does not make: FA Full-Time is the destination here, and the tally uses the report's
+  existing first name + initials.
+- **Open question — penalties.** `match_events.is_penalty` exists but the tally does not
+  distinguish penalties, because FA Full-Time's requirements for recording them are
+  unconfirmed. Confirm what the portal wants before adding a "(P)" count.
 
 Goals are listed chronologically. Updating the FA Full-Time portal needs
 per-player totals, so a high-scoring match means tallying a long list by hand,
