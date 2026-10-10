@@ -8,6 +8,50 @@ Known issues and planned work. Newest findings at the top of each section.
 
 ## Bugs
 
+### BUG-047 — TBD kickoff times default to local midnight, so the stored date falls on the previous day in UTC `OPEN`
+**Found:** 10 Oct 2026 (Tom), during BUG-044 staging testing.
+
+`combineFixtureDateTime()` in `src/lib/fixtureDateTime.ts` turns an empty kickoff time into local
+midnight (`setHours(0, 0, 0, 0)`). Under BST that is 23:00 UTC on the **previous** calendar day.
+Seen on staging: a TBD fixture set to 13 Oct 2026 was stored as `2026-10-12 23:00:00+00`.
+
+**This pre-dates BUG-044 and is not a regression from it.** The helper's own comment calls
+midnight "the default `createFixture` has always used". The BUG-044 branch only moved that
+behaviour into a shared function, which made it visible.
+
+**Severity: latent, not live.** The app formats dates in local time everywhere, so a coach never
+sees a wrong date. The harm falls on anything that reads UTC: direct SQL, future exports, FA
+Full-Time transcription. It has already misled someone once. A reading of the staging output
+took that fixture as 12 October rather than 13.
+
+It affects every TBD fixture created while the UK is on BST, and disappears over winter. That
+makes it the kind of defect that takes a season to pin down.
+
+**Fix:** one line, `setHours(12, 0, 0, 0)`. Midday local is 11:00Z under BST and 12:00Z under
+GMT, so the calendar day matches in both all year. Midnight is the worst possible choice for any
+positive UTC offset. Update the helper's comment and `src/lib/fixtureDateTime.test.ts` to match.
+
+**Data question: decide this before changing the code.** Existing TBD fixtures keep their
+midnight timestamps. Without a repair, the table would hold old rows at midnight and new rows at
+midday. To size it:
+
+```sql
+select id, opponent_name, scheduled_date, kickoff_time_tbd,
+       (scheduled_date at time zone 'Europe/London')::date as local_date,
+       (scheduled_date at time zone 'UTC')::date           as utc_date
+from fixtures
+where kickoff_time_tbd = true
+order by scheduled_date;
+```
+
+Any row where `local_date` and `utc_date` differ reads a day early outside local time.
+
+**Side effect on sorting:** changing the default changes where TBD fixtures sort within a day.
+Today they come first. Afterwards they would come after any morning kickoff. Probably an
+improvement, but make that change on purpose.
+
+Relates to BUG-044, UX-041.
+
 ### BUG-046 — createFixture swallows failures with a console line and no toast `OPEN`
 **Found:** 10 Oct 2026, while fixing BUG-044.
 
@@ -3212,6 +3256,40 @@ Full spec, contrast pairs and regeneration steps in `docs/brand/BRAND.md`.
 ---
 
 ## UX
+
+### UX-041 — A kickoff time cannot be cleared back to blank `OPEN`
+**Found:** 10 Oct 2026 (Tom), during BUG-044 staging testing. It is why that branch's test 3
+could not be run.
+
+The Match Time field is labelled **(Optional)**, and the save handlers fully support an empty
+value: `createFixture` and `updateFixture` both write `kickoff_time_tbd: !selectedTime`. But once
+a time has been set, the UI offers no visible way to unset it. A fixture can be **created** as
+TBD and can never be **returned** to TBD. The form promises something it won't let you do.
+
+**Where the field lives** (verified 10 Oct 2026). All three are a bare
+`<Input type="time">` with no clear control:
+- **Create:** the form rendered inline in `src/pages/Fixtures.tsx` (the `createDialogOpen`
+  dialog, around line 968). `CreateFixtureDialog` (`src/components/fixtures/CreateFixtureDialog.tsx`)
+  has the same field, but nothing renders it. `Fixtures.tsx` imports it and never uses it as
+  JSX, so it looks like a dead duplicate of the inline form. The fix needs to land on the inline
+  form, or the inline form needs replacing with the component first.
+- **Edit:** `EditFixtureDialog` (`src/components/fixtures/EditFixtureDialog.tsx`), used by both
+  `Fixtures.tsx` and `FixtureDetail.tsx`.
+
+**Can the input itself be cleared?** Not reliably, and it isn't discoverable. A native time
+input is cleared differently in every browser. On desktop Chrome you blank the hour or minute
+segment with Backspace, and any blank segment makes `value` `''`. Other browsers and iOS Safari
+differ: some pickers offer a Reset or Clear action, some offer none. None of it is visible to a
+coach who doesn't already know the trick. This comes from reading the code and general browser
+behaviour, **not tested on a device**. Check on an iPhone before choosing.
+**Leaning:** a visible "Clear" / "Set as TBD" button next to the field (at least 44×44pt),
+shown only when a time is set and calling `onTimeChange('')`. That works the same everywhere
+and needs no change to the handlers. Making the native input clearable depends on the browser,
+so it can't be the whole answer.
+
+Minor.
+
+Relates to BUG-044, BUG-047.
 
 ### UX-040 — Match Data Editor cannot choose which period an event belongs to `OPEN`
 **Found:** 2 Oct 2026 (Tom), entering a paper-recorded match. With two periods created there
