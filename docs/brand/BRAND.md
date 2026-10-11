@@ -18,6 +18,75 @@ served — `public/` holds the copies the browser actually loads.
 Preferred logo pairing is Signal Amber on Floodlight Navy — 8.8:1.
 Never set amber on white (2.0:1) or place amber directly against blue (2.9:1).
 
+### Navy surfaces
+
+Added 12 Oct 2026. These colours were already in use on the match screen's navy panels
+(the fixed header and the pending-substitutions panel) and in the share-card mockup, but
+were not written down here.
+
+| Role | Name | Hex | Contrast |
+|---|---|---|---|
+| Secondary text on navy | Slate on Navy | `#8D9AAC` | 6.3:1 on Floodlight Navy; 4.6:1 on Navy Raised |
+| Chips and buttons on navy | Navy Raised | `#2B313D` | Paper text on it 11.5:1; the surface is 1.4:1 against navy |
+| Borders on navy only | Navy Edge | `#2A3447` | 1.4:1 against navy; 11.0:1 against Paper |
+
+- **Slate on Navy** is what Slate is on a light ground, carried onto navy. Slate itself
+  measures only 3.0:1 on navy. In code it is `FLOODLIGHT.dim` in `FixedMatchHeader.tsx` and
+  `PendingSubsPanel.tsx`. It matches the dark theme's `--muted-foreground` to within
+  rounding.
+- **Navy Raised** is the solid colour the code produces today with translucency. The
+  header's period chip is Paper at 12% over navy, which composites to `#2B313D`. The
+  pending panel's Undo button is white at 14% over navy, `#313743`, which is close enough
+  to be the same surface. The token should be solid, and both should use it.
+- **Navy Edge** is **provisional**. No app code uses it yet. The value comes from the
+  approved share-card mockup (REPORT-003). At 1.4:1 it is a subtle divider between navy
+  areas, not a boundary that has to be seen. Do not rely on it alone to show a shape on
+  navy; see Loss below.
+
+The share-card mockup uses `#1B2434` for raised and `#8D99AC` for muted. Build to the
+values above, which are what the app already ships.
+
+### Results
+
+Settled 12 Oct 2026. A result is shown by **fill versus outline, not by hue**.
+
+| Result | Treatment | Text |
+|---|---|---|
+| Win | Filled Pitch Blue chip | White (6.0:1) |
+| Draw | Filled Slate chip | Floodlight Navy (3.0:1; see note) |
+| Loss | Outline chip: transparent fill, Navy Edge border | Muted: Slate on light grounds (5.3:1 on Paper), Slate on Navy on navy (6.3:1) |
+
+Why:
+
+- **Red-deep keeps meaning "act now".** That is what makes the pending-subs escalation
+  read as urgent, so it is never spent on a result.
+- **Hue is not doing the work,** so the treatment survives sunlight and colour-vision
+  deficiency.
+- **This is a children's club, and results go to parents.** A defeat is not marked in alarm
+  colours. The score already says what happened.
+
+**Open contrast notes, measured 12 Oct 2026:**
+
+- Navy text on the Slate draw chip is 3.0:1, below the 4.5:1 floor for text this size.
+  White on Slate is 6.0:1.
+- On a navy ground, the loss outline (Navy Edge) is 1.4:1, so it all but disappears there.
+
+### Pitch Blue carries two related meanings
+
+On the match screen, Pitch Blue means **"our side, active"**: a player on the pitch, our
+goals, squad-ready and starter states. On a result it means **"we won"**. These are the
+same idea, our side doing well, so it is one meaning stretched, not a collision. Do not
+"fix" it by giving the win chip a different colour.
+
+The rule that still holds is never amber directly against Pitch Blue (2.9:1).
+
+### Gap for slice 1: `--red` and `--red-deep` are not tokens yet
+
+The semantic-critical table below names `--red` and `--red-deep`. **`src/index.css` declares
+neither.** The only red token is `--destructive`, which is set to Red-deep. Components that
+need the brighter Red (the pending-subs critical border) hard-code `#E5484D` instead. Slice 1
+of the Floodlight conversion (`docs/FLOODLIGHT-CONVERSION.md`) closes this gap.
+
 ### Semantic critical
 
 | Token | Hex | Use |
