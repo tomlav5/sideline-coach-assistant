@@ -3188,6 +3188,23 @@ super admin).
 
 ## Design
 
+### DESIGN-010 — `--accent` is Signal Amber, so every outline/ghost hover turns amber `OPEN`
+**Found:** 11 Oct 2026, during the DESIGN-002 re-audit (`docs/FLOODLIGHT-CONVERSION.md` §3).
+
+Phase one set `--accent` to Signal Amber in both themes. shadcn uses `accent` for hover and
+focus, not for the primary action. That covers `button.tsx`'s `outline` and `ghost` variants
+(`hover:bg-accent`) and the dropdown, select, context-menu, command, menubar, calendar and
+toggle items. On touch devices hover sticks after a tap, so a tapped outline or ghost button
+stays amber next to the screen's real amber action. That breaks the one-amber rule, and no
+hard-coded-colour count catches it because it goes through a token.
+
+Fix shape (slice 1 of the conversion plan): add `--action` for the amber, point `--accent`
+back to a neutral hover (Floodlight sunken `#E4E9EE`, today's `--secondary`), and move every
+intentional amber onto `--action`. Look at the match screen's dialogs on staging afterwards,
+since their hover states change.
+
+Relates to DESIGN-002, DESIGN-003.
+
 ### DESIGN-009 — Auth email templates are outside the design system `OPEN`
 **Found:** 19 Sep 2026.
 
@@ -3308,7 +3325,7 @@ colours gets an unreadable match screen.
 Relates to UX-005 (the 258 hard-coded classes are also the layout-consistency obstacle).
 **Blocked by:** DESIGN-002.
 
-### DESIGN-002 — 258 hard-coded colour classes bypass the design tokens `IN PROGRESS`
+### DESIGN-002 — 352 hard-coded colour sites bypass the design tokens `IN PROGRESS`
 `src/index.css` defines a complete shadcn token set, but 258 Tailwind colour utilities
 across the app (116 green, 76 yellow, 66 blue) set colours directly. Until these route
 through semantic tokens, a palette change means a find-and-replace rather than editing
@@ -3357,8 +3374,27 @@ editor is `MatchDataEditor.tsx`) and three files with no colour debt at all
 **The live site count now stands at ~183**, down from ~294, with zero shared-component
 leverage available to reduce it further (checked every colour-bearing file's actual import
 count: everything is imported 0-1 times except `ui/toast.tsx`, 4 sites, genuinely global).
-Full screen-by-screen breakdown, repeated-pattern analysis, missing-token list and proposed
-conversion slices from the 27 Sep audit are not reproduced here — see that session's report.
+~~Full screen-by-screen breakdown, repeated-pattern analysis, missing-token list and proposed
+conversion slices from the 27 Sep audit are not reproduced here — see that session's report.~~
+That report was lost with its chat session. Superseded by the 11 Oct re-audit below.
+
+**Update — 11 Oct 2026, re-audit. Plan now lives in `docs/FLOODLIGHT-CONVERSION.md`.**
+Re-counted from scratch with the same broad net: **352 live sites** — 189 Tailwind colour
+utilities, 62 hex/rgba literals, 101 local-constant references. The "~183" above does not
+hold and was never a three-kind total: the 27 Sep components summed to ~405, not ~294, and
+~183 matches the Tailwind component alone (291 − 111). Like for like, Tailwind is +9 and
+hex/rgba +13 since 27 Sep; constant usage is flat by line. The match screen (DEBT-030) is
+171 of the 352. The doc holds the per-screen breakdown, the missing-token list (`--action`,
+`--active`, `--info`, `--live`, `--success`, `--warning`, `--critical`, `--chrome*`,
+`--result-*`, with the decisions each needs), ten one-evening slices with a match-recording
+flag on each, and the re-count commands. Keep counts current there, not here.
+
+**31 Oct Phase A target: not achievable.** Ten slices at one evening each is ten evenings.
+31 Oct is 20 days from the re-audit, leaving three early-week windows (weeks of 12, 19 and
+26 Oct). The three match-screen slices need one each, so they alone consume every
+remaining early-week slot with no slippage, and seven further evenings would have to fit in
+the same three weeks. At one slice a week the phase is ten weeks. At two a week it is five.
+REPORT-003's prerequisite (slices 1 and 4) is two evenings with no early-week constraint.
 
 **Blocks:** DESIGN-003.
 
@@ -3375,37 +3411,9 @@ Full spec, contrast pairs and regeneration steps in `docs/brand/BRAND.md`.
 
 ## UX
 
-### UX-044 — Own goals for us are missing from the report's scorer tally `IN PROGRESS`
-**Found:** 12 Oct 2026 (Tom). **In progress:** `fix/own-goal-in-scorer-tally` (PR TBD).
-
-On the Reds 3-6 report the Scorers list read "Noah H 1, Peter D 1": two goals against a
-scoreline of three. The third was an own goal by an opposition player, counting for us. A coach
-checks the tally against the score, so a list that falls short of the score reads as missing data.
-
-**Cause.** `buildMatchTally` (`src/lib/matchTally.ts`) only counted goals with a `player_id`. That
-is right for assists, because an own goal has no assist. For scorers it dropped a goal that counted.
-
-**Fix (as built).** `buildMatchTally` returns `ownGoals: number` alongside `scorers` and
-`assists`. It counts `event_type = 'goal'` AND `is_own_goal` AND `is_our_team`. It is a separate
-count, not a synthetic `TallyEntry`: an own goal is not a player, and a fake `player_id` would
-leak into anything that consumes the entries. An own goal that counted for the opposition is
-theirs, and it appears nowhere in our tally. On `MatchReport` the Scorers & Assists card adds one
-"Own goal" row below every named scorer (muted text, dashed outline instead of the filled player
-rows). The card now also shows when an own goal is our only goal. The copied FA Full-Time text
-appends it last on the scorers line: `Scorers: Noah H 1, Peter D 1, Own goal 1`. Assists, the
-score calculations and every write path are unchanged.
-
-**The invariant (tested in `src/lib/matchTally.test.ts`).** Scorer counts plus `ownGoals` equal
-the number of our goals in the events array. It holds only for well-formed rows. An our-team goal
-with no `player_id` and `is_own_goal` false (the old "Unknown" case) still falls out of the tally.
-That includes the 11 Oct 2026 74' production row, until it is flagged `is_own_goal = true` as UX-042's
-"After this ships" step says. If that is the Reds 3-6 match, the report stays short until that
-update is run.
-
-Relates to UX-042, REPORT-004, REPORT-003.
-
-### UX-043 — Staged substitutions raise two false alarms between periods `IN PROGRESS`
-**Found:** 11 Oct 2026, coach feedback relayed by Tom. **In progress:** `fix/half-time-subs-tone` (PR TBD).
+### UX-043 — Staged substitutions raise two false alarms between periods `DONE 12 Oct 2026`
+**Found:** 11 Oct 2026, coach feedback relayed by Tom. **Done:** `fix/half-time-subs-tone`, PR #128.
+Merged as built below: three-state pending panel (`pending` / `critical` / `break`), with no red escalation and no destructive Submit toast between periods.
 
 During a break a coach stages their changes and presses Submit — the obvious thing to do. They
 got a red destructive toast ("Substitutions can only be recorded while a period is running."),
@@ -3444,9 +3452,9 @@ itself be the ENDED row after End Period (the resync re-selects it via
 
 Relates to UX-039, BUG-041, UX-007, DESIGN-008.
 
-### UX-042 — No way to record an own goal `IN PROGRESS`
-**Found:** 11 Oct 2026 (coach report, after a match that day). **Branch:** `feat/own-goals`
-(PR TBD).
+### UX-042 — No way to record an own goal `DONE 12 Oct 2026`
+**Found:** 11 Oct 2026 (coach report, after a match that day). **Branch:** `feat/own-goals`,
+PR #127. Merged as built below: `match_events.is_own_goal` flag, an Own goal control on every goal write path, and "Own goal" labels in the report, events lists and editor.
 
 An opposition player scored an own goal for the Reds. The app had no way to record it, so the
 coach credited it to one of our own players, which put a goal he did not score on that child's
