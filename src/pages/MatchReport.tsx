@@ -12,7 +12,7 @@ import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { ResponsiveWrapper } from '@/components/ui/responsive-wrapper';
 import { buildPlayerTimes, formatSpell, type PlayerTime, type PlayerTimeLogRow } from '@/lib/playerTimeReport';
-import { buildMatchTally, formatTallyText, tallyName, type TallyEntry } from '@/lib/matchTally';
+import { buildMatchTally, formatTallyText, tallyName, OWN_GOAL_LABEL, type TallyEntry } from '@/lib/matchTally';
 import { goalScorerFallback } from '@/lib/ownGoal';
 
 interface MatchEvent {
@@ -382,8 +382,10 @@ export default function MatchReport() {
     }
   };
 
-  const renderTallyList = (label: string, entries: TallyEntry[]) =>
-    entries.length > 0 && (
+  // ownGoals (UX-044) is a single row below every named entry, styled so it does
+  // not read as a player called "Own goal": muted text, outline instead of fill.
+  const renderTallyList = (label: string, entries: TallyEntry[], ownGoals = 0) =>
+    (entries.length > 0 || ownGoals > 0) && (
       <div>
         <h4 className="font-medium text-xs sm:text-sm mb-2">{label}</h4>
         <div className="space-y-1.5">
@@ -393,6 +395,12 @@ export default function MatchReport() {
               <span className="font-mono font-bold flex-shrink-0">{entry.count}</span>
             </div>
           ))}
+          {ownGoals > 0 && (
+            <div className="flex items-center justify-between p-2 border border-dashed rounded text-sm gap-2 text-muted-foreground">
+              <span className="italic truncate">{OWN_GOAL_LABEL}</span>
+              <span className="font-mono font-bold flex-shrink-0">{ownGoals}</span>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -502,7 +510,7 @@ export default function MatchReport() {
       </Card>
 
       {/* Scorers & Assists (REPORT-004) — nothing at all when we have no goals */}
-      {tally.scorers.length > 0 && (
+      {(tally.scorers.length > 0 || tally.ownGoals > 0) && (
         <Card>
           <CardHeader className="pb-3 sm:pb-6">
             <div className="flex items-center justify-between gap-2">
@@ -532,7 +540,7 @@ export default function MatchReport() {
           </CardHeader>
           <CardContent className="p-3 sm:p-6 pt-0 space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {renderTallyList('Scorers', tally.scorers)}
+              {renderTallyList('Scorers', tally.scorers, tally.ownGoals)}
               {renderTallyList('Assists', tally.assists)}
             </div>
             {tallyCopyState === 'failed' && (

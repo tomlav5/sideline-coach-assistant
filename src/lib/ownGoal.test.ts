@@ -84,12 +84,12 @@ describe('own goals in the score (UX-042)', () => {
   });
 });
 
-describe('own goals in the scorer tally (UX-042)', () => {
-  // Confirms buildMatchTally needs no change: own goals have no player_id, so they
-  // credit nobody — in either tally — whichever side they counted for.
-  it('excludes own goals from both the scorer and assist tallies', () => {
+describe('own goals in the scorer tally (UX-042, UX-044)', () => {
+  // Own goals credit no player, so neither tally gets an entry for one. Ours are
+  // counted in ownGoals instead (UX-044); the opposition's is not counted at all.
+  it('credits no player for an own goal, whichever side it counted for', () => {
     const tally = buildMatchTally([ownGoal(true), ownGoal(false)]);
-    expect(tally).toEqual({ scorers: [], assists: [] });
+    expect(tally).toEqual({ scorers: [], assists: [], ownGoals: 1 });
   });
 
   // Protects ordinary goals in the same match from being affected by an own goal.
