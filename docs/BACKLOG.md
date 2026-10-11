@@ -3298,6 +3298,35 @@ Full spec, contrast pairs and regeneration steps in `docs/brand/BRAND.md`.
 
 ## UX
 
+### UX-044 — Own goals for us are missing from the report's scorer tally `IN PROGRESS`
+**Found:** 12 Oct 2026 (Tom). **In progress:** `fix/own-goal-in-scorer-tally` (PR TBD).
+
+On the Reds 3-6 report the Scorers list read "Noah H 1, Peter D 1": two goals against a
+scoreline of three. The third was an own goal by an opposition player, counting for us. A coach
+checks the tally against the score, so a list that falls short of the score reads as missing data.
+
+**Cause.** `buildMatchTally` (`src/lib/matchTally.ts`) only counted goals with a `player_id`. That
+is right for assists, because an own goal has no assist. For scorers it dropped a goal that counted.
+
+**Fix (as built).** `buildMatchTally` returns `ownGoals: number` alongside `scorers` and
+`assists`. It counts `event_type = 'goal'` AND `is_own_goal` AND `is_our_team`. It is a separate
+count, not a synthetic `TallyEntry`: an own goal is not a player, and a fake `player_id` would
+leak into anything that consumes the entries. An own goal that counted for the opposition is
+theirs, and it appears nowhere in our tally. On `MatchReport` the Scorers & Assists card adds one
+"Own goal" row below every named scorer (muted text, dashed outline instead of the filled player
+rows). The card now also shows when an own goal is our only goal. The copied FA Full-Time text
+appends it last on the scorers line: `Scorers: Noah H 1, Peter D 1, Own goal 1`. Assists, the
+score calculations and every write path are unchanged.
+
+**The invariant (tested in `src/lib/matchTally.test.ts`).** Scorer counts plus `ownGoals` equal
+the number of our goals in the events array. It holds only for well-formed rows. An our-team goal
+with no `player_id` and `is_own_goal` false (the old "Unknown" case) still falls out of the tally.
+That includes the 11 Oct 2026 74' production row, until it is flagged `is_own_goal = true` as UX-042's
+"After this ships" step says. If that is the Reds 3-6 match, the report stays short until that
+update is run.
+
+Relates to UX-042, REPORT-004, REPORT-003.
+
 ### UX-043 — Staged substitutions raise two false alarms between periods `IN PROGRESS`
 **Found:** 11 Oct 2026, coach feedback relayed by Tom. **In progress:** `fix/half-time-subs-tone` (PR TBD).
 
@@ -3373,6 +3402,11 @@ unchanged. It already skips events with no `player_id`, so own goals drop out of
 
 **The "Unknown" fallback:** it existed because an our-team goal with no player had no other
 meaning. After this change it only appears for genuinely bad data.
+
+**Follow-up needed in the scorer tally — 12 Oct 2026, see UX-044.** The note above that
+`buildMatchTally` "is unchanged" was half wrong. Skipping events with no `player_id` was right for
+assists and wrong for scorers. An own goal for us counted in the score but not in the Scorers list,
+so the list fell short of the scoreline. UX-044 counts our own goals separately as `ownGoals`.
 
 **Deploy order matters.** `MatchReport` and `MatchDataEditor` select `is_own_goal` explicitly,
 so apply the migration to production **before** merging. Ordinary goal recording does not
