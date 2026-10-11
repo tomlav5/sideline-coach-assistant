@@ -712,13 +712,90 @@ The fast/slow poll is not implicated for an ordinary mid-period swap: the other
 players on the pitch keep their open intervals, so isActiveNow stays true. It
 can legitimately fire at kick-off and half-time, which is what it exists for.
 
-FIXES, in order of size:
-1. Promise.all the three post-submit reads instead of awaiting in series.
-2. Add an isSubmitting guard on Submit. CRITICAL: it must reset on every error
+MEASURED — 12 Oct 2026 (Tom, staging, DevTools Network). A TWO-PAIR submit cost
+**40 requests** in total, of which **9** were against `match_events`. This is the
+first hard number; everything above it was estimate.
+
+THE 9 ON match_events BREAK DOWN AS 4 WRITES AND 5 READS:
+  - 4 writes — a substitution_off and a substitution_on per pair. This is the
+    irreducible data.
+  - 1 read — the explicit `await loadEvents()` in handleSubmitPendingSubs.
+  - 4 reads — THE DEVICE REACTING TO ITS OWN WRITES.
+
+SELF-ECHO (new finding). EnhancedMatchTracker.tsx ~:1020 subscribes to
+postgres_changes on match_events for the fixture and calls loadEvents() on EVERY
+change, including ones this device just made. Four inserts raise four
+notifications, each triggering a full re-read of the whole events list. Each
+re-read also re-renders the events panel, which is a direct contributor to the
+flicker described above — the footer resizes once per echo.
+
+This also corrects the note above that the realtime handlers "only console.log
+their payloads". That is no longer true for match_events.
+
+FIX: a trailing debounce on the realtime-triggered reload, so a burst of
+notifications collapses into one read. Preferred over filtering out own writes by
+client_event_id (which would work — the id exists and is client-generated)
+because a debounce ALSO absorbs a burst from a second coach's device, which is
+the case that grows as more coaches use the app. Keep the explicit loadEvents()
+in the submit handler: it guarantees freshness for the person who acted and still
+works when realtime is down.
+
+WHAT THE OTHER 31 ARE — PARTIALLY ACCOUNTED FOR. applyPair's non-match_events
+work is roughly 6-7 round trips per pair (two player_match_status upserts, the
+time-log reads, the close-interval update, the in-interval insert), so ~12-14 for
+two pairs, plus resolveCurrentPeriod (1-3) and the post-submit
+refreshPlayerStatusLists and reloadTimes (2). That accounts for roughly 25-30 of
+the 40 with confidence. The remainder is NOT attributed — do not assume it is
+noise without measuring again with a filter per table.
+
+RESOLVED — MEASURED MID-PERIOD. Tom confirmed the measured swap happened
+during play, not at a period boundary. The fast poll is therefore NOT implicated:
+the other players on the pitch kept their open intervals, isActiveNow stayed
+true, and usePlayerTimers never left the 15s slow poll. An earlier claim in
+analysis that the 2s poll was inflating the count was WRONG and is withdrawn —
+the note at the top of this entry was right all along.
+
+The 2s poll can still inflate a submit made AT a period boundary, where every
+interval closes and the summaries map empties. Nobody has measured that case. If
+a coach reports slowness specifically at half-time or between periods, measure it
+separately rather than assuming it is this bug.
+
+REPLICATED, mid-period, same session. A second two-pair submit also cost
+**9 requests against match_events** (filtered list 82 to 91), matching the first
+capture exactly. The 4-writes/5-reads split and the self-echo are therefore
+stable and reproducible, not a one-off.
+  CAVEAT: the unfiltered total was NOT recaptured on this second run, so the
+  "other 31" above remain unmeasured. The next capture must record all three
+  things in one go: the unfiltered total, the per-table filtered counts, and
+  whether the submit was mid-period or at a boundary.
+  NOTE ON DATING: the MEASURED block above is labelled 12 Oct 2026, but both
+  captures were taken on 11 Oct 2026. The 12 Oct label is believed to be a
+  slip made when the block was written; left as found pending confirmation.
+
+AT REST, during normal play, the screen costs about 6 requests a minute — 4
+player-times polls at the 15s interval plus 2 heartbeats. Across an hour that is
+~360 requests before anyone touches anything, which matters for BUG-013 and
+coaches on poor signal.
+
+FIXES, revised order after the measurement:
+1. Debounce the realtime-triggered loadEvents. Smallest change, removes 4 of the
+   9 match_events requests, and it is the one that also fixes the flicker and
+   helps when a second coach is recording elsewhere.
+2. Promise.all the three post-submit reads instead of awaiting in series.
+3. Add an isSubmitting guard on Submit. CRITICAL: it must reset on every error
    path. A guard that fails to reset leaves a coach unable to substitute for
    the rest of the match — worse than the bug it fixes.
-3. Batch the per-pair writes into a single transactional RPC. See DEBT-036 —
+4. Batch the per-pair writes into a single transactional RPC. See DEBT-036 —
    this is the real fix and it also resolves BUG-033.
+
+DROPPED: suppressing the player-times poll while a submit is in flight. This was
+item 4 until the measured swap was confirmed mid-period, where the poll stays on
+its 15s interval and contributes nothing to the 40. Reconsider only if a
+boundary submit is ever measured and shows the 2s poll firing across the
+settling window.
+
+TARGET: items 1, 2 and 4 together should take a two-pair submit from 40 requests
+to under 10. Re-measure the same way to confirm rather than assuming.
 
 ### BUG-031 — Deletes never refresh the report views `OPEN`
 **Found:** 11 Sep 2026.
