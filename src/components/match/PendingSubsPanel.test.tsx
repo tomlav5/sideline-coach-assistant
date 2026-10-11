@@ -24,7 +24,7 @@ describe('PendingSubsPanel', () => {
         pairs={[]}
         nameFor={nameFor}
         waitedSeconds={0}
-        critical={false}
+        tone="pending"
         onUndoLast={() => {}}
       />,
     );
@@ -37,7 +37,7 @@ describe('PendingSubsPanel', () => {
         pairs={[pair('p1', 'A', 'X'), pair('p2', 'B', 'Y')]}
         nameFor={nameFor}
         waitedSeconds={12}
-        critical={false}
+        tone="pending"
         onUndoLast={() => {}}
       />,
     );
@@ -56,7 +56,7 @@ describe('PendingSubsPanel', () => {
         pairs={[pair('p1', 'A', 'X')]}
         nameFor={nameFor}
         waitedSeconds={75}
-        critical
+        tone="critical"
         onUndoLast={() => {}}
       />,
     );
@@ -70,7 +70,7 @@ describe('PendingSubsPanel', () => {
         pairs={[pair('p1', 'GHOST', 'X')]}
         nameFor={nameFor}
         waitedSeconds={3}
-        critical={false}
+        tone="pending"
         onUndoLast={() => {}}
       />,
     );
@@ -87,11 +87,52 @@ describe('PendingSubsPanel', () => {
         pairs={[pair('p1', 'A', 'X')]}
         nameFor={nameFor}
         waitedSeconds={0}
-        critical={false}
+        tone="pending"
         onUndoLast={vi.fn()}
         disabled
       />,
     );
     expect(screen.getByRole('button', { name: 'Undo last' })).toBeDisabled();
+  });
+
+  describe('three distinct states (UX-043)', () => {
+    const renderTone = (tone: 'pending' | 'break' | 'critical') =>
+      render(
+        <PendingSubsPanel
+          pairs={[pair('p1', 'A', 'X'), pair('p2', 'B', 'Y'), pair('p3', 'A', 'Y')]}
+          nameFor={nameFor}
+          waitedSeconds={83}
+          tone={tone}
+          onUndoLast={() => {}}
+        />,
+      );
+
+    it('pending: amber count and the waiting clock, no breathe', () => {
+      const { container } = renderTone('pending');
+      expect(screen.getByText('3 subs pending')).toBeInTheDocument();
+      expect(screen.getByText('waiting 1:23')).toBeInTheDocument();
+      expect(container.querySelector('.pending-critical-breathe')).toBeNull();
+    });
+
+    it('break: calm "ready" copy, no waiting clock, no red, no breathe', () => {
+      const { container } = renderTone('break');
+      expect(screen.getByText('3 subs ready')).toBeInTheDocument();
+      expect(screen.getByText('on at Start Period')).toBeInTheDocument();
+      expect(screen.queryByText(/waiting/)).toBeNull();
+      expect(screen.queryByText(/Not submitted/)).toBeNull();
+      expect(container.querySelector('.pending-critical-breathe')).toBeNull();
+      expect((container.firstChild as HTMLElement).style.backgroundColor).not.toBe('rgb(180, 35, 44)');
+      // Undo is unchanged in every state.
+      expect(screen.getByRole('button', { name: 'Undo last' })).toBeEnabled();
+    });
+
+    it('critical: Red-deep, breathing, "Not submitted", clock still shown', () => {
+      const { container } = renderTone('critical');
+      expect(screen.getByText('Not submitted · 3 subs')).toBeInTheDocument();
+      expect(screen.getByText('waiting 1:23')).toBeInTheDocument();
+      const root = container.firstChild as HTMLElement;
+      expect(root).toHaveClass('pending-critical-breathe');
+      expect(root.style.backgroundColor).toBe('rgb(180, 35, 44)');
+    });
   });
 });

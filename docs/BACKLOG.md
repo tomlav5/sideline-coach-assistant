@@ -3152,7 +3152,16 @@ load-bearing, not decorative: "1 substitution still pending" is the app preventi
 mistake. And the undo affordance currently lives inside a toast, so removing toasts before
 the inline confirmation line exists would remove undo. Step 2 must be built first.
 
-Relates to UX-007.
+**The "load-bearing toast" question answered in practice — 11 Oct 2026 (UX-043).** The
+pending-subs escalation is exactly the kind of signal this item warns against removing, and
+coach feedback confirmed it is worth keeping: mid-period it is the only thing that pulls the
+coach's eye back to a forgotten substitution. What was wrong was its trigger condition, not the
+signal. It fired between periods, where auto-apply makes a wait harmless. UX-043 narrows the
+trigger (period open AND 60s) and swaps the break-time Submit refusal for a default-style
+confirmation. Takeaway for step 1: before removing or softening a toast, check whether it is
+wrong in every situation or only in some.
+
+Relates to UX-007, UX-043.
 
 ### DESIGN-007 — End Match button colour never specified `DONE 11 Sep 2026`
 **Found:** 11 Sep 2026. **Checked:** 11 Sep 2026, branch `fix/floodlight-polish` (PR TBD).
@@ -3288,6 +3297,46 @@ Full spec, contrast pairs and regeneration steps in `docs/brand/BRAND.md`.
 ---
 
 ## UX
+
+### UX-043 — Staged substitutions raise two false alarms between periods `IN PROGRESS`
+**Found:** 11 Oct 2026, coach feedback relayed by Tom. **In progress:** `fix/half-time-subs-tone` (PR TBD).
+
+During a break a coach stages their changes and presses Submit — the obvious thing to do. They
+got a red destructive toast ("Substitutions can only be recorded while a period is running."),
+and a minute later `PendingSubsPanel` flipped to Red-deep with a breathing animation and "Not
+submitted · 3 subs". Two alarms, and the coach had done nothing wrong: the pairs were staged
+correctly and auto-apply (UX-039 phase 1) commits them the moment Start Period is pressed.
+Tom: "imagine seeing this for the first time when using the app, it's confusing."
+
+**Why it happened.** The 60s escalation predates auto-apply. Back then a forgotten staged pair
+really was a problem at any time, because nothing would ever commit it. Between periods that is
+now false by construction.
+
+**Decision (Tom, 11 Oct): keep the red escalation mid-period exactly as it is.** A pair staged
+and never submitted mid-period leaves the on-screen pitch disagreeing with the real one and
+keeps accruing minutes to the player who has come off. Auto-apply does not catch it, because it
+only fires at a period start. The only change is that the escalation never fires during a break.
+
+**Fix shape (as built).** `src/lib/pendingSubsTone.ts` gives the panel three states:
+`pending`, `critical` (60s+ AND a period open) and `break` (calm "N subs ready · on at Start
+Period", no waiting clock). Submit from the action bar or the 's' shortcut during a break now
+raises a DEFAULT toast ("Ready for the next period"). Nothing is written and nothing is
+unstaged, as before. The End Match guard and auto-apply keep the existing refusal wording,
+because from the guard the pairs will not go on at a next period. `NO_OPEN_PERIOD_MESSAGE`
+itself is unchanged.
+
+**THE PREDICATE TRAP.** "Is a period open" must be `isPeriodOpen` (keyed on `actual_end_time`,
+`src/lib/periodOpen.ts`). It must NOT be `is_active` or the timer's running flag: pausing sets
+`is_active = false` while the period is still in play. A second trap was found while building:
+the page's own `periods`/`currentPeriod` state is loaded on mount only, so it never sees a period
+started or ended on screen. Used directly, a coach who opened the screen before kick-off would
+have had the mid-period escalation suppressed for the whole match. The timer now reports
+`isPeriodOpen(timerState.currentPeriod)` through `onTimerUpdate`, and the page's mount-time
+`currentPeriod` is only a fallback until the timer first reports. The timer's `currentPeriod` can
+itself be the ENDED row after End Period (the resync re-selects it via
+`fixtures.current_period_id`), which is why a non-null period id is not enough either.
+
+Relates to UX-039, BUG-041, UX-007, DESIGN-008.
 
 ### UX-042 — No way to record an own goal `IN PROGRESS`
 **Found:** 11 Oct 2026 (coach report, after a match that day). **Branch:** `feat/own-goals`
@@ -3514,7 +3563,12 @@ BUG-041 message ("Substitutions can only be recorded while a period is running")
 correct on this point; check the rest. Also relevant to REPORT-003's share card, which has
 to render two, three or four periods.
 
-Relates to BUG-041, BUG-014, REPORT-003.
+**FALSE ALARM FROM PHASE 1 — 11 Oct 2026, see UX-043.** The pending panel's 60s red
+escalation and the BUG-041 refusal toast both predate auto-apply. Once phase 1 commits staged
+pairs at Start Period, staging during a break is the correct workflow, and both signals fired at
+coaches who had done nothing wrong. UX-043 suppresses them between periods only.
+
+Relates to BUG-041, BUG-014, REPORT-003, UX-043.
 
 ### UX-038 — Assist step presented bench players as equally valid as pitch players `DONE 27 Sep 2026`
 **Found and fixed:** 27 Sep 2026, staging testing on `fix/goal-dialog`, while fixing UX-029/UX-033.

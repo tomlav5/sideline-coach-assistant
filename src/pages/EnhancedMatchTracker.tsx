@@ -44,6 +44,8 @@ import { useAutoApplyPendingSubs } from '@/hooks/useAutoApplyPendingSubs';
 import { PendingSubsPanel } from '@/components/match/PendingSubsPanel';
 import { NoOpenPeriodError, submitSubstitutions } from '@/lib/submitSubstitutions';
 import { openSpellsForNewPeriod } from '@/lib/openPeriodSpells';
+import { isPeriodOpen } from '@/lib/periodOpen';
+import { breakSubmitToast, pendingSubsTone } from '@/lib/pendingSubsTone';
 import { decideMissingStarterLog } from '@/lib/missingStarterLog';
 import { useToast } from '@/hooks/use-toast';
 
@@ -77,6 +79,8 @@ interface MatchPeriod {
   period_number: number;
   planned_duration_minutes: number;
   is_active: boolean;
+  // Loaded by select('*'); the only reliable "has this period ended" signal (periodOpen.ts).
+  actual_end_time?: string | null;
 }
 
 export default function EnhancedMatchTracker() {
@@ -123,6 +127,12 @@ export default function EnhancedMatchTracker() {
   // brief window before the timer speaks (BUG-012).
   const [timerPeriodId, setTimerPeriodId] = useState<string | null | undefined>(undefined);
   const [timerRunning, setTimerRunning] = useState(false);
+  // Whether a period is in play, reported by the timer as isPeriodOpen(its
+  // currentPeriod) — true while PAUSED, false once ENDED. `undefined` until the
+  // timer's first update, then the mount-time fallback below stops applying.
+  // Neither `timerRunning` (false when paused) nor this page's mount-time
+  // `periods` (never sees a period started or ended on screen) can stand in (UX-043).
+  const [timerPeriodOpen, setTimerPeriodOpen] = useState<boolean | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   
   // Smart suggestions based on match context (after state declarations)
@@ -163,7 +173,7 @@ export default function EnhancedMatchTracker() {
   }, [pendingStack.length]);
   const pendingWaitedSeconds =
     oldestPendingAt === null ? 0 : Math.max(0, Math.floor((nowTick - oldestPendingAt) / 1000));
-  const pendingCritical = pendingWaitedSeconds >= 60;
+  // pendingSubsTone / pendingCritical are derived below, once currentPeriod exists.
 
   // The bottom furniture is now variable-height — it grows with each pending row —
   // so the scroll container's padding is derived from the measured footer rather
@@ -592,7 +602,8 @@ export default function EnhancedMatchTracker() {
     seconds: number,
     totalMatchSeconds: number,
     periodId?: string | null,
-    isRunning?: boolean
+    isRunning?: boolean,
+    periodOpen?: boolean
   ) => {
     setCurrentMinute(minute);
     setTotalMatchMinute(totalMinute);
@@ -602,6 +613,7 @@ export default function EnhancedMatchTracker() {
     // Fresh every second while a period runs — drives usePlayerTimers (DEFECT 1).
     if (periodId !== undefined) setTimerPeriodId(periodId);
     if (isRunning !== undefined) setTimerRunning(isRunning);
+    if (periodOpen !== undefined) setTimerPeriodOpen(periodOpen);
 
     // Removed per-second DB writes to player_time_logs. We now only write on transitions:
     // - New period start initializes starters at time_on=0 in useEffect on period change
@@ -609,6 +621,14 @@ export default function EnhancedMatchTracker() {
     // - Period end finalizes open intervals
   }, []);
   const currentPeriod = periods.find(p => p.is_active) || (periods.length > 0 ? periods[periods.length - 1] : null);
+
+  // Staged substitutions only escalate to red while a period is in play. Between
+  // periods auto-apply (UX-039) commits them at the next Start Period, so a wait
+  // is not a mistake and the panel reads calm instead (UX-043). The timer's report
+  // wins; the mount-time currentPeriod is only a fallback until it first speaks.
+  const periodOpen = timerPeriodOpen ?? isPeriodOpen(currentPeriod);
+  const pendingTone = pendingSubsTone(pendingWaitedSeconds, periodOpen);
+  const pendingCritical = pendingTone === 'critical';
 
   // Real-time player timers. The timer (fresh every second via onTimerUpdate) is
   // the source of truth for both the running flag and the current period id.
@@ -659,7 +679,13 @@ export default function EnhancedMatchTracker() {
   // Commit the staged substitutions. Reused by the action-bar Submit and the
   // UX-010 end-of-period/match guard. Rejects if the batch did not fully commit,
   // leaving any failed pair staged rather than losing it.
-  const handleSubmitPendingSubs = async () => {
+  //
+  //
+  // `origin` only changes the wording when no period is open. 'submit' is the coach
+  // pressing Submit (button or 's'): staging for the next period, nothing is wrong.
+  // Every other caller keeps the refusal — from the End Match guard the pairs will
+  // NOT go on at a next period, and auto-apply only runs once a period has started.
+  const handleSubmitPendingSubs = async (origin: 'submit' | 'other' = 'other') => {
     if (recordingLocked || pendingStack.length === 0) return;
 
     const batch = pendingStack.map((p) => ({
@@ -704,6 +730,12 @@ export default function EnhancedMatchTracker() {
     if (result.error instanceof NoOpenPeriodError) {
       // BUG-041: submitted during a break. Nothing was written, and nothing is
       // removed from the stack — the same pairs submit once the period starts.
+      if (origin === 'submit') {
+        // UX-043: the coach did the right thing; auto-apply will commit these at
+        // Start Period. Confirm it, in the default (not destructive) style.
+        toast(breakSubmitToast(pendingStack.length));
+        throw result.error;
+      }
       toast({
         title: result.error.message,
         description:
@@ -1016,7 +1048,7 @@ export default function EnhancedMatchTracker() {
       // Staging is done by tapping tiles now (UX-007 branch 3); the 's' shortcut
       // commits whatever is staged.
       if (pendingStack.length > 0) {
-        void handleSubmitPendingSubs();
+        void handleSubmitPendingSubs('submit');
       }
     },
     onOtherEvent: () => setShowEventDialog(true),
@@ -1444,7 +1476,7 @@ export default function EnhancedMatchTracker() {
           pairs={pendingStack}
           nameFor={firstNameFor}
           waitedSeconds={pendingWaitedSeconds}
-          critical={pendingCritical}
+          tone={pendingTone}
           onUndoLast={undoLastPendingSub}
           disabled={recordingLocked}
         />
@@ -1460,7 +1492,7 @@ export default function EnhancedMatchTracker() {
         ref={actionBarRef}
         onQuickGoal={() => setShowGoalDialog(true)}
         onOtherEvent={() => setShowEventDialog(true)}
-        onSubmit={() => { void handleSubmitPendingSubs(); }}
+        onSubmit={() => { void handleSubmitPendingSubs('submit'); }}
         pendingCount={pendingStack.length}
         pendingCritical={pendingCritical}
         isPeriodRunning={timerRunning}

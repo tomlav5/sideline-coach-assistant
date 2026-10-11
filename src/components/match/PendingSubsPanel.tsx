@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils';
 import type { PendingPair } from '@/lib/pendingSubs';
+import type { PendingSubsTone } from '@/lib/pendingSubsTone';
 
 // Floodlight — see docs/brand/BRAND.md. Scoped locally like the header and tile grid;
 // the app-wide token migration is DESIGN-002.
@@ -21,8 +22,13 @@ interface PendingSubsPanelProps {
   nameFor: (playerId: string) => string;
   /** Seconds the OLDEST pending pair has been staged. Owned by the parent's clock. */
   waitedSeconds: number;
-  /** True once the oldest pair has waited 60s — deep-red critical state. */
-  critical: boolean;
+  /**
+   * Decided by the parent (lib/pendingSubsTone.ts), never worked out here:
+   * `pending` mid-period, `critical` once the oldest pair has waited 60s mid-period
+   * (deep red), `break` between periods — calm, no waiting clock, because
+   * auto-apply commits the pairs at the next Start Period (UX-043).
+   */
+  tone: PendingSubsTone;
   onUndoLast: () => void;
   /** Not the active tracker: the whole panel is inert (it should not render then anyway). */
   disabled?: boolean;
@@ -39,12 +45,14 @@ export function PendingSubsPanel({
   pairs,
   nameFor,
   waitedSeconds,
-  critical,
+  tone,
   onUndoLast,
   disabled = false,
 }: PendingSubsPanelProps) {
   if (pairs.length === 0) return null;
 
+  const critical = tone === 'critical';
+  const onBreak = tone === 'break';
   const mutedInk = critical ? 'rgba(255, 255, 255, 0.78)' : FLOODLIGHT.dim;
 
   // Resolve every row up front from the SAME list the count is taken from, so the
@@ -81,14 +89,23 @@ export function PendingSubsPanel({
             >
               {critical
                 ? `Not submitted · ${count} sub${count === 1 ? '' : 's'}`
-                : `${count} sub${count === 1 ? '' : 's'} pending`}
+                : onBreak
+                  ? `${count} sub${count === 1 ? '' : 's'} ready`
+                  : `${count} sub${count === 1 ? '' : 's'} pending`}
             </span>
-            <span
-              className="font-mono text-[11px]"
-              style={{ color: mutedInk, fontVariantNumeric: 'tabular-nums' }}
-            >
-              waiting {formatWait(waitedSeconds)}
-            </span>
+            {onBreak ? (
+              // No waiting clock between periods: there is nothing to be late for.
+              <span className="text-[11px]" style={{ color: mutedInk }}>
+                on at Start Period
+              </span>
+            ) : (
+              <span
+                className="font-mono text-[11px]"
+                style={{ color: mutedInk, fontVariantNumeric: 'tabular-nums' }}
+              >
+                waiting {formatWait(waitedSeconds)}
+              </span>
+            )}
           </div>
 
           <button

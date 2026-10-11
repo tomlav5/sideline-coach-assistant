@@ -11,6 +11,7 @@ import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { canActOnMatch, type TrackerHolder } from '@/lib/trackerGate';
+import { isPeriodOpen } from '@/lib/periodOpen';
 
 // Floodlight — see docs/brand/BRAND.md. Scoped locally to this component, per the
 // precedent set by the header/tile-grid branches (DESIGN-002 covers the app-wide
@@ -35,6 +36,10 @@ interface EnhancedMatchControlsProps {
   // periodId/isRunning are the live period identity and running flag straight from
   // useEnhancedMatchTimer — the parent's own periods/fixture state is only loaded on
   // mount, so it needs these to drive per-player timers while a period runs (DEFECT 1).
+  // periodOpen is isPeriodOpen(timerState.currentPeriod) — keyed on actual_end_time, so
+  // it stays true while a period is PAUSED (isRunning false) and is false once it has
+  // ENDED even if the timer's resync has re-selected the ended row as currentPeriod.
+  // Neither periodId nor isRunning can answer "is a period in play" on its own (UX-043).
   onTimerUpdate?: (
     currentMinute: number,
     totalMinute: number,
@@ -42,7 +47,8 @@ interface EnhancedMatchControlsProps {
     currentSeconds: number,
     totalSeconds: number,
     periodId?: string | null,
-    isRunning?: boolean
+    isRunning?: boolean,
+    periodOpen?: boolean
   ) => void;
   forceRefresh?: boolean;
   // Ownership gate (client-side only — see SEC-003 for the still-open server-side
@@ -141,11 +147,13 @@ export function EnhancedMatchControls({
       timerState.totalMatchTime,
       timerState.currentPeriod?.id ?? null,
       timerState.isRunning,
+      isPeriodOpen(timerState.currentPeriod),
     );
   }, [
     timerState.currentTime,
     timerState.totalMatchTime,
     timerState.currentPeriod?.id,
+    timerState.currentPeriod?.actual_end_time,
     timerState.currentPeriod?.period_number,
     timerState.isRunning,
     timerState.matchStatus,

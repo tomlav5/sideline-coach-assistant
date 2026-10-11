@@ -179,6 +179,31 @@ describe('EnhancedMatchControls › reports a successful start (auto-apply trigg
   });
 });
 
+// The parent decides whether staged substitutions may escalate to red from this
+// flag (UX-043). It must key on actual_end_time: a PAUSED period reports
+// isRunning false but is still in play.
+describe('EnhancedMatchControls › reports whether a period is open (UX-043)', () => {
+  const pausedPeriod = { ...openPeriod, is_active: false, pause_time: '2026-09-20T10:20:00Z' };
+  const cases = [
+    ['running', { ...base, periods: [openPeriod], currentPeriod: openPeriod, isRunning: true, matchStatus: 'in_progress' }, true, true],
+    ['paused', { ...base, periods: [pausedPeriod], currentPeriod: pausedPeriod, isRunning: false, matchStatus: 'paused' }, false, true],
+    // endCurrentPeriod clears currentPeriod…
+    ['ended (cleared)', { ...base, periods: [endedPeriod], currentPeriod: undefined, isRunning: false, matchStatus: 'paused' }, false, false],
+    // …but the resync can re-select the ended row via fixtures.current_period_id.
+    ['ended (re-selected)', { ...base, periods: [endedPeriod], currentPeriod: endedPeriod, isRunning: false, matchStatus: 'in_progress' }, false, false],
+    ['before kick-off', states['Start Period'], false, false],
+  ] as const;
+
+  it.each(cases)('%s → isRunning %s, periodOpen %s', (_label, timerState, running, open) => {
+    mocks.timerState = timerState;
+    const onTimerUpdate = vi.fn();
+    renderControls({ onTimerUpdate });
+    const last = onTimerUpdate.mock.calls.at(-1)!;
+    expect(last[6]).toBe(running);
+    expect(last[7]).toBe(open);
+  });
+});
+
 describe('EnhancedMatchControls › claim on start', () => {
   const pressStart = () => fireEvent.click(screen.getByRole('button', { name: /start period/i }));
 
