@@ -6,6 +6,8 @@ import { EnhancedEventDialog } from '@/components/match/EnhancedEventDialog';
 import { EditSquadDialog } from '@/components/match/EditSquadDialog';
 import { MatchLockingBanner } from '@/components/match/MatchLockingBanner';
 import { QuickGoalButton } from '@/components/match/QuickGoalButton';
+import { applyOwnGoal } from '@/lib/ownGoal';
+import { goalFailureToast } from '@/lib/goalFailure';
 import { FixedMatchHeader } from '@/components/match/FixedMatchHeader';
 import { BottomActionBar } from '@/components/match/BottomActionBar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -64,6 +66,7 @@ interface MatchEvent {
   total_match_minute: number;
   is_our_team: boolean;
   is_penalty?: boolean;
+  is_own_goal?: boolean;
   notes?: string;
   players?: Player & { id: string };
   assist_players?: Player & { id: string };
@@ -333,19 +336,21 @@ export default function EnhancedMatchTracker() {
   };
 
   // Quick goal handler with optimistic updates and assist tracking
-  const handleQuickGoal = async (playerId: string, isOurTeam: boolean = true, assistPlayerId?: string, isPenalty: boolean = false) => {
+  const handleQuickGoal = async (playerId: string, isOurTeam: boolean = true, assistPlayerId?: string, isPenalty: boolean = false, isOwnGoal: boolean = false) => {
     try {
-      // Get current period
-      const { data: activePeriod } = await supabase
+      // Get current period. Both failures here used to return quietly, which
+      // the dialog read as success: it closed and the goal was simply lost.
+      // They now throw into the catch below, which tells the coach.
+      const { data: activePeriod, error: periodError } = await supabase
         .from('match_periods')
         .select('*')
         .eq('fixture_id', fixtureId)
         .eq('is_active', true)
         .maybeSingle();
 
+      if (periodError) throw periodError;
       if (!activePeriod) {
-        console.error('No active period - start a period first');
-        return;
+        throw new Error('No period is running — start a period first');
       }
 
       // Generate unique client event ID
@@ -355,9 +360,12 @@ export default function EnhancedMatchTracker() {
       const isPenaltyPeriod = (activePeriod as any).period_type === 'penalties';
 
       // Create goal event
+      // UX-042: applyOwnGoal is a no-op for an ordinary goal (no is_own_goal
+      // key is even added). For an own goal it nulls scorer/assist and clears
+      // is_penalty — including the shootout auto-penalty below.
       const { data: newEvent, error } = await supabase
         .from('match_events')
-        .insert({
+        .insert(applyOwnGoal({
           fixture_id: fixtureId,
           period_id: activePeriod.id,
           event_type: 'goal',
@@ -369,7 +377,7 @@ export default function EnhancedMatchTracker() {
           is_penalty: isPenaltyPeriod || isPenalty,
           is_retrospective: false,
           client_event_id: clientEventId,
-        })
+        }, isOwnGoal))
         .select('id, player_id')
         .single();
 
@@ -383,7 +391,9 @@ export default function EnhancedMatchTracker() {
       const scorer = players.find((p) => p.id === playerId);
       pushUndo({
         type: 'event',
-        description: isOurTeam
+        description: isOwnGoal
+          ? `Own goal — ${isOurTeam ? 'for us' : 'for opposition'}`
+          : isOurTeam
           ? `Goal — ${scorer ? `${scorer.first_name} ${scorer.last_name}` : 'our team'}`
           : 'Goal — opposition',
         undo: async () => {
@@ -398,9 +408,12 @@ export default function EnhancedMatchTracker() {
 
       // Reload events to update UI
       await loadEvents();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error recording quick goal:', error);
-      console.error('Failed to record goal:', error?.message);
+      // Every QuickGoalButton path lands here, and this is where the error
+      // detail is. Re-thrown so the dialog stays open with its selections
+      // intact for a retry.
+      toast(goalFailureToast(error));
       throw error;
     }
   };
@@ -1239,6 +1252,7 @@ export default function EnhancedMatchTracker() {
                               <span className="font-semibold text-base">GOAL</span>
                             </div>
                             {event.is_penalty && <Badge variant="outline" className="text-xs">Penalty</Badge>}
+                            {event.is_own_goal && <Badge variant="outline" className="text-xs">Own goal</Badge>}
                             {!event.is_our_team && <Badge variant="destructive" className="text-xs">Opposition</Badge>}
                           </>
                         )}
@@ -1267,7 +1281,15 @@ export default function EnhancedMatchTracker() {
                         </div>
                       )}
                       
-                      {event.event_type === 'goal' && !scorer && !event.is_our_team && (
+                      {event.event_type === 'goal' && event.is_own_goal && (
+                        <div className="flex flex-col gap-1 ml-1">
+                          <div className="flex items-baseline gap-2">
+                            <span className="text-xs text-muted-foreground uppercase tracking-wide">Own goal</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {event.event_type === 'goal' && !scorer && !event.is_our_team && !event.is_own_goal && (
                         <div className="flex flex-col gap-1 ml-1">
                           <div className="flex items-baseline gap-2">
                             <span className="text-xs text-muted-foreground uppercase tracking-wide">Opponent Goal</span>

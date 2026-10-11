@@ -22,6 +22,7 @@ interface MatchEvent {
   period_id: string;
   is_our_team: boolean;
   is_penalty?: boolean;
+  is_own_goal?: boolean;
   player_id?: string;
   assist_player_id?: string | null;
   notes?: string;
@@ -141,6 +142,7 @@ export default function MatchDataEditor() {
           period_id,
           is_our_team,
           is_penalty,
+          is_own_goal,
           player_id,
           assist_player_id,
           notes,

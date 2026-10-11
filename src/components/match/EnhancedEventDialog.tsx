@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import { PlayerSelector } from '@/components/match/PlayerSelector';
+import { applyOwnGoal } from '@/lib/ownGoal';
 
 // Floodlight — see docs/brand/BRAND.md. Scoped locally, per the precedent set by the
 // header/tile-grid branches (DESIGN-002 covers the app-wide token migration). These
@@ -77,6 +78,7 @@ export function EnhancedEventDialog({
   const [assistPlayer, setAssistPlayer] = useState('');
   const [isOurTeam, setIsOurTeam] = useState(true);
   const [isPenalty, setIsPenalty] = useState(false);
+  const [isOwnGoal, setIsOwnGoal] = useState(false);
   const [customMinute, setCustomMinute] = useState('');
   const [notes, setNotes] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -166,6 +168,10 @@ export function EnhancedEventDialog({
     ];
   }, [pitchPlayers, benchPlayers]);
 
+  // The Own goal checkbox is hidden in a shootout period, so a tick left over
+  // from an earlier, cancelled use of this dialog must not apply there.
+  const ownGoal = isOwnGoal && resolvedPeriod?.period_type !== 'penalties';
+
   const availableCount = playerGroups
     ? (pitchPlayers?.length ?? 0) + (benchPlayers?.length ?? 0)
     : activePlayers.length;
@@ -176,7 +182,8 @@ export function EnhancedEventDialog({
       return;
     }
 
-    if (eventType === 'goal' && !selectedPlayer && isOurTeam) {
+    // An own goal (UX-042) has no scorer by definition.
+    if (eventType === 'goal' && !selectedPlayer && isOurTeam && !ownGoal) {
       console.error('Please select a player for the goal');
       return;
     }
@@ -187,7 +194,9 @@ export function EnhancedEventDialog({
       const isPenaltyPeriod = resolvedPeriod.period_type === 'penalties';
       const minuteToUse = customMinute ? parseInt(customMinute) : currentMinute;
       
-      const eventData = {
+      // UX-042: applyOwnGoal leaves an ordinary goal's payload untouched; for an
+      // own goal it nulls scorer/assist and clears is_penalty.
+      const eventData = applyOwnGoal({
         fixture_id: fixtureId,
         period_id: (resolvedPeriod || currentPeriod)!.id,
         event_type: eventType,
@@ -200,7 +209,7 @@ export function EnhancedEventDialog({
         notes: notes || null,
         is_retrospective: false,
         client_event_id: (typeof crypto !== 'undefined' && 'randomUUID' in crypto) ? (crypto as any).randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      };
+      }, eventType === 'goal' && ownGoal);
 
       const { error } = await supabase
         .from('match_events')
@@ -212,6 +221,7 @@ export function EnhancedEventDialog({
       setSelectedPlayer('');
       setAssistPlayer('');
       setIsPenalty(false);
+      setIsOwnGoal(false);
       setCustomMinute('');
       setNotes('');
       
@@ -256,8 +266,8 @@ export function EnhancedEventDialog({
             </div>
           </div>
 
-          {/* Player Selection (only for our team) */}
-          {isOurTeam && (
+          {/* Player Selection (only for our team, never for an own goal) */}
+          {isOurTeam && !ownGoal && (
             <div>
               <Label>Goal Scorer</Label>
               <PlayerSelector
@@ -279,7 +289,7 @@ export function EnhancedEventDialog({
           )}
 
           {/* Assist Player (only for goals from our team, not in penalty shootout) */}
-          {eventType === 'goal' && isOurTeam && resolvedPeriod?.period_type !== 'penalties' && (
+          {eventType === 'goal' && isOurTeam && !ownGoal && resolvedPeriod?.period_type !== 'penalties' && (
             <div>
               <Label>Assist Player (optional)</Label>
               <PlayerSelector
@@ -298,15 +308,40 @@ export function EnhancedEventDialog({
             </div>
           )}
 
-          {/* Penalty Checkbox (only for goals, not in penalty shootout) */}
+          {/* Penalty and Own goal Checkboxes (only for goals, not in penalty
+              shootout — a shootout kick can't be an own goal). Mutually
+              exclusive: ticking Own goal clears and disables Penalty (UX-042). */}
           {eventType === 'goal' && (!resolvedPeriod || resolvedPeriod.period_type !== 'penalties') && (
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="penalty"
-                checked={isPenalty}
-                onCheckedChange={(checked) => setIsPenalty(checked === true)}
-              />
-              <Label htmlFor="penalty">Penalty Kick</Label>
+            <div className="space-y-1">
+              <div className="flex items-center gap-6">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="penalty"
+                    checked={isPenalty}
+                    disabled={isOwnGoal}
+                    onCheckedChange={(checked) => setIsPenalty(checked === true)}
+                  />
+                  <Label htmlFor="penalty">Penalty Kick</Label>
+                </div>
+                <div className="flex items-center space-x-2 min-h-11">
+                  <Checkbox
+                    id="own-goal"
+                    checked={isOwnGoal}
+                    onCheckedChange={(checked) => {
+                      setIsOwnGoal(checked === true);
+                      if (checked === true) setIsPenalty(false);
+                    }}
+                  />
+                  <Label htmlFor="own-goal">Own goal</Label>
+                </div>
+              </div>
+              {isOwnGoal && (
+                <p className="text-xs text-muted-foreground">
+                  {isOurTeam
+                    ? 'Opponent into their own net — counts for us. Nobody credited.'
+                    : 'One of ours into our net — counts for them. Nobody credited.'}
+                </p>
+              )}
             </div>
           )}
 

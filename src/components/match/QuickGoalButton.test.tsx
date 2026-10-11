@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QuickGoalButton } from './QuickGoalButton';
 
 // useIsMobile() calls window.matchMedia, which jsdom does not implement.
@@ -165,3 +165,142 @@ describe('QuickGoalButton', () => {
     expect(onGoalScored).toHaveBeenCalledWith('a', true, 'b', false);
   });
 });
+
+// UX-042: own goals. The ordinary path (Goal → scorer → assist) must be
+// untouched when the box isn't ticked — the tests above assert it is still
+// called with exactly the four arguments it always was.
+describe('QuickGoalButton own goal', () => {
+  const ownGoalBox = () => screen.getByRole('checkbox', { name: 'Own goal' });
+  const penaltyBox = () => screen.getByRole('checkbox', { name: 'Penalty Kick' });
+
+  it('is unticked by default, and an ordinary goal is recorded exactly as before', () => {
+    const { onGoalScored } = renderDialog();
+
+    expect(ownGoalBox()).not.toBeChecked();
+    fireEvent.click(buttonNamed('Alpha'));
+    fireEvent.click(screen.getByRole('button', { name: 'No Assist' }));
+
+    expect(onGoalScored).toHaveBeenCalledTimes(1);
+    expect(onGoalScored.mock.calls[0]).toEqual(['a', true, undefined, false]);
+  });
+
+  it('for our team: hides the scorer picker, skips the assist step and credits nobody', () => {
+    const { onGoalScored } = renderDialog();
+
+    fireEvent.click(ownGoalBox());
+
+    expect(queryButtonNamed('Alpha')).not.toBeInTheDocument();
+    expect(queryButtonNamed('Bravo')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Confirm Own Goal/ }));
+
+    expect(screen.queryByText('Who Assisted?')).not.toBeInTheDocument();
+    expect(onGoalScored).toHaveBeenCalledWith('', true, undefined, false, true);
+  });
+
+  it('for the opposition: records an own goal that counts for them', () => {
+    const { onGoalScored } = renderDialog();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Opponent Goal' }));
+    fireEvent.click(ownGoalBox());
+    fireEvent.click(screen.getByRole('button', { name: /Confirm Own Goal/ }));
+
+    expect(onGoalScored).toHaveBeenCalledWith('', false, undefined, false, true);
+  });
+
+  it('unticks and disables Penalty when ticked, and never sends both', () => {
+    const { onGoalScored } = renderDialog();
+
+    fireEvent.click(penaltyBox());
+    expect(penaltyBox()).toBeChecked();
+
+    fireEvent.click(ownGoalBox());
+    expect(penaltyBox()).not.toBeChecked();
+    expect(penaltyBox()).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Confirm Own Goal/ }));
+    expect(onGoalScored).toHaveBeenCalledWith('', true, undefined, false, true);
+  });
+
+  it('unticking Own goal brings the scorer picker back', () => {
+    renderDialog();
+
+    fireEvent.click(ownGoalBox());
+    fireEvent.click(ownGoalBox());
+
+    expect(buttonNamed('Alpha')).toBeInTheDocument();
+    expect(penaltyBox()).not.toBeDisabled();
+  });
+});
+
+// A failed goal write must not close the dialog or lose what the coach picked —
+// the parent shows a "Goal not recorded" toast and re-throws, and the coach
+// retries from exactly where they were.
+describe('QuickGoalButton when recording fails', () => {
+  const failing = () => vi.fn().mockRejectedValueOnce(new Error('insert failed')).mockResolvedValue(undefined);
+
+  it('stays open on the assist step with the scorer kept, and a retry sends the same goal', async () => {
+    const onGoalScored = failing();
+    const onOpenChange = vi.fn();
+    renderDialog({ onGoalScored, onOpenChange });
+
+    fireEvent.click(buttonNamed('Alpha'));
+    fireEvent.click(buttonNamed('Bravo'));
+    await waitFor(() => expect(onGoalScored).toHaveBeenCalledTimes(1));
+
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(screen.getByText('Who Assisted?')).toBeInTheDocument();
+    await waitFor(() => expect(buttonNamed('Bravo')).not.toBeDisabled());
+
+    fireEvent.click(buttonNamed('Bravo'));
+    await waitFor(() => expect(onGoalScored).toHaveBeenCalledTimes(2));
+    expect(onGoalScored.mock.calls[1]).toEqual(onGoalScored.mock.calls[0]);
+    expect(onGoalScored.mock.calls[1]).toEqual(['a', true, 'b', false]);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('keeps an own goal ticked after a failure, and a retry sends the same own goal', async () => {
+    const onGoalScored = failing();
+    const onOpenChange = vi.fn();
+    renderDialog({ onGoalScored, onOpenChange });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Own goal' }));
+    fireEvent.click(screen.getByRole('button', { name: /Confirm Own Goal/ }));
+    await waitFor(() => expect(onGoalScored).toHaveBeenCalledTimes(1));
+
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(screen.getByRole('checkbox', { name: 'Own goal' })).toBeChecked();
+    const confirm = screen.getByRole('button', { name: /Confirm Own Goal/ });
+    await waitFor(() => expect(confirm).not.toBeDisabled());
+
+    fireEvent.click(confirm);
+    await waitFor(() => expect(onGoalScored).toHaveBeenCalledTimes(2));
+    expect(onGoalScored.mock.calls[1]).toEqual(['', true, undefined, false, true]);
+  });
+
+  it('keeps an opponent goal and its penalty tick after a failure', async () => {
+    const onGoalScored = failing();
+    const onOpenChange = vi.fn();
+    renderDialog({ onGoalScored, onOpenChange });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Opponent Goal' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Penalty Kick' }));
+    fireEvent.click(screen.getByRole('button', { name: /Confirm Opponent Goal/ }));
+    await waitFor(() => expect(onGoalScored).toHaveBeenCalledTimes(1));
+
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(screen.getByRole('checkbox', { name: 'Penalty Kick' })).toBeChecked();
+    expect(screen.getByRole('button', { name: /Confirm Opponent Goal/ })).toBeInTheDocument();
+  });
+
+  it('a successful goal still closes the dialog', async () => {
+    const onOpenChange = vi.fn();
+    const { onGoalScored } = renderDialog({ onOpenChange });
+
+    fireEvent.click(buttonNamed('Alpha'));
+    fireEvent.click(screen.getByRole('button', { name: 'No Assist' }));
+
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    expect(onGoalScored).toHaveBeenCalledTimes(1);
+  });
+});
+
