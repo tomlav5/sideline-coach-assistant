@@ -32,6 +32,7 @@ interface MatchEvent {
   total_match_minute: number;
   is_our_team: boolean;
   is_penalty?: boolean;
+  is_own_goal?: boolean;
   notes?: string;
   players?: Player & { id: string };
   assist_players?: Player & { id: string };
@@ -205,7 +206,7 @@ export function LiveEventsSummary({
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-semibold truncate">
-                            {scorer || 'Unknown'}
+                            {event.is_own_goal ? 'Own goal' : scorer || 'Unknown'}
                           </span>
                           {event.is_penalty && (
                             <Badge variant="outline" className="text-[10px] px-1 py-0">PEN</Badge>

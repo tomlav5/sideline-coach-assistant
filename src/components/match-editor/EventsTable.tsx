@@ -11,6 +11,7 @@ import { Edit, Trash2, Check, X, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { EnhancedEventDialog } from '@/components/match/EnhancedEventDialog';
 import { supabase } from '@/integrations/supabase/client';
+import { applyOwnGoal } from '@/lib/ownGoal';
 
 interface MatchEvent {
   id: string;
@@ -20,6 +21,7 @@ interface MatchEvent {
   period_id: string;
   is_our_team: boolean;
   is_penalty?: boolean;
+  is_own_goal?: boolean;
   player_id?: string;
   assist_player_id?: string | null;
   notes?: string;
@@ -77,6 +79,7 @@ export function EventsTable({ events, periods, players, fixtureId, onUpdate, onH
       minute_in_period: event.minute_in_period,
       total_match_minute: event.total_match_minute,
       is_penalty: event.is_penalty,
+      is_own_goal: event.is_own_goal,
       notes: event.notes,
       period_id: event.period_id,
     });
@@ -91,16 +94,20 @@ export function EventsTable({ events, periods, players, fixtureId, onUpdate, onH
     try {
       setSaving(true);
       
+      // UX-042: is_own_goal is always written here (unlike the live dialogs) so
+      // that unticking it converts an own goal back to an ordinary goal.
+      // applyOwnGoal then nulls scorer/assist and clears penalty when ticked.
       const { error } = await supabase
         .from('match_events')
-        .update({
+        .update(applyOwnGoal({
           player_id: editForm.player_id || null,
           assist_player_id: editForm.assist_player_id || null,
           minute_in_period: editForm.minute_in_period,
           total_match_minute: editForm.total_match_minute,
           is_penalty: editForm.is_penalty || false,
+          is_own_goal: false,
           notes: editForm.notes || null,
-        })
+        }, !!editForm.is_own_goal))
         .eq('id', eventId);
 
       if (error) throw error;
@@ -272,6 +279,7 @@ export function EventsTable({ events, periods, players, fixtureId, onUpdate, onH
                     <TableCell>
                       <Select
                         value={editForm.player_id || 'none'}
+                        disabled={!!editForm.is_own_goal}
                         onValueChange={(value) => setEditForm({ ...editForm, player_id: value === 'none' ? undefined : value })}
                       >
                         <SelectTrigger className="h-8">
@@ -291,6 +299,7 @@ export function EventsTable({ events, periods, players, fixtureId, onUpdate, onH
                       {event.event_type === 'goal' && (
                         <Select
                           value={editForm.assist_player_id === null || editForm.assist_player_id === undefined ? 'none' : editForm.assist_player_id}
+                          disabled={!!editForm.is_own_goal}
                           onValueChange={(value) => setEditForm({ ...editForm, assist_player_id: value === 'none' ? null : value })}
                         >
                           <SelectTrigger className="h-8">
@@ -309,13 +318,32 @@ export function EventsTable({ events, periods, players, fixtureId, onUpdate, onH
                     </TableCell>
                     <TableCell>
                       {event.event_type === 'goal' && (
-                        <div className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`penalty-${event.id}`}
-                            checked={editForm.is_penalty || false}
-                            onCheckedChange={(checked) => setEditForm({ ...editForm, is_penalty: !!checked })}
-                          />
-                          <Label htmlFor={`penalty-${event.id}`} className="text-xs">Penalty</Label>
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`penalty-${event.id}`}
+                              checked={editForm.is_penalty || false}
+                              disabled={!!editForm.is_own_goal}
+                              onCheckedChange={(checked) => setEditForm({ ...editForm, is_penalty: !!checked })}
+                            />
+                            <Label htmlFor={`penalty-${event.id}`} className="text-xs">Penalty</Label>
+                          </div>
+                          {/* UX-042: converts a goal mis-credited to one of our players
+                              into an own goal — clears scorer, assist and penalty. */}
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`own-goal-${event.id}`}
+                              checked={editForm.is_own_goal || false}
+                              onCheckedChange={(checked) =>
+                                setEditForm(
+                                  checked
+                                    ? { ...editForm, is_own_goal: true, player_id: undefined, assist_player_id: null, is_penalty: false }
+                                    : { ...editForm, is_own_goal: false }
+                                )
+                              }
+                            />
+                            <Label htmlFor={`own-goal-${event.id}`} className="text-xs">Own goal</Label>
+                          </div>
                         </div>
                       )}
                     </TableCell>
@@ -358,13 +386,18 @@ export function EventsTable({ events, periods, players, fixtureId, onUpdate, onH
                         {event.is_our_team ? 'Us' : 'Them'}
                       </Badge>
                     </TableCell>
-                    <TableCell>{getPlayerName(event.players)}</TableCell>
+                    <TableCell>
+                      {event.is_own_goal ? 'Own goal' : getPlayerName(event.players)}
+                    </TableCell>
                     <TableCell>
                       {event.assist_players ? getPlayerName(event.assist_players) : '-'}
                     </TableCell>
                     <TableCell>
                       {event.is_penalty && (
                         <Badge variant="outline" className="text-xs">Penalty</Badge>
+                      )}
+                      {event.is_own_goal && (
+                        <Badge variant="outline" className="text-xs">Own goal</Badge>
                       )}
                     </TableCell>
                     <TableCell className="text-right">

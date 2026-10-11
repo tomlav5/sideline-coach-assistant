@@ -8,6 +8,38 @@ Known issues and planned work. Newest findings at the top of each section.
 
 ## Bugs
 
+### BUG-049 — EnhancedEventDialog swallows a failed goal write with only a console line `OPEN`
+**Found:** 11 Oct 2026, while fixing the silent Goal-button failure under UX-042.
+
+`EnhancedEventDialog.handleSubmit` (Event button, 'g' shortcut, editor Add Event) ends
+`catch (error) { console.error(...) }`. If the upsert fails, the dialog stays open, "Recording..."
+reverts to "Record Goal", and nothing tells the coach. It is the same defect the UX-042
+follow-up fixed for `QuickGoalButton`, but a separate component and write path, so it was left
+out of that branch. Fix shape: `toast(goalFailureToast(error))` from `src/lib/goalFailure.ts` in
+that catch. The dialog already stays open on failure. Also check its `!resolvedPeriod` and
+missing-scorer early returns: both currently only call `console.error`.
+
+Relates to UX-042, BUG-046, BUG-044.
+
+### BUG-048 — EnhancedEventDialog credits a stale scorer to an opponent goal `OPEN`
+**Found:** 11 Oct 2026, reading the code while building UX-042 (`feat/own-goals`). Not
+reproduced on a device or on staging.
+
+In `EnhancedEventDialog` (Event button, 'g' shortcut, editor Add Event), picking a scorer and
+then switching the team toggle to **Opponent** hides the scorer picker but does not clear
+`selectedPlayer`. `handleSubmit` writes `player_id: selectedPlayer || null`, so the opponent
+goal is saved with one of our players as its scorer. The score is still right (`is_our_team`
+is false), and `buildMatchTally` and the report views only count our-team goals, so that
+child's season tally is probably unaffected. But the row is wrong, and the editor shows that
+child's name against an opposition goal. It is the same class of error as the one UX-042 was
+raised for. `QuickGoalButton` is not affected: its opponent path always sends `''`.
+
+FIX: clear `selectedPlayer` and `assistPlayer` when the toggle switches to Opponent. Or, more
+defensively, write `player_id: isOurTeam ? selectedPlayer || null : null`. Small; it needs its
+own branch because it changes the ordinary goal path.
+
+Relates to UX-042, UX-036.
+
 ### BUG-047 — TBD kickoff times default to local midnight, so the stored date falls on the previous day in UTC `OPEN`
 **Found:** 10 Oct 2026 (Tom), during BUG-044 staging testing.
 
@@ -3256,6 +3288,88 @@ Full spec, contrast pairs and regeneration steps in `docs/brand/BRAND.md`.
 ---
 
 ## UX
+
+### UX-042 — No way to record an own goal `IN PROGRESS`
+**Found:** 11 Oct 2026 (coach report, after a match that day). **Branch:** `feat/own-goals`
+(PR TBD).
+
+An opposition player scored an own goal for the Reds. The app had no way to record it, so the
+coach credited it to one of our own players, which put a goal he did not score on that child's
+season record. The row was repaired by hand in production the same day: `player_id` nulled,
+explanation in `notes`. It now displays as "Unknown". That is accurate, but it looks wrong.
+
+**Model decision: a flag, not an event type.** `match_events.is_own_goal boolean NOT NULL
+DEFAULT false` (migration `20261011120000_add_match_events_is_own_goal.sql`). We deliberately
+did **not** add `event_type = 'own_goal'`. Every score calculation counts
+`event_type === 'goal'` by `is_our_team`: `calculateScore`, `MatchReport.getScore`, and the
+`our_goals`/`opponent_goals` subqueries in the fixture views. A new type would have silently
+dropped own goals from the scoreline everywhere. A flag changes nothing that already works.
+`is_penalty` is the precedent.
+
+Semantics: `is_our_team` keeps its meaning, the side the goal **counted for**. An own goal
+credits nobody (`player_id` and `assist_player_id` null) and is never a penalty. The
+`match_events_own_goal_check` constraint enforces this in the database. `src/lib/ownGoal.ts`
+(`applyOwnGoal`) enforces it on every write path. For an ordinary goal, `applyOwnGoal` returns
+the payload untouched, without even an `is_own_goal` key.
+
+**What was built:** an Own goal checkbox beside Penalty in `QuickGoalButton` (both
+sides; it hides the scorer picker, skips the assist step, and clears/disables Penalty) and in
+`EnhancedEventDialog` (hidden in a shootout period); the same control in the Match Data
+Editor's inline edit form (`EventsTable.tsx`), so a mis-credited goal can be converted without
+SQL; "Own goal" in place of "Unknown"/"Opposition" in `MatchReport` (both blocks), the live
+events summary, the match screen's events list and the editor list. `buildMatchTally` is
+unchanged. It already skips events with no `player_id`, so own goals drop out of both tallies
+(covered by `src/lib/ownGoal.test.ts`). The CSV export and the player-stats views key on
+`player_id` too, so they exclude own goals for the same reason.
+
+**The "Unknown" fallback:** it existed because an our-team goal with no player had no other
+meaning. After this change it only appears for genuinely bad data.
+
+**Deploy order matters.** `MatchReport` and `MatchDataEditor` select `is_own_goal` explicitly,
+so apply the migration to production **before** merging. Ordinary goal recording does not
+depend on it, because it never sends the column. `src/integrations/supabase/types.ts` was
+edited by hand to add the column, since the migration isn't applied anywhere yet. Regenerate
+it once it is.
+
+**After this ships:** set `is_own_goal = true` on the 11 Oct 2026 74' event in production
+(already repaired by hand: `player_id` null, notes explain). Its assist must also be null and
+it must not be a penalty, or the new constraint rejects the update.
+
+Not covered: `RetrospectiveMatchDialog` (unrouted, being retired under DEBT-026).
+
+**Found in staging testing, 11 Oct 2026: a failed goal told the coach nothing.** Ticking Own
+goal and pressing Confirm appeared to do nothing. The immediate cause was the migration not yet
+being on staging, so the insert failed on the missing column. The real defect is older than own
+goals and affects **every** Goal-button path, ordinary goals included. `handleQuickGoal` in
+`EnhancedMatchTracker` caught the error, logged it twice and re-threw it. `QuickGoalButton`'s
+three handlers caught it under the comment "Error handled by parent", which was false. No toast,
+no message, the dialog stayed open, and the button looked dead. The same function had two worse
+paths: a failed period lookup and a missing active period both `return`ed quietly. The dialog read
+that as success and **closed**, so the goal was lost without a word.
+
+Fixed on the same branch. `handleQuickGoal` now raises a destructive "Goal not recorded" toast
+naming the error (`goalFailureToast`, `src/lib/goalFailure.ts`), with the same treatment as
+BUG-024 and BUG-044. It sits there because that is where the error detail is, and every
+QuickGoalButton path goes through it. Both quiet `return`s now throw into the same catch.
+`QuickGoalButton` still deliberately does not reset on failure: the dialog stays open with the
+scorer, assist step, penalty and own-goal ticks intact for a retry. Its comments now say so.
+Write payloads are unchanged.
+
+Also fixed, because without it the fix is invisible on desktop: the toast viewport was
+`z-[100]`, the same as Dialog's overlay and below its content (`z-[110]`). It also rendered
+earlier in the DOM. So any toast raised while a desktop Dialog was open sat under an 80% black
+overlay. It is now `z-[140]`, above Popover/Select (`z-[130]`). The phone Sheet (`z-50`) was never
+affected. This probably also hid BUG-044's "Failed to update match" toast on desktop, since
+Edit Fixture is a Dialog. Not verified.
+
+This is the **third instance** of the silent-failure pattern, after BUG-024 and BUG-044. That
+strengthens the case for the sweep logged under BUG-044's "Recurring pattern", and the sweep
+should widen. As logged, it covers `.update()`/`.delete()` calls missing `count: 'exact'`. This
+case was the other half of the same pattern: a `catch` that only calls `console.error` (or
+claims someone else handles it). BUG-046 (`createFixture`) and BUG-049 (`EnhancedEventDialog`)
+are two more known ones. Match-recording paths first.
+
+Relates to UX-029, UX-036, BUG-048, BUG-049, BUG-024, BUG-044, DESIGN-008.
 
 ### UX-041 — A kickoff time cannot be cleared back to blank `OPEN`
 **Found:** 10 Oct 2026 (Tom), during BUG-044 staging testing. It is why that branch's test 3

@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { ResponsiveWrapper } from '@/components/ui/responsive-wrapper';
 import { buildPlayerTimes, formatSpell, type PlayerTime, type PlayerTimeLogRow } from '@/lib/playerTimeReport';
 import { buildMatchTally, formatTallyText, tallyName, type TallyEntry } from '@/lib/matchTally';
+import { goalScorerFallback } from '@/lib/ownGoal';
 
 interface MatchEvent {
   id: string;
@@ -21,6 +22,7 @@ interface MatchEvent {
   period_id: string;
   is_our_team: boolean;
   is_penalty?: boolean;
+  is_own_goal?: boolean;
   player_id?: string;
   assist_player_id?: string;
   players?: {
@@ -136,6 +138,7 @@ export default function MatchReport() {
           period_id,
           is_our_team,
           is_penalty,
+          is_own_goal,
           player_id,
           assist_player_id,
           notes,
@@ -624,7 +627,7 @@ export default function MatchReport() {
                                       </span>
                                     ) : (
                                       <span className="text-muted-foreground text-xs sm:text-sm">
-                                        {event.is_our_team ? 'Unknown' : 'Opposition'}
+                                        {goalScorerFallback(event)}
                                       </span>
                                     )}
                                   </div>
@@ -666,7 +669,7 @@ export default function MatchReport() {
                                         </span>
                                       ) : (
                                         <span className="text-muted-foreground text-xs sm:text-sm">
-                                          {event.is_our_team ? 'Unknown' : 'Opposition'}
+                                          {goalScorerFallback(event)}
                                         </span>
                                       )}
                                     </div>

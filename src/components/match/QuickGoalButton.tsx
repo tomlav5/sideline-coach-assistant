@@ -32,7 +32,12 @@ interface QuickGoalButtonProps {
    */
   pitchPlayers: Player[];
   benchPlayers: Player[];
-  onGoalScored: (playerId: string, isOurTeam: boolean, assistPlayerId?: string, isPenalty?: boolean) => Promise<void>;
+  /**
+   * `isOwnGoal` (UX-042) is passed only by the own-goal path, always with an
+   * empty playerId and no assist — an ordinary goal calls this with exactly
+   * the four arguments it always has.
+   */
+  onGoalScored: (playerId: string, isOurTeam: boolean, assistPlayerId?: string, isPenalty?: boolean, isOwnGoal?: boolean) => Promise<void>;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -45,6 +50,7 @@ export function QuickGoalButton({ pitchPlayers, benchPlayers, onGoalScored, open
   const [selectedScorer, setSelectedScorer] = useState<string | null>(null);
   const [showAssistSelect, setShowAssistSelect] = useState(false);
   const [isPenalty, setIsPenalty] = useState(false);
+  const [isOwnGoal, setIsOwnGoal] = useState(false);
 
   // On-pitch first, then bench, both in tile-grid order (UX-029) — the
   // scorer step's own groups, passed straight to PlayerPickerList.
@@ -68,20 +74,63 @@ export function QuickGoalButton({ pitchPlayers, benchPlayers, onGoalScored, open
       // Opponent goals don't require player selection
       await onGoalScored('', false, undefined, isPenalty);
       resetDialog();
-    } catch (error) {
-      // Error handled by parent
+    } catch {
+      // The parent (EnhancedMatchTracker.handleQuickGoal) has already shown a
+      // "Goal not recorded" toast. Deliberately no resetDialog() here: the
+      // dialog stays open with the coach's selections intact, so they can retry.
     } finally {
       setIsLoading(false);
     }
   };
+
+  // UX-042: an own goal credits nobody, so there is no scorer or assist step —
+  // one confirm, for whichever side the toggle says it counted for. Kept
+  // separate from handleGoalScored/handleOpponentGoal so the ordinary paths
+  // are byte-for-byte what they were.
+  const handleOwnGoal = async () => {
+    setIsLoading(true);
+    try {
+      await onGoalScored('', isOurTeam, undefined, false, true);
+      resetDialog();
+    } catch {
+      // The parent (EnhancedMatchTracker.handleQuickGoal) has already shown a
+      // "Goal not recorded" toast. Deliberately no resetDialog() here: the
+      // dialog stays open with the coach's selections intact, so they can retry.
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Own goal and penalty are mutually exclusive: ticking Own goal clears and
+  // disables Penalty.
+  const handleOwnGoalChange = (checked: boolean) => {
+    setIsOwnGoal(checked);
+    if (checked) setIsPenalty(false);
+  };
+
+  const ownGoalCheckbox = (id: string, hint: string) => (
+    <div className="flex flex-col items-center">
+      <div className="flex items-center space-x-2 min-h-11">
+        <Checkbox
+          id={id}
+          checked={isOwnGoal}
+          onCheckedChange={(checked) => handleOwnGoalChange(checked === true)}
+        />
+        <Label htmlFor={id}>Own goal</Label>
+      </div>
+      {isOwnGoal && <p className="text-xs text-muted-foreground">{hint}</p>}
+    </div>
+  );
 
   const handleGoalScored = async (scorerId: string, assistId: string | null) => {
     setIsLoading(true);
     try {
       await onGoalScored(scorerId, isOurTeam, assistId || undefined, isPenalty);
       resetDialog();
-    } catch (error) {
-      // Error handled by parent
+    } catch {
+      // The parent (EnhancedMatchTracker.handleQuickGoal) has already shown a
+      // "Goal not recorded" toast. Deliberately no resetDialog() here: the
+      // dialog stays open with the coach's selections intact, so they can retry.
     } finally {
       setIsLoading(false);
     }
@@ -94,6 +143,7 @@ export function QuickGoalButton({ pitchPlayers, benchPlayers, onGoalScored, open
     setSelectedScorer(null);
     setShowAssistSelect(false);
     setIsPenalty(false);
+    setIsOwnGoal(false);
   };
 
   // UX-038: bench players stay selectable as the assist provider — a goal
@@ -148,58 +198,80 @@ export function QuickGoalButton({ pitchPlayers, benchPlayers, onGoalScored, open
             Record a goal for the opposing team
           </p>
           
-          {/* Penalty Checkbox */}
-          <div className="flex items-center justify-center space-x-2">
-            <Checkbox
-              id="penalty-opponent"
-              checked={isPenalty}
-              onCheckedChange={(checked) => setIsPenalty(checked === true)}
-            />
-            <Label htmlFor="penalty-opponent">Penalty Kick</Label>
+          {/* Penalty and Own goal Checkboxes */}
+          <div className="flex items-center justify-center gap-6">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="penalty-opponent"
+                checked={isPenalty}
+                disabled={isOwnGoal}
+                onCheckedChange={(checked) => setIsPenalty(checked === true)}
+              />
+              <Label htmlFor="penalty-opponent">Penalty Kick</Label>
+            </div>
+            {ownGoalCheckbox('own-goal-opponent', 'One of ours, into our net. Nobody credited.')}
           </div>
           
           <Button
-            onClick={handleOpponentGoal}
+            onClick={isOwnGoal ? handleOwnGoal : handleOpponentGoal}
             disabled={isLoading}
             size="lg"
             className="w-full h-16 text-lg font-semibold border-0 hover:brightness-95"
             style={{ backgroundColor: FLOODLIGHT.amber, color: FLOODLIGHT.navy }}
           >
             <Goal className="h-6 w-6 mr-3" />
-            Confirm Opponent Goal
+            {isOwnGoal ? 'Confirm Own Goal' : 'Confirm Opponent Goal'}
           </Button>
         </div>
       ) : (
         <>
-          {/* Penalty Checkbox for Our Team */}
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="penalty-our-team"
-              checked={isPenalty}
-              onCheckedChange={(checked) => setIsPenalty(checked === true)}
-            />
-            <Label htmlFor="penalty-our-team">Penalty Kick</Label>
+          {/* Penalty and Own goal Checkboxes for Our Team */}
+          <div className="flex items-start gap-6">
+            <div className="flex items-center space-x-2 min-h-11">
+              <Checkbox
+                id="penalty-our-team"
+                checked={isPenalty}
+                disabled={isOwnGoal}
+                onCheckedChange={(checked) => setIsPenalty(checked === true)}
+              />
+              <Label htmlFor="penalty-our-team">Penalty Kick</Label>
+            </div>
+            {ownGoalCheckbox('own-goal-our-team', 'Opponent into their own net. Nobody credited.')}
           </div>
 
-          {/* Goal Scorer — on-pitch players first, then bench, both in the
-              same order as the match screen's tile grid (UX-029). Replaces
-              the old "Recent Scorers (Quick Tap)" localStorage list, which
-              was global across matches and reshuffled after every goal.
-              Inline list (UX-036), not a combobox — a coach tapping the
-              amber Goal button touchline-side needs the names on screen in
-              one tap, not a picker that opens a second control. */}
-          <div>
-            <p className="text-sm font-medium mb-2">Goal Scorer</p>
-            <PlayerPickerList
-              groups={playerGroups}
-              onSelect={handleScorerSelected}
-              searchValue={searchTerm}
-              onSearchChange={setSearchTerm}
-              emptyMessage="No active players available"
+          {isOwnGoal ? (
+            /* UX-042: no scorer to pick, so no picker — just confirm. */
+            <Button
+              onClick={handleOwnGoal}
               disabled={isLoading}
-              autoFocusSearch={!isMobile}
-            />
-          </div>
+              size="lg"
+              className="w-full h-16 text-lg font-semibold border-0 hover:brightness-95"
+              style={{ backgroundColor: FLOODLIGHT.amber, color: FLOODLIGHT.navy }}
+            >
+              <Goal className="h-6 w-6 mr-3" />
+              Confirm Own Goal
+            </Button>
+          ) : (
+            /* Goal Scorer — on-pitch players first, then bench, both in the
+               same order as the match screen's tile grid (UX-029). Replaces
+               the old "Recent Scorers (Quick Tap)" localStorage list, which
+               was global across matches and reshuffled after every goal.
+               Inline list (UX-036), not a combobox — a coach tapping the
+               amber Goal button touchline-side needs the names on screen in
+               one tap, not a picker that opens a second control. */
+            <div>
+              <p className="text-sm font-medium mb-2">Goal Scorer</p>
+              <PlayerPickerList
+                groups={playerGroups}
+                onSelect={handleScorerSelected}
+                searchValue={searchTerm}
+                onSearchChange={setSearchTerm}
+                emptyMessage="No active players available"
+                disabled={isLoading}
+                autoFocusSearch={!isMobile}
+              />
+            </div>
+          )}
         </>
       )}
     </div>

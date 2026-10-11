@@ -366,6 +366,7 @@ export type Database = {
           fixture_id: string
           id: string
           is_our_team: boolean
+          is_own_goal: boolean
           is_penalty: boolean | null
           is_retrospective: boolean
           minute_in_period: number
@@ -384,6 +385,7 @@ export type Database = {
           fixture_id: string
           id?: string
           is_our_team?: boolean
+          is_own_goal?: boolean
           is_penalty?: boolean | null
           is_retrospective?: boolean
           minute_in_period: number
@@ -402,6 +404,7 @@ export type Database = {
           fixture_id?: string
           id?: string
           is_our_team?: boolean
+          is_own_goal?: boolean
           is_penalty?: boolean | null
           is_retrospective?: boolean
           minute_in_period?: number
