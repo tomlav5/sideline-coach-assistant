@@ -31,7 +31,10 @@ All colors MUST be HSL.
     --muted: 210 23% 91%;
     --muted-foreground: 217 13% 40%;
 
-    --accent: 37 91% 55%;
+    /* Neutral hover/selection (Floodlight sunken), not amber: shadcn uses accent for
+       hover and focus on outline/ghost buttons and menu items, and hover sticks after a
+       tap on touch devices. Amber actions use --action. See DESIGN-010. */
+    --accent: 210 23% 91%;
     --accent-foreground: 219 38% 10%;
 
     /* Red-deep, not Red: plain Red (358 75% 59%) against white text measures ~3.9:1,
@@ -54,6 +57,61 @@ All colors MUST be HSL.
     --sidebar-accent-foreground: 219 38% 10%;
     --sidebar-border: 212 20% 83%;
     --sidebar-ring: 214 90% 42%;
+
+    /* Floodlight semantic tokens (DESIGN-002 phase two, slice 1 — see
+       docs/FLOODLIGHT-CONVERSION.md §3). Some deliberately equal existing tokens:
+       Pitch Blue is already --ring, Slate is already --muted-foreground. */
+
+    /* Signal Amber. Amber ALWAYS takes navy text. */
+    --action: 37 91% 55%;
+    --action-foreground: 219 38% 10%;
+
+    /* Pitch Blue: on-pitch / active state. */
+    --active: 214 90% 42%;
+    --active-foreground: 0 0% 100%;
+
+    /* Pitch Blue: our-team markers (our goals, squad ready, starters). */
+    --success: 214 90% 42%;
+    --success-foreground: 0 0% 100%;
+
+    /* Pitch Blue: match in progress. */
+    --live: 214 90% 42%;
+    --live-foreground: 0 0% 100%;
+
+    /* Pitch Blue at 8% over Paper, with a Pitch Blue border and text. */
+    --info: 214 43% 90%;
+    --info-foreground: 214 90% 42%;
+    --info-border: 213 59% 76%;
+
+    /* Red #E5484D and Red-deep #B4232C. Only when something is about to be lost;
+       never decorative. */
+    --critical: 358 75% 59%;
+    --critical-foreground: 0 0% 100%;
+    --critical-deep: 356 67% 42%;
+    --critical-deep-foreground: 0 0% 100%;
+
+    /* Navy panel surfaces. These do NOT flip between themes: the fixed match header
+       and the pending-substitutions panel are navy surfaces on a light screen, and
+       --primary flips to Paper in dark, which would turn them white. .dark repeats
+       these values unchanged on purpose. */
+    --chrome: 219 38% 10%;            /* Navy */
+    --chrome-foreground: 210 21% 95%; /* Paper */
+    --chrome-muted: 215 16% 61%;      /* Slate on Navy */
+    --chrome-raised: 220 17% 20%;     /* Navy Raised #2B313D */
+    --chrome-edge: 219 26% 22%;       /* Navy Edge #2A3447 */
+
+    /* Results: fill versus outline carries the distinction, not hue (BRAND.md). */
+    --result-win: 214 90% 42%;
+    --result-win-foreground: 0 0% 100%;
+    --result-draw: 210 14% 89%;       /* Slate at 10% over Paper */
+    --result-draw-foreground: 219 38% 10%;
+    --result-draw-border: 212 20% 83%;
+    --result-loss-border: 212 20% 83%;
+    --result-loss-foreground: 217 13% 40%;
+
+    /* There is deliberately no --warning. A warning has no hue by design
+       (FLOODLIGHT-CONVERSION.md §3): it is expressed as foreground text plus a
+       heavier --border, never as amber. */
   }
 
   .dark {
@@ -77,8 +135,8 @@ All colors MUST be HSL.
     --muted: 217 30% 20%;
     --muted-foreground: 215 16% 61%;
 
-    --accent: 37 91% 55%;
-    --accent-foreground: 219 38% 10%;
+    --accent: 217 30% 20%;
+    --accent-foreground: 210 21% 95%;
 
     --destructive: 356 67% 42%;
     --destructive-foreground: 0 0% 100%;
@@ -95,6 +153,47 @@ All colors MUST be HSL.
     --sidebar-accent-foreground: 210 21% 95%;
     --sidebar-border: 214 25% 20%;
     --sidebar-ring: 214 77% 61%;
+
+    /* Floodlight semantic tokens, dark. See the :root block for what each is for. */
+    --action: 37 91% 55%;
+    --action-foreground: 219 38% 10%;
+
+    /* Lighter Pitch Blue takes NAVY text, not white: white measures 3.2:1 on this
+       blue, navy measures 5.6:1. */
+    --active: 214 77% 61%;
+    --active-foreground: 219 38% 10%;
+
+    --success: 214 77% 61%;
+    --success-foreground: 219 38% 10%;
+
+    --live: 214 77% 61%;
+    --live-foreground: 219 38% 10%;
+
+    --info: 214 35% 15%;
+    --info-foreground: 214 77% 61%;
+    --info-border: 214 40% 32%;
+
+    --critical: 358 75% 59%;
+    --critical-foreground: 0 0% 100%;
+    --critical-deep: 356 67% 42%;
+    --critical-deep-foreground: 0 0% 100%;
+
+    /* IDENTICAL to light, deliberately: navy panels stay navy in both themes. */
+    --chrome: 219 38% 10%;
+    --chrome-foreground: 210 21% 95%;
+    --chrome-muted: 215 16% 61%;
+    --chrome-raised: 220 17% 20%;
+    --chrome-edge: 219 26% 22%;
+
+    --result-win: 214 77% 61%;
+    --result-win-foreground: 219 38% 10%;
+    --result-draw: 220 17% 20%;       /* Navy Raised */
+    --result-draw-foreground: 210 21% 95%;
+    --result-draw-border: 214 25% 20%;
+    --result-loss-border: 215 16% 61%;
+    --result-loss-foreground: 215 16% 61%;
+
+    /* No --warning here either; see the note at the end of :root. */
   }
 }
 

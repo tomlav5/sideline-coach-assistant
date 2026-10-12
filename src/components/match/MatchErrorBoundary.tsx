@@ -18,7 +18,7 @@ function MatchErrorFallback() {
         </p>
         <Button
           onClick={reloadPage}
-          className="touch-target w-full bg-accent text-accent-foreground hover:bg-accent/90"
+          className="touch-target w-full bg-action text-action-foreground hover:bg-action/90"
         >
           Reload
         </Button>
