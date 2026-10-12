@@ -52,9 +52,9 @@ Settled 12 Oct 2026. A result is shown by **fill versus outline, not by hue**.
 
 | Result | Treatment | Text |
 |---|---|---|
-| Win | Filled Pitch Blue chip | White (6.0:1) |
-| Draw | Filled Slate chip | Floodlight Navy (3.0:1; see note) |
-| Loss | Outline chip: transparent fill, Navy Edge border | Muted: Slate on light grounds (5.3:1 on Paper), Slate on Navy on navy (6.3:1) |
+| Win | Filled Pitch Blue | White (6.0:1) |
+| Draw | Tinted: Slate at 10% over the ground, Edge border | Floodlight Navy (13.9:1) |
+| Loss | Outline: no fill. Edge border on light grounds, Slate on Navy border on navy grounds | Muted |
 
 Why:
 
@@ -65,11 +65,10 @@ Why:
 - **This is a children's club, and results go to parents.** A defeat is not marked in alarm
   colours. The score already says what happened.
 
-**Open contrast notes, measured 12 Oct 2026:**
-
-- Navy text on the Slate draw chip is 3.0:1, below the 4.5:1 floor for text this size.
-  White on Slate is 6.0:1.
-- On a navy ground, the loss outline (Navy Edge) is 1.4:1, so it all but disappears there.
+**Colour alone is not enough.** Pitch Blue and Slate sit within 1% of each other in
+luminance, so a result marker that carries no word or letter cannot rely on colour alone.
+The result chips and the Reports circles both carry text, so this is a constraint on any
+future form-guide dot, not on what exists today.
 
 ### Pitch Blue carries two related meanings
 
@@ -80,19 +79,16 @@ same idea, our side doing well, so it is one meaning stretched, not a collision.
 
 The rule that still holds is never amber directly against Pitch Blue (2.9:1).
 
-### Gap for slice 1: `--red` and `--red-deep` are not tokens yet
-
-The semantic-critical table below names `--red` and `--red-deep`. **`src/index.css` declares
-neither.** The only red token is `--destructive`, which is set to Red-deep. Components that
-need the brighter Red (the pending-subs critical border) hard-code `#E5484D` instead. Slice 1
-of the Floodlight conversion (`docs/FLOODLIGHT-CONVERSION.md`) closes this gap.
-
 ### Semantic critical
 
-| Token | Hex | Use |
-|---|---|---|
-| `--red` | `#E5484D` | Critical borders and accents |
-| `--red-deep` | `#B4232C` | Critical panel grounds; white text reads at 6.5:1 |
+| Token | Name | Hex | Use |
+|---|---|---|---|
+| `--critical` | Red | `#E5484D` | Critical borders and accents |
+| `--critical-deep` | Red-deep | `#B4232C` | Critical panel grounds; white text reads at 6.5:1 |
+
+Renamed from `--red` / `--red-deep` on 12 Oct 2026 (Floodlight slice 1), when they were
+first declared in `src/index.css`: the palette is moving to semantic names, and a token
+called `--red` cannot later mean anything else.
 
 **This is not a second accent.** It must never be used decoratively, for branding, or to
 draw general attention. It appears only when something is about to be lost — the first

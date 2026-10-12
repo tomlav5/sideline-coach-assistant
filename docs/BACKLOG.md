@@ -3188,8 +3188,11 @@ super admin).
 
 ## Design
 
-### DESIGN-010 — `--accent` is Signal Amber, so every outline/ghost hover turns amber `OPEN`
+### DESIGN-010 — `--accent` is Signal Amber, so every outline/ghost hover turns amber `DONE 12 Oct 2026`
 **Found:** 11 Oct 2026, during the DESIGN-002 re-audit (`docs/FLOODLIGHT-CONVERSION.md` §3).
+**Fixed:** 12 Oct 2026, branch `feat/floodlight-tokens-slice-1` (PR TBD). Added `--action`,
+repointed `--accent` to a neutral (light `210 23% 91%`, dark `217 30% 20%`), and moved the
+two intentional ambers (`MatchErrorBoundary` Reload, `Auth` Verify code) onto `bg-action`.
 
 Phase one set `--accent` to Signal Amber in both themes. shadcn uses `accent` for hover and
 focus, not for the primary action. That covers `button.tsx`'s `outline` and `ghost` variants
@@ -3395,6 +3398,12 @@ flag on each, and the re-count commands. Keep counts current there, not here.
 remaining early-week slot with no slippage, and seven further evenings would have to fit in
 the same three weeks. At one slice a week the phase is ten weeks. At two a week it is five.
 REPORT-003's prerequisite (slices 1 and 4) is two evenings with no early-week constraint.
+
+**12 Oct 2026 — slice 1 landed** (branch `feat/floodlight-tokens-slice-1`, PR TBD). Declared
+`--action`, `--active`, `--success`, `--live`, `--info`, `--critical`, `--critical-deep`, the
+`--chrome` set and `--result-*` in both themes and mapped them in `tailwind.config.ts`;
+`--warning` deliberately not declared. Closes DESIGN-010. No sites converted — the count is
+unchanged at 352.
 
 **Blocks:** DESIGN-003.
 

@@ -310,7 +310,7 @@ export default function Auth() {
                           "w-full touch-target",
                           otpCode.length === 6 &&
                             !isLoading &&
-                            "bg-accent text-accent-foreground hover:bg-accent/90"
+                            "bg-action text-action-foreground hover:bg-action/90"
                         )}
                         onClick={() => handleVerifyCode()}
                         disabled={isLoading || otpCode.length !== 6}

@@ -56,6 +56,55 @@ export default {
 					DEFAULT: 'hsl(var(--card))',
 					foreground: 'hsl(var(--card-foreground))'
 				},
+				action: {
+					DEFAULT: 'hsl(var(--action))',
+					foreground: 'hsl(var(--action-foreground))'
+				},
+				active: {
+					DEFAULT: 'hsl(var(--active))',
+					foreground: 'hsl(var(--active-foreground))'
+				},
+				success: {
+					DEFAULT: 'hsl(var(--success))',
+					foreground: 'hsl(var(--success-foreground))'
+				},
+				live: {
+					DEFAULT: 'hsl(var(--live))',
+					foreground: 'hsl(var(--live-foreground))'
+				},
+				info: {
+					DEFAULT: 'hsl(var(--info))',
+					foreground: 'hsl(var(--info-foreground))',
+					border: 'hsl(var(--info-border))'
+				},
+				critical: {
+					DEFAULT: 'hsl(var(--critical))',
+					foreground: 'hsl(var(--critical-foreground))',
+					deep: 'hsl(var(--critical-deep))',
+					'deep-foreground': 'hsl(var(--critical-deep-foreground))'
+				},
+				chrome: {
+					DEFAULT: 'hsl(var(--chrome))',
+					foreground: 'hsl(var(--chrome-foreground))',
+					muted: 'hsl(var(--chrome-muted))',
+					raised: 'hsl(var(--chrome-raised))',
+					edge: 'hsl(var(--chrome-edge))'
+				},
+				result: {
+					win: {
+						DEFAULT: 'hsl(var(--result-win))',
+						foreground: 'hsl(var(--result-win-foreground))'
+					},
+					draw: {
+						DEFAULT: 'hsl(var(--result-draw))',
+						foreground: 'hsl(var(--result-draw-foreground))',
+						border: 'hsl(var(--result-draw-border))'
+					},
+					loss: {
+						border: 'hsl(var(--result-loss-border))',
+						foreground: 'hsl(var(--result-loss-foreground))'
+					}
+				},
 				sidebar: {
 					DEFAULT: 'hsl(var(--sidebar-background))',
 					foreground: 'hsl(var(--sidebar-foreground))',

@@ -173,16 +173,16 @@ map them onto existing palette colours. Where a decision is needed, it is marked
 
 | Token (+ `-foreground`) | Light value | Replaces | One-amber / red-rule risk |
 |---|---|---|---|
-| **`--action`** | Signal Amber `#F5A524`, navy text | `FLOODLIGHT.amber`, `AMBER` (BottomActionBar, QuickGoalButton, EnhancedMatchControls, FixedMatchHeader, PendingSubsPanel, PlayerTileGrid, MatchLockingBanner). Gives DESIGN-003 the semantic name it asks for. | **High, and already live — see below.** |
-| **`--active`** | Pitch Blue `#0B5FCC`, white text | `FLOODLIGHT.pitchBlue` (PlayerTileGrid on-pitch tiles, EnhancedMatchControls, MatchLockingBanner). At present the only token holding Pitch Blue is `--ring`, which is the wrong name to build on. | Never adjacent to amber (2.9:1, per BRAND.md). The tile grid already obeys this. |
-| **`--info`** | Pitch Blue tint: 8% ground, 35% border, Pitch Blue text | `INFO_BG/BORDER/TEXT` (EnhancedEventDialog), the `rgba(11,95,204,…)` literals (MatchLockingBanner), `blue-50/500` panels (SquadSelection substitutes), `text-blue-500/700` (NotFound). | It shares a hue with `--active`. UX-015 set that precedent. **DECISION:** accept it, or make info neutral. |
-| **`--live`** | Pitch Blue with a pulsing dot. A match in progress *is* the active state. | Orange in-progress treatment (Fixtures 22, LiveMatchBanner 4). The red "live" pill (MatchReport 413–414). The `variant="destructive"` LIVE badges (Fixtures, LiveMatchBanner, which are token-based and so not counted, but are the wrong colour). The red "Live Match" home tile. | Today, live is shown in **red** in two places. That breaks the red rule (red only when something is about to be lost). Choosing **amber** for live would break one-amber on the Fixtures screen, which already has an amber resume action. Pitch Blue avoids both. |
-| **`--success`** | **Settled 12 Oct 2026 (Tom): Pitch Blue `#0B5FCC`**, for **our-team markers**: our goals in the events lists, Squad Ready, starter states. Success **toasts** take no hue (DESIGN-008 wants most of them removed anyway). | `text-green-600` ticks (AdminApprovals, the editor tables, ValidationPanel, RegistrationSuccess, Fixtures "Squad Ready", SquadSelection, EnhancedMatchTracker goal icon). The green "tracking" panel (LiveMatchBanner). `bg-green-*` (SquadSelection starters). Our goals in green (MatchReport 618, 660, 761). | No new colour. Pitch Blue already means "our side, active" (on-pitch tiles), so this extends an existing meaning rather than adding one. Pitch Blue text measures 5.3:1 on Paper; white text on a Pitch Blue fill measures 6.0:1. See BRAND.md. |
+| **`--action`** — **DECLARED** (slice 1) | Signal Amber `#F5A524`, navy text | `FLOODLIGHT.amber`, `AMBER` (BottomActionBar, QuickGoalButton, EnhancedMatchControls, FixedMatchHeader, PendingSubsPanel, PlayerTileGrid, MatchLockingBanner). Gives DESIGN-003 the semantic name it asks for. | **High, and already live — see below.** |
+| **`--active`** — **DECLARED** (slice 1) | Pitch Blue `#0B5FCC`, white text | `FLOODLIGHT.pitchBlue` (PlayerTileGrid on-pitch tiles, EnhancedMatchControls, MatchLockingBanner). At present the only token holding Pitch Blue is `--ring`, which is the wrong name to build on. | Never adjacent to amber (2.9:1, per BRAND.md). The tile grid already obeys this. |
+| **`--info`** — **DECLARED** (slice 1) | Pitch Blue tint: 8% ground, 35% border, Pitch Blue text | `INFO_BG/BORDER/TEXT` (EnhancedEventDialog), the `rgba(11,95,204,…)` literals (MatchLockingBanner), `blue-50/500` panels (SquadSelection substitutes), `text-blue-500/700` (NotFound). | It shares a hue with `--active`. UX-015 set that precedent. **DECISION:** accept it, or make info neutral. |
+| **`--live`** — **DECLARED** (slice 1) | Pitch Blue with a pulsing dot. A match in progress *is* the active state. | Orange in-progress treatment (Fixtures 22, LiveMatchBanner 4). The red "live" pill (MatchReport 413–414). The `variant="destructive"` LIVE badges (Fixtures, LiveMatchBanner, which are token-based and so not counted, but are the wrong colour). The red "Live Match" home tile. | Today, live is shown in **red** in two places. That breaks the red rule (red only when something is about to be lost). Choosing **amber** for live would break one-amber on the Fixtures screen, which already has an amber resume action. Pitch Blue avoids both. |
+| **`--success`** — **DECLARED** (slice 1) | **Settled 12 Oct 2026 (Tom): Pitch Blue `#0B5FCC`**, for **our-team markers**: our goals in the events lists, Squad Ready, starter states. Success **toasts** take no hue (DESIGN-008 wants most of them removed anyway). | `text-green-600` ticks (AdminApprovals, the editor tables, ValidationPanel, RegistrationSuccess, Fixtures "Squad Ready", SquadSelection, EnhancedMatchTracker goal icon). The green "tracking" panel (LiveMatchBanner). `bg-green-*` (SquadSelection starters). Our goals in green (MatchReport 618, 660, 761). | No new colour. Pitch Blue already means "our side, active" (on-pitch tiles), so this extends an existing meaning rather than adding one. Pitch Blue text measures 5.3:1 on Paper; white text on a Pitch Blue fill measures 6.0:1. See BRAND.md. |
 | **`--warning`** | **No hue, and never amber** (unchanged, confirmed 12 Oct 2026). Foreground text, warning icon, `--border` in a heavier weight. | `yellow-*` (ValidationPanel, MatchDataEditor "Unsaved", LiveMatchBanner LOCKED, Auth dev box, EnhancedMatchControls `AlertTriangle`). `amber-500/600` (AcceptInvitation, SquadSelection). | **Highest risk of all.** The obvious choice, amber, would put a second amber element on the editor (warnings next to Save) and on the match screen (pending-subs guard next to Submit). **It must not be amber.** |
-| **`--critical`** / **`--critical-deep`** | Red `#E5484D` / Red-deep `#B4232C` | `RED`, `RED_DEEP` (PendingSubsPanel, EnhancedMatchControls). The inline displaced-tracker notice (`EnhancedMatchTracker.tsx:1104`). `toast.tsx` red-*. BRAND.md already documents these as `--red` / `--red-deep`, but **`index.css` does not declare them**. Only `--destructive` (= Red-deep) exists. | Must stay non-decorative. That rules out using it for results; see Loss below. |
-| **`--chrome`**, **`--chrome-foreground`**, **`--chrome-muted`** | Navy `#101724`, Paper `#EEF1F4`, Slate on Navy `#8D9AAC` | `FLOODLIGHT.navy/ink/dim` in FixedMatchHeader and PendingSubsPanel, which are navy panels on a light screen. `--primary` cannot do this job, because it flips to Paper in dark mode. | Slate on Navy is now in BRAND.md (6.3:1 on navy). It equals `.dark --muted-foreground` to within rounding. |
-| **`--chrome-raised`**, **`--chrome-edge`** | Navy Raised `#2B313D`, Navy Edge `#2A3447` | Navy Raised: the header's period chip (`chipBg`, Paper at 12% over navy) and the pending panel's Undo button (white at 14% over navy, `#313743`). Navy Edge: nothing in the app yet. Only the share-card mockup uses it. | Both now in BRAND.md. Navy Raised is the value the code actually produces; slice 1 should collapse the two overlays into one solid token. Navy Edge is provisional, because no app code uses it (see BRAND.md). |
-| **`--result-win`**, **`--result-draw`**, **`--result-loss`** | **Settled 12 Oct 2026 (Tom).** Win: a **filled** Pitch Blue chip, white text. Draw: a **filled** Slate chip, navy text. Loss: an **outline** chip, with a transparent fill, a Navy Edge border and muted text. | Both copies of `getMatchResult` (MatchReport, Reports: green/yellow/red-500 with white text). Their goals in red (MatchReport 618, 660, 765) go to muted text. Our goals go to `--success`. | See [Result treatments](#result-treatments) below. **Draw fails contrast as specified:** navy on Slate measures 3.0:1. |
+| **`--critical`** / **`--critical-deep`** — **DECLARED** (slice 1) | Red `#E5484D` / Red-deep `#B4232C` | `RED`, `RED_DEEP` (PendingSubsPanel, EnhancedMatchControls). The inline displaced-tracker notice (`EnhancedMatchTracker.tsx:1104`). `toast.tsx` red-*. Declared in slice 1; BRAND.md's former `--red` / `--red-deep` names were renamed to match. `--destructive` (= Red-deep) is unchanged. | Must stay non-decorative. That rules out using it for results; see Loss below. |
+| **`--chrome`**, **`--chrome-foreground`**, **`--chrome-muted`** — **DECLARED** (slice 1) | Navy `#101724`, Paper `#EEF1F4`, Slate on Navy `#8D9AAC` | `FLOODLIGHT.navy/ink/dim` in FixedMatchHeader and PendingSubsPanel, which are navy panels on a light screen. `--primary` cannot do this job, because it flips to Paper in dark mode. | Slate on Navy is now in BRAND.md (6.3:1 on navy). It equals `.dark --muted-foreground` to within rounding. |
+| **`--chrome-raised`**, **`--chrome-edge`** — **DECLARED** (slice 1) | Navy Raised `#2B313D`, Navy Edge `#2A3447` | Navy Raised: the header's period chip (`chipBg`, Paper at 12% over navy) and the pending panel's Undo button (white at 14% over navy, `#313743`). Navy Edge: nothing in the app yet. Only the share-card mockup uses it. | Both now in BRAND.md. Navy Raised is the value the code actually produces; slice 1 should collapse the two overlays into one solid token. Navy Edge is provisional, because no app code uses it (see BRAND.md). |
+| **`--result-win`**, **`--result-draw`**, **`--result-loss`** — **DECLARED** (slice 1) | **Settled 12 Oct 2026 (Tom).** Win: a **filled** Pitch Blue chip, white text. Draw: a **tinted** chip, Slate at 10% over the ground with an Edge border, navy text (13.9:1). Loss: an **outline** chip, with no fill, an Edge border (Slate on Navy on navy grounds) and muted text. | Both copies of `getMatchResult` (MatchReport, Reports: green/yellow/red-500 with white text). Their goals in red (MatchReport 618, 660, 765) go to muted text. Our goals go to `--success`. | See [Result treatments](#result-treatments) below. |
 
 ### Result treatments
 
@@ -191,8 +191,8 @@ Settled 12 Oct 2026 (Tom):
 | Result | Treatment | Text on chip |
 |---|---|---|
 | Win | **Filled** Pitch Blue `#0B5FCC` | White, 6.0:1 |
-| Draw | **Filled** Slate `#5A6474` | Floodlight Navy, **3.0:1** |
-| Loss | **Outline**: transparent fill, Navy Edge `#2A3447` border | Muted (Slate `#5A6474` on light grounds, 5.3:1 on Paper; Slate on Navy `#8D9AAC` on navy, 6.3:1) |
+| Draw | **Tinted**: Slate at 10% over the ground, Edge `#CBD3DC` border | Floodlight Navy, 13.9:1 |
+| Loss | **Outline**: no fill. Edge border on light grounds; Slate on Navy `#8D9AAC` border on navy grounds | Muted (Slate `#5A6474` on light grounds, 5.3:1 on Paper; Slate on Navy on navy, 6.3:1) |
 
 **Fill versus outline carries the distinction, not hue.** That was chosen for three reasons:
 
@@ -204,20 +204,10 @@ Settled 12 Oct 2026 (Tom):
 3. **This is a children's club whose results are shared with parents.** A defeat should not
    be marked in alarm colours. The score already says what happened.
 
-This also resolves the share-card conflict raised in the first draft of this plan. The
-approved mockup's Red-deep Loss chip must change to the outline treatment when REPORT-003
-is built.
-
-**Two problems with the spec as written.** Both are measured, not guessed. They need a ruling
-before slice 4, and neither is changed here:
-
-- **Draw: navy text on Slate is 3.0:1.** That fails the 4.5:1 AA floor for chip-sized text.
-  White on Slate measures 6.0:1.
-- **Loss on the navy share card: the Navy Edge border against navy is 1.4:1.** That is below
-  the 3:1 non-text floor, so on the card the outline effectively disappears. "Loss" then
-  reads as plain muted text, and the fill/outline distinction rests on the word alone. On
-  light screens the same border measures 11.0:1 on Paper and is clearly visible. (On the
-  card, Win's fill is 3.0:1 against navy and Draw's is 3.0:1, both right at the floor.)
+**The two contrast problems in the first version of this spec are resolved** (12 Oct 2026,
+slice 1). The filled Slate draw chip (navy text at 3.0:1) became the tinted chip above at
+13.9:1. The loss outline on navy now uses Slate on Navy rather than Navy Edge, which was
+1.4:1 against navy and all but invisible.
 
 **The merge of the two `getMatchResult` copies is not a straight swap.** Today each returns
 a single background class, which the caller pairs with `text-white`
@@ -257,7 +247,7 @@ regression shows up on staging days before Saturday rather than at kick-off.
 
 | # | Slice | Screens | Sites | Match-recording? | Unblocks |
 |---|---|---|---:|---|---|
-| **1** | **Semantic tokens + accent fix** | none directly (`index.css`, `tailwind.config.ts`, BRAND.md) | 0 converted | **Indirectly.** Repointing `--accent` changes hover colour on match-screen dialogs. Only hover state changes; nothing in the write path. Safe any day, but look at the match screen once on staging. | Every other slice. REPORT-003. Settles the decisions in §3. |
+| **1** | **Semantic tokens + accent fix** — **DONE 12 Oct 2026**, branch `feat/floodlight-tokens-slice-1` | none directly (`index.css`, `tailwind.config.ts`, BRAND.md) | 0 converted | **Indirectly.** Repointing `--accent` changes hover colour on match-screen dialogs. Only hover state changes; nothing in the write path. Safe any day, but look at the match screen once on staging. | Every other slice. REPORT-003. Settles the decisions in §3. |
 | **2** | **Live & tracking states** | Home (`LiveMatchBanner`), Fixtures | 54 | No. The Resume buttons only navigate. | One consistent "live" vocabulary across the screens a coach passes through on the way to a match. Removes the most off-palette colour (orange). |
 | **3** | **Home tiles** | Home (`OptimizedIndex`, `QuickActionCard`) | 43 | No | Removes purple. It is the first screen anyone sees. **Check against DESIGN-006 first**, which says this screen needs a redesign, not a recolour. Recommended: do this slice anyway as a pure neutral recolour (no new layout). The class strings live in two config arrays, so DESIGN-006 throws away very little. |
 | **4** | **Results** | Match report, Reports | 23 | No. Read-only screens. | **REPORT-003** shares result colours with this screen. It also merges the two copies of `getMatchResult` into one helper. |
@@ -366,7 +356,8 @@ merges.**
 
 - **Slice 1 is the hard prerequisite.** The card is a fixed-navy surface ("never themed":
   it is rasterised to a PNG), so it does not need any other screen converted. It does need
-  the `--chrome` family and the result tokens to exist. They are now in BRAND.md (12 Oct).
+  the `--chrome` family and the result tokens to exist. They are now in BRAND.md and
+  declared in `src/index.css` (slice 1, 12 Oct).
   Otherwise the card hard-codes its own copies of them and becomes the eleventh local
   constant object. Note that the mockup's own values differ slightly from the code's: it uses
   raised `#1B2434` where the app produces `#2B313D`, and `#8D99AC` for `#8D9AAC`. The card
@@ -374,7 +365,7 @@ merges.**
 - **Slice 4 is a strong should.** It puts the settled win/draw/loss treatments (§3,
   [Result treatments](#result-treatments)) on the match report itself. The card and the
   report then show the same result the same way, and the card can reuse the merged
-  `getMatchResult` helper. The mockup's Red-deep Loss chip changes to the outline treatment.
+  `getMatchResult` helper.
 
 So: **slices 1 and 4. That is two evenings if 4 follows 1 directly, or four if 2 and 3 go
 first as ordered.** None of them touches match-recording code.
