@@ -8,6 +8,29 @@ Known issues and planned work. Newest findings at the top of each section.
 
 ## Bugs
 
+### BUG-050 — Match header's LIVE/PAUSED chip reads mount-time status, so it can contradict the timer below it `OPEN`
+**Found:** 12 Oct 2026, during the match-screen survey for the Floodlight end-state mockup.
+
+`FixedMatchHeader` takes its status chip from `fixture.status`, which is loaded when the page
+mounts and is never refreshed by the timer. `EnhancedMatchControls`, directly beneath it in the
+same scroll, derives its own status badge from live timer state. After a pause or a resume the
+header can therefore still read LIVE while the card below it reads PAUSED, or the reverse, until
+something unrelated causes a reload.
+
+NOT a data bug. Nothing is recorded wrong and the timer itself is unaffected. It is a trust bug:
+the header is the part a coach glances at from the touchline, and it is the part most likely to
+be stale.
+
+FIX SHAPE: drive the chip from the same source the timer card uses, rather than from the
+mount-time fixture row. Check the behaviour during the break between periods, where `is_active`
+is false but the period has not ended — see `src/lib/periodOpen.ts` and BUG-041. A naive fix that
+keys on `is_active` will show PAUSED during every break.
+
+Worth doing BEFORE slice 8a converts this component, so a pre-existing bug is not blamed on the
+colour conversion.
+
+Relates to DEBT-030, BUG-041.
+
 ### BUG-049 — EnhancedEventDialog swallows a failed goal write with only a console line `OPEN`
 **Found:** 11 Oct 2026, while fixing the silent Goal-button failure under UX-042.
 
@@ -1766,6 +1789,25 @@ Relates to UX-001.
 ---
 
 ## Technical debt
+
+### DEBT-044 — SmartSuggestionBadge is imported by the match screen but never rendered `OPEN`
+**Found:** 12 Oct 2026, during the match-screen survey for the Floodlight end-state mockup.
+
+`EnhancedMatchTracker.tsx` imports `SmartSuggestionBadge` and never places it in the JSX. The
+component is complete — high/medium/low variants, its own FLOODLIGHT constants, and deliberately
+never amber — but nothing on the screen shows it.
+
+Decide which before slice 8a: delete it, as `chore/delete-dead-code` did for the four dead
+components on 27 Sep, or render it where it was meant to go. It should not be converted while
+nobody can see it; 8a would otherwise spend an evening recolouring a component that never
+appears.
+
+CHECK WHEN RESOLVING: whether its colour sites are inside the 352 counted in
+`docs/FLOODLIGHT-CONVERSION.md`. The audit counted local-constant references across the
+match-screen components, so they probably are. If they are, the total needs adjusting when this
+is settled, the same way the 27 Sep dead-code deletion moved the count.
+
+Relates to DEBT-029, DEBT-030, DESIGN-002.
 
 ### DEBT-043 — `src/components/match/PlayerTimesList.tsx` is dead code `OPEN`
 **Found:** 27 Sep 2026, during BUG-036 (`fix/report-period-aggregation`), while
